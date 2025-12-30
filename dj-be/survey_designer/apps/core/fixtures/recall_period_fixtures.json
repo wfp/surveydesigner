@@ -1,0 +1,32 @@
+[
+  {
+    "model": "questions.recallperiod",
+    "pk": 1,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "_7D",
+      "description": "7 days"
+    }
+  },
+  {
+    "model": "questions.recallperiod",
+    "pk": 2,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "_1M",
+      "description": "One month"
+    }
+  },
+  {
+    "model": "questions.recallperiod",
+    "pk": 3,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "_6M",
+      "description": "6 months"
+    }
+  }
+]

@@ -1,0 +1,15 @@
+# Ignore everything
+**
+survey_designer/__init__.py
+# ... except for dependencies and source
+!pyproject.toml
+!poetry.lock
+!setup.cfg
+!Makefile
+!manage.py
+!survey_designer/
+!package.json
+!pnpm-lock.yaml
+!tsconfig.json
+!tsconfig.node.json
+!vite.config.js

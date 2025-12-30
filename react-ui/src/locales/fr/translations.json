@@ -1,0 +1,141 @@
+{
+    "deleteSavedSurveyModal": {
+        "delete": "Êtes-vous sûr de vouloir supprimer l'enquête.",
+        "actionCannotBeUndone": "Cette action ne peut pas être annulée.",
+        "modalHeading": "Supprimer l'enquête"
+    },
+    "actions": {
+        "delete": "Supprimer",
+        "cancel": "Annuler",
+        "login": "Se connecter",
+        "logout": "Se déconnecter",
+        "help": "Aide",
+        "goToHome": "Aller à la maison",
+        "copiedToClipboard": "Copié dans le presse-papier",
+        "close": "Fermer",
+        "edit": "Modifier",
+        "share": "Partager",
+        "previous": "Précédent",
+        "next": "Suivant",
+        "save": "Sauvegarder"
+    },
+    "filters": {
+        "show": "Afficher les filtres",
+        "hide": "Masquer les filtres",
+        "clear": "Tout effacer",
+        "apply": "Appliquer"
+    },
+    "footer": {
+        "address": "Via C. G. Viola 68 Parc Médicis",
+        "code": "00148 Rome, Italie",
+        "privacy": "Confidentialité",
+        "terms": "Conditions d'utilisation",
+        "link": "Wfp.org",
+        "version": "ver.",
+        "wfp": "Programme Alimentaire Mondial",
+        "description": "Le Programme alimentaire mondial des Nations Unies – sauver des vies en cas d'urgence\net changer la vie de millions de personnes grâce au développement durable. PAM\ntravaille dans plus de 80 pays à travers le monde, nourrissant les gens\npris dans des conflits et des catastrophes, et jeter les bases d'un\nMeilleur futur."
+    },
+    "generate": {
+        "title": "GÉNÉRER UNE ENQUÊTE",
+        "download": {
+            "xls": "Télécharger XLSForm",
+            "word": "Télécharger le format Word"
+        },
+        "preview": "Aperçu de l'enquête",
+        "publish": "Publier l'enquête",
+        "site": "Site",
+        "projects": "Projets",
+        "notification": {
+            "uploadError": "Erreur lors du téléchargement du fichier.",
+            "getProjectError": "Erreur lors de l'obtention des projets",
+            "uploadLocation": "Téléchargement du formulaire sur {{name}}...",
+            "uploadConfirmation": "Le formulaire a été téléchargé sur {{name}}"
+        }
+    },
+    "landingPage": {
+        "title": "Concepteur d'enquête",
+        "wfp": "PAM",
+        "description": "Bienvenue dans Survey Designer ! Cet outil vous permet de construire\n des enquêtes multilingues et standardisées de haute qualité en quelques\n des étapes simples. Il suit les conventions de dénomination standard du PAM\n (Codebook) tout en vous donnant de la flexibilité sur ce qu'il faut inclure dans\n votre enquête. Il vous permet soit de générer l'enquête sous forme de\n XLSForm ou pour intégrer directement des outils basés sur ODK tels que : MoDa\n et Kobo.",
+        "learnMore": "pour apprendre plus!",
+        "welcome": "Accueillir"
+    },
+    "modules": {
+        "errors": {
+            "selectOneSubModule": "Veuillez sélectionner au moins un sous-module.",
+            "mandatoryModule": "Il s'agit d'un module obligatoire pour ce type d'enquête, êtes-vous sûr de vouloir le supprimer ?",
+            "noModules": "Modules introuvables. Veuillez modifier vos sélections lors de la première étape."
+        },
+        "indicatorAreas": {
+            "title": "INDICATEURS"
+        },
+        "title": "MODULES ET SOUS-MODULES"
+    },
+    "nav": {
+        "codebook": "Livre de codes",
+        "cms": "CMS",
+        "manageApiKeys": "Gérer les clés API",
+        "profile": "Profil"
+    },
+    "review": {
+        "languages": "Langues",
+        "previewSurvey": "Aperçu de l'enquête"
+    },
+    "sharedLinkLandingPage": {
+        "SurveyNotFound": "Enquête introuvable",
+        "createCopy": "Créer une copie",
+        "generatingDocument": "Génération de documents"
+    },
+    "sharedLinkModal": {
+        "description": "Copiez le lien ci-dessous et partagez-le avec d'autres. Toute personne disposant du lien pourra consulter l’enquête.",
+        "heading": "Partager l'enquête"
+    },
+    "submoduleList": {
+        "nothingToReview": "Il n'y a rien à revoir.",
+        "deleteConfirmationSingular": "Ce sont des questions obligatoires",
+        "deleteConfirmationPlural": "Ce sont des questions obligatoires pour ce sous-module, êtes-vous sûr de vouloir le supprimer ?"
+    },
+    "submoduleListItem": {
+        "noIndicatorsIncluded": "* Aucun indicateur inclus pour ce sous-module",
+        "partiallyIncluded": "* Partiellement inclus avec {{indicatorsList}}",
+        "indicatorPlural": "* Les indicateurs {{indicatorsList}} incluent toutes les questions de ce sous-module",
+        "indicatorSingular": "* L'indicateur {{indicatorsList}} comprend toutes les questions de ce sous-module"
+    },
+    "survey": {
+        "title": "Titre de l'enquête",
+        "organizations": "Organisations",
+        "category": "Catégorie",
+        "type": "Taper",
+        "mode": "Mode",
+        "context": "Contexte"
+    },
+    "surveyTable": {
+        "name": "Nom de l'enquête",
+        "organizations": "Organisations",
+        "category": "Catégorie d'enquête",
+        "type": "Type d'enquête",
+        "mode": "Mode enquête",
+        "context": "Contexte de l'enquête",
+        "lastSavedDate": "Dernière Enregistrement"
+    },
+    "surveyWizard": {
+        "title": "Assistant d'enquête",
+        "subTitle": "Suivez les étapes pour générer et publier une enquête",
+        "steps": {
+            "defineSurvey": "DÉFINISSEZ VOTRE ENQUÊTE",
+            "selectModules": "CONCEVEZ VOTRE ENQUÊTE",
+            "selectAdditionQuestions": "PERSONNALISEZ VOTRE ENQUÊTE",
+            "generatePublishSurvey": "GÉNÉRER ET PUBLIER UNE ENQUÊTE"
+        },
+        "stepTitle": "Étape : {{currentStep}}/{{stepsCount}} {{currentStepTitle}}",
+        "modulesCount": "{{moduleCount}} modules, {{submoduleCount}} sous-modules sélectionnés",
+        "questionsGeneratedCount": "({{numberOfQuestionsToBeGenerated}} questions à générer)",
+        "deselectAllSubmodules": "Désélectionner tous les sous-modules",
+        "selectAllSubmodules": "Sélectionner tous les sous-modules",
+        "expandAllSubmodules": "Développer tous les sous-modules",
+        "collapseAllSubmodules": "Réduire tous les sous-modules",
+        "expandAllIndicators": "Développer tous les indicateurs",
+        "collapseAllIndicators": "Réduire tous les indicateurs",
+        "savedSurveys": "Enquêtes enregistrées",
+        "createSurvey": "Créer une enquête"
+    }
+}

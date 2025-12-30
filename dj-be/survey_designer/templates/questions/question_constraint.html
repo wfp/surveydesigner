@@ -1,0 +1,282 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <link rel="stylesheet" type="text/css" href="/static/admin/css/base.css">
+  <link rel="stylesheet" href="/static/css/admin.css">
+  <link rel="stylesheet" type="text/css" href="/static/admin/css/forms.css">
+  <link rel="stylesheet" type="text/css" href="{% static '/js/tribute/tribute.css' %}">
+  <script src="/static/admin/js/vendor/jquery/jquery.js"></script>
+  <link href="/static/admin/css/vendor/select2/select2.css" type="text/css" media="screen" rel="stylesheet">
+  <link href="/static/admin/css/autocomplete.css" type="text/css" media="screen" rel="stylesheet">
+  <script src="/static/admin/js/vendor/select2/select2.full.js"></script>
+  <script src="{% static 'js/admin/jquery.formset.js' %}"></script>
+  <script src="{% static '/js/tribute/tribute.js' %}"></script>
+  <script>
+    function toggleReferenceField(elem) {
+      const value = elem.val();
+      const container = elem.closest('.form-container');
+      const questionSelect = container.find('.question-select').closest('.fieldWrapper');
+      const valueInput = container.find('.value-input').closest('.fieldWrapper');
+      if (value === 'SELF') {
+        valueInput.show();
+        questionSelect.hide();
+        return
+      }
+
+      if (value === 'OTHER') {
+        questionSelect.show();
+        valueInput.hide();
+        return
+      }
+    }
+
+    function initQuestionSelect2(elem) {
+      elem.select2({
+        width: '100%',
+        ajax: {
+          url: '/admin/questions/basequestion/autocomplete/',
+          dataType: 'json'
+        }
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      $('.form-container').formset({
+        addCssClass: 'add-row add-handler',
+        deleteCssClass: 'delete-row',
+        deleteText: '<span class="inline-deletelink">DELETE</strong>',
+        addText: 'add constraint',
+        added: function (elem) {
+          toggleReferenceField(elem.find('.reference-question-select'));
+          initQuestionSelect2(elem.find('.question-select'))
+        }
+      });
+
+      $('.translation-form-container').formset({
+        prefix: '{{ translation_formset.prefix }}',
+        addCssClass: 'add-translation-row',
+        deleteCssClass: 'delete-translation-row',
+        deleteText: '<span class="inline-deletelink">DELETE</strong>',
+        addText: 'add translation',
+        formCssClass: 'translation-form',
+        hideLastAddForm: true,
+      });
+
+      initQuestionSelect2($('.question-select'));
+
+      $('#id_base_questions').select2({
+        width: '80%',
+        ajax: {
+          url: '/admin/questions/basequestion/autocomplete/',
+          dataType: 'json'
+        }
+      });
+
+      $('.reference-question-select').each(function () {
+        toggleReferenceField($(this))
+      });
+
+      $(document).on('change', '.reference-question-select', function () {
+        toggleReferenceField($(this))
+      });
+
+      const mode = $('[name="mode"]:checked').val();
+
+      if (mode === 'text') {
+          $('#text-constraint').show();
+          $('#constraints').hide();
+
+        } else if (mode === 'form') {
+          $('#text-constraint').hide();
+          $('#constraints').show();
+        }
+
+      $('[name="mode"]').change(function () {
+        const value = $(this).val();
+
+        if (value === 'text') {
+          $('#text-constraint').show();
+          $('#constraints').hide();
+
+        } else if (value === 'form') {
+          $('#text-constraint').hide();
+          $('#constraints').show();
+        }
+      });
+
+      var tribute = new Tribute({
+        values: function (text, cb) {
+          const url = `/admin/questions/basequestion/autocomplete/?term=${text}`;
+          $.get(url, function (data) {
+            cb(data.results);
+          });
+        },
+        trigger: '$',
+        lookup: 'text',
+        fillAttr: 'text',
+        requireLeadingSpace: false,
+        selectTemplate: (item) => {
+          return '${' + item.original.text + '}';
+        },
+      });
+
+      tribute.attach(document.getElementById("id_constraint"));
+    });
+  </script>
+
+  <style>
+      input {
+          text-align: center;
+      }
+
+      .fieldMargin {
+          margin-left: 1rem;
+          margin-right: 1rem;
+          text-align: center;
+      }
+
+      .d-flex {
+          display: flex;
+      }
+
+      .margin-b {
+          margin-bottom: 1rem;
+      }
+
+      #id_form-0-logical_operator-wrapper {
+          display: none;
+      }
+
+      .add-row {
+          background: url({% static "admin/img/icon-addlink.svg" %}) 0 1px no-repeat;
+          padding-left: 16px;
+          font-size: 12px;
+      }
+      .add-translation-row {
+          background: url({% static "admin/img/icon-addlink.svg" %}) 0 1px no-repeat;
+          padding-left: 16px;
+          font-size: 12px;
+      }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <form method="POST">
+    {% csrf_token %}
+
+    <div class="form-row">
+      <div>
+        Questions:
+        {% for question in form.base_questions_qs %}
+          <span>{% if not forloop.first %},{% endif %} {{ question.name }}</span>
+        {% endfor %}
+      </div>
+      {{ form.base_questions.as_hidden }}
+      <div class="fieldWrapper" style="margin-top: 1rem">
+        <label for="{{ form.mode.id_for_label }}">Mode: </label>
+        {{ form.mode }}
+        {{ form.mode.errors }}
+      </div>
+    </div>
+
+    <div id="text-constraint">
+      <div class="form-row">
+        <div class="fieldWrapper">
+          <label for="{{ form.constraint.id_for_label }}">Constraint: </label>
+          <div>{{ form.constraint }}</div>
+          {{ form.constraint.errors }}
+        </div>
+      </div>
+    </div>
+
+    <div class="form-row">
+        <div class="fieldWrapper">
+          <label for="{{ form.constraint_message.id_for_label }}">Constraint Message (en): </label>
+          <div>{{ form.constraint_message }}</div>
+          {{ form.constraint_message.errors }}
+        </div>
+    </div>
+
+    <div id="translations">
+      {{ translation_formset.management_form }}
+      <h3>Translations</h3>
+      {% for formset_form in translation_formset %}
+        <div class="translation-form-container form-row d-flex">
+          <div>
+            <div class="d-flex margin-b">
+              <div class="fieldWrapper fieldMargin" style="min-width: 160px">
+                <label for="{{ formset_form.language.id_for_label }}">Language</label>
+                <div>{{ formset_form.language }}</div>
+                {{ formset_form.language.errors }}
+              </div>
+
+              <div class="fieldWrapper fieldMargin" style="min-width: 160px">
+                <label for="{{ formset_form.label.id_for_label }}">Label</label>
+                <div>{{ formset_form.label }}</div>
+                {{ formset_form.label.errors }}
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div id="constraints">
+      {{ formset.management_form }}
+      {% for formset_form in formset %}
+        <div class="form-container form-row d-flex">
+          <div>
+            <div class="d-flex margin-b" style="justify-content: center">
+              <div class="fieldWrapper fieldMargin" id="{{ formset_form.logical_operator.id_for_label }}-wrapper">
+                <label for="{{ formset_form.logical_operator.id_for_label }}">and/or</label>
+                <div>{{ formset_form.logical_operator }}</div>
+                {{ formset_form.logical_operator.errors }}
+              </div>
+            </div>
+
+            <div class="d-flex margin-b" style="justify-content: center">
+              <div class="fieldWrapper fieldMargin">
+                <label for="{{ formset_form.reference_question.id_for_label }}">Reference Question</label>
+                <div>{{ formset_form.reference_question }}</div>
+                {{ formset_form.reference_question.errors }}
+              </div>
+            </div>
+
+            <div class="d-flex margin-b">
+              <div class="fieldWrapper fieldMargin">
+                <label for="{{ formset_form.question_value.id_for_label }}">Question</label>
+                <div><input placeholder="." type="text" disabled maxlength="255"></div>
+                {{ formset_form.question_value.errors }}
+              </div>
+
+              <div class="fieldWrapper fieldMargin">
+                <label for="{{ formset_form.operator.id_for_label }}">Operator</label>
+                <div>{{ formset_form.operator }}</div>
+                {{ formset_form.operator.errors }}
+              </div>
+
+              <div class="fieldWrapper fieldMargin" style="min-width: 160px">
+                <label for="{{ formset_form.value.id_for_label }}">Value</label>
+                <div>{{ formset_form.value }}</div>
+                {{ formset_form.value.errors }}
+              </div>
+
+              <div class="fieldWrapper fieldMargin" style="min-width: 160px">
+                <label for="{{ formset_form.question.id_for_label }}">Question</label>
+                <div>{{ formset_form.question }}</div>
+                {{ formset_form.question.errors }}
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="submit-row" style="margin-top: 2rem">
+      <button type="button" class="button cancelButton" onclick="window.history.back()">CANCEL</button>
+      <input type="submit" value="Save" class="default" name="_save">
+    </div>
+  </form>
+{% endblock content %}

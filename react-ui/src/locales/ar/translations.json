@@ -1,0 +1,141 @@
+{
+    "deleteSavedSurveyModal": {
+        "delete": "هل أنت متأكد أنك تريد حذف الاستطلاع.",
+        "actionCannotBeUndone": "لا يمكن التراجع عن هذا الإجراء.",
+        "modalHeading": "حذف الاستطلاع"
+    },
+    "actions": {
+        "delete": "يمسح",
+        "cancel": "يلغي",
+        "login": "تسجيل الدخول",
+        "logout": "تسجيل خروج",
+        "help": "يساعد",
+        "goToHome": "اذهب إلى المنزل",
+        "copiedToClipboard": "نسخ إلى الحافظة",
+        "close": "يغلق",
+        "edit": "يحرر",
+        "share": "يشارك",
+        "previous": "سابق",
+        "next": "التالي",
+        "save": "يحفظ"
+    },
+    "filters": {
+        "show": "اظهر الفلاتر",
+        "hide": "إخفاء عوامل التصفية",
+        "clear": "امسح الكل",
+        "apply": "يتقدم"
+    },
+    "footer": {
+        "address": "عبر سي جي فيولا 68 ميديشي بارك",
+        "code": "00148 روما، إيطاليا",
+        "privacy": "خصوصية",
+        "terms": "شروط الاستخدام",
+        "link": "Wfp.org",
+        "version": "الاصدار.",
+        "wfp": "برنامج الأغذية العالمي",
+        "description": "برنامج الأغذية العالمي التابع للأمم المتحدة - إنقاذ الأرواح في حالات الطوارئ\nوتغيير حياة الملايين من خلال التنمية المستدامة. برنامج الأغذية العالمي\nتعمل في أكثر من 80 دولة حول العالم، وتقوم بإطعام الناس\nوقعوا في الصراعات والكوارث، ووضع الأسس ل\nمستقبل افضل."
+    },
+    "generate": {
+        "title": "إنشاء استطلاع",
+        "download": {
+            "xls": "تحميل XLSForm",
+            "word": "تحميل تنسيق وورد"
+        },
+        "preview": "معاينة المسح",
+        "publish": "نشر الاستطلاع",
+        "site": "موقع",
+        "projects": "المشاريع",
+        "notification": {
+            "uploadError": "خطأ في تحميل الملف.",
+            "getProjectError": "خطأ في الحصول على المشاريع",
+            "uploadLocation": "تحميل النموذج إلى {{name}}...",
+            "uploadConfirmation": "تم تحميل النموذج إلى {{name}}"
+        }
+    },
+    "landingPage": {
+        "title": "صمم الاستطلاع",
+        "wfp": "برنامج الأغذية العالمي",
+        "description": "مرحبًا بك في مصمم الاستبيانات! هذه الأداة تسمح لك بالبناء\n استبيانات موحدة عالية الجودة ومتعددة اللغات في عدد قليل\n خطوات بسيطة. وهو يتبع اصطلاحات التسمية القياسية لبرنامج الأغذية العالمي\n (كتاب الرموز) مع منحك المرونة فيما يجب تضمينه فيه\n الاستطلاع الخاص بك. يسمح لك إما بإنشاء الاستطلاع كملف\n XLSForm أو للدفع مباشرة إلى الأدوات المستندة إلى ODK مثل: MoDa\n وكوبو.",
+        "learnMore": "لتعلم المزيد!",
+        "welcome": "مرحباً"
+    },
+    "modules": {
+        "errors": {
+            "selectOneSubModule": "الرجاء تحديد وحدة فرعية واحدة على الأقل.",
+            "mandatoryModule": "هذه وحدة مطلوبة لهذا النوع من الاستطلاعات، هل أنت متأكد من أنك تريد حذفها؟",
+            "noModules": "لم يتم العثور على وحدات. يرجى تغيير اختياراتك في الخطوة الأولى."
+        },
+        "indicatorAreas": {
+            "title": "المؤشرات"
+        },
+        "title": "الوحدات والوحدات الفرعية"
+    },
+    "nav": {
+        "codebook": "كتاب الرموز",
+        "cms": "نظام إدارة المحتوى",
+        "manageApiKeys": "إدارة مفاتيح API",
+        "profile": "حساب تعريفي"
+    },
+    "review": {
+        "languages": "اللغات",
+        "previewSurvey": "معاينة المسح"
+    },
+    "sharedLinkLandingPage": {
+        "SurveyNotFound": "لم يتم العثور على الاستطلاع",
+        "createCopy": "إنشاء نسخة",
+        "generatingDocument": "توليد الوثيقة"
+    },
+    "sharedLinkModal": {
+        "description": "انسخ الرابط أدناه وشاركه مع الآخرين. سيتمكن أي شخص لديه الرابط من مشاهدة الاستطلاع.",
+        "heading": "مشاركة الاستطلاع"
+    },
+    "submoduleList": {
+        "nothingToReview": "لا يوجد شيء للمراجعة.",
+        "deleteConfirmationSingular": "هذه أسئلة مطلوبة",
+        "deleteConfirmationPlural": "هذه أسئلة مطلوبة لهذه الوحدة الفرعية، هل أنت متأكد من أنك تريد حذفها؟"
+    },
+    "submoduleListItem": {
+        "noIndicatorsIncluded": "* لم يتم تضمين أي مؤشرات لهذه الوحدة الفرعية",
+        "partiallyIncluded": "* مضمن جزئيًا في {{indicatorsList}}",
+        "indicatorPlural": "* تتضمن مؤشرات {{indicatorsList}} جميع أسئلة هذه الوحدة الفرعية",
+        "indicatorSingular": "* يتضمن المؤشر {{indicatorsList}} جميع أسئلة هذه الوحدة الفرعية"
+    },
+    "survey": {
+        "title": "عنوان الاستطلاع",
+        "organizations": "المنظمات",
+        "category": "فئة",
+        "type": "يكتب",
+        "mode": "وضع",
+        "context": "سياق"
+    },
+    "surveyTable": {
+        "name": "اسم الاستطلاع",
+        "organizations": "المنظمات",
+        "category": "فئة المسح",
+        "type": "نوع المسح",
+        "mode": "وضع المسح",
+        "context": "سياق المسح",
+        "lastSavedDate": "آخر حفظ"
+    },
+    "surveyWizard": {
+        "title": "معالج المسح",
+        "subTitle": "أكمل الخطوات لإنشاء استطلاع ونشره",
+        "steps": {
+            "defineSurvey": "حدد الاستطلاع الخاص بك",
+            "selectModules": "صمم الاستطلاع",
+            "selectAdditionQuestions": "خصص الاستطلاع",
+            "generatePublishSurvey": "إنشاء ونشر الاستطلاع"
+        },
+        "stepTitle": "الخطوة: {{currentStep}}/{{stepsCount}} {{currentStepTitle}}",
+        "modulesCount": "{{moduleCount}} وحدات، تم تحديد {{submoduleCount}} وحدات فرعية",
+        "questionsGeneratedCount": "(سيتم إنشاء {{numberOfQuestionsToBeGenerated}} من الأسئلة)",
+        "deselectAllSubmodules": "قم بإلغاء تحديد كافة الوحدات الفرعية",
+        "selectAllSubmodules": "حدد كافة الوحدات الفرعية",
+        "expandAllSubmodules": "قم بتوسيع كافة الوحدات الفرعية",
+        "collapseAllSubmodules": "طي كافة الوحدات الفرعية",
+        "expandAllIndicators": "قم بتوسيع كافة المؤشرات",
+        "collapseAllIndicators": "طي كافة المؤشرات",
+        "savedSurveys": "الاستطلاعات المحفوظة",
+        "createSurvey": "إنشاء استطلاع"
+    }
+}

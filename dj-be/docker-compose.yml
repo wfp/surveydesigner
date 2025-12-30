@@ -1,0 +1,193 @@
+version: "3.9"
+
+x-refs:
+  sdconf: &sdconf
+    build: .
+    image: "survey-designer:latest"
+    volumes:
+      - .:/app
+    environment:
+      - SECRET_KEY
+      - ENV
+      - DEBUG
+      - ALLOWED_HOSTS
+      - CORS_ALLOWED_ORIGINS
+      - REDIS_URL
+      - POSTGRES_USER
+      - POSTGRES_DB
+      - POSTGRES_HOST
+      - POSTGRES_PASSWORD
+      - POSTGRES_PORT
+      - EMAIL_HOST_USER
+      - EMAIL_HOST_PASSWORD
+      - OIDC_CLIENT_ID
+      - OIDC_CLIENT_SECRET
+      - OIDC_CALLBACK_URL
+      - OIDC_AUTHORIZATION_ENDPOINT
+      - OIDC_ENDPOINT
+      - OIDC_JWKS_ENDPOINT
+      - OIDC_CONFIGURATION_ENDPOINT
+      - OIDC_USERINFO_ENDPOINT
+      - IDENTITY_PROVIDER
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      createbuckets:
+        condition: service_completed_successfully
+
+services:
+  initdb:
+    <<: *sdconf
+    command: "migrate"
+    restart: "no"
+
+  api:
+    <<: *sdconf
+    command: "collectstatic run_dev"
+    restart: on-failure
+    ports:
+      - "8080:8080"
+    depends_on:
+      initdb:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "make", "healthcheck"]
+      start_period: 5s
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  worker:
+    <<: *sdconf
+    command: "worker"
+    restart: on-failure
+    depends_on:
+      initdb:
+        condition: service_completed_successfully
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:22.0.1
+    command: start-dev
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: r00t
+    ports:
+      - "8081:8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      start_period: 10s
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  postgres:
+    image: "postgres:13"
+    restart: on-failure
+    environment:
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+      - POSTGRES_DB
+      - POSTGRES_HOST
+      - POSTGRES_PORT
+      - POSTGRES_MULTIPLE_DATABASES=keycloak
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-keycloak-db.sh:/docker-entrypoint-initdb.d/init-keycloak-db.sh
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB -h $POSTGRES_HOST -p $POSTGRES_PORT",
+        ]
+      start_period: 5s
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: "redis:6"
+    restart: on-failure
+    volumes:
+      - rqdata:/var/lib/redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      start_period: 2s
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  maildev:
+    image: maildev/maildev:latest
+    restart: on-failure
+    environment:
+      - MAILDEV_INCOMING_USER=${EMAIL_HOST_USER}
+      - MAILDEV_INCOMING_PASS=${EMAIL_HOST_PASSWORD}
+    ports:
+      - "1080:1080"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "1080"]
+      start_period: 2s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:RELEASE.2023-09-30T07-02-29Z.fips
+    command: minio server /data --console-address ":9001"
+    restart: on-failure
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=${AWS_ACCESS_KEY_ID}
+      - MINIO_ROOT_PASSWORD=${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      start_period: 2s
+      interval: 30s
+      timeout: 20s
+      retries: 5
+
+  createbuckets:
+    image: minio/mc
+    restart: on-failure
+    entrypoint: >-
+      /bin/sh -c "
+        until mc alias set myminio http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD; do
+          echo 'Waiting for MinIO to be ready...';
+          sleep 2;
+        done;
+        mc mb --quiet --ignore-existing myminio/$$AWS_STORAGE_BUCKET_NAME;
+        mc anonymous set none myminio/$$AWS_STORAGE_BUCKET_NAME;
+      "
+    environment:
+      - MINIO_ROOT_USER=${AWS_ACCESS_KEY_ID}
+      - MINIO_ROOT_PASSWORD=${AWS_SECRET_ACCESS_KEY}
+      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME}
+    depends_on:
+      minio:
+        condition: service_healthy
+
+networks:
+  default:
+    name: survey-designer-app
+volumes:
+  pgdata:
+  rqdata:
+  miniodata:
+  keycloak_data:

@@ -1,0 +1,163 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Survey > should match snapshot 1`] = `
+<div>
+  <form>
+    <div
+      class="wfp--inline-loading"
+    >
+      <div
+        class="wfp--inline-loading__animation"
+      >
+        <div
+          aria-live="assertive"
+          class="wfp--loading wfp--loading--inline"
+        >
+          <svg
+            class="wfp--loading__svg"
+            viewBox="-75 -75 150 150"
+          >
+            <title>
+              Loading
+            </title>
+            <circle
+              cx="37.5"
+              cy="0"
+              r="4"
+              style="display: display;"
+            />
+            <circle
+              cx="26.516504294495533"
+              cy="26.51650429449553"
+              r="4"
+              style="display: display;"
+            />
+            <circle
+              cx="2.296212748401287e-15"
+              cy="37.5"
+              r="4"
+              style="display: display;"
+            />
+            <circle
+              cx="-26.51650429449553"
+              cy="26.516504294495533"
+              r="4"
+              style="display: display;"
+            />
+            <circle
+              cx="-37.5"
+              cy="4.592425496802574e-15"
+              r="4"
+              style="display: display;"
+            />
+            <circle
+              cx="-26.516504294495537"
+              cy="-26.51650429449553"
+              r="4"
+              style="display: display;"
+            />
+            <circle
+              cx="-6.8886382452038615e-15"
+              cy="-37.5"
+              r="4"
+              style="display: display;"
+            />
+            <circle
+              cx="26.516504294495526"
+              cy="-26.516504294495537"
+              r="4"
+              style="display: none;"
+            />
+          </svg>
+        </div>
+      </div>
+      <p
+        class="wfp--inline-loading__text"
+      >
+        loading...
+      </p>
+    </div>
+  </form>
+</div>
+`;
+
+exports[`Survey > should render loading indicator 1`] = `
+<div>
+  <form>
+    <div
+      class="wfp--inline-loading"
+    >
+      <div
+        class="wfp--inline-loading__animation"
+      >
+        <div
+          aria-live="assertive"
+          class="wfp--loading wfp--loading--inline"
+        >
+          <svg
+            class="wfp--loading__svg"
+            viewBox="-75 -75 150 150"
+          >
+            <title>
+              Loading
+            </title>
+            <circle
+              cx="37.5"
+              cy="0"
+              r="4"
+              style="display: display;"
+            />
+            <circle
+              cx="26.516504294495533"
+              cy="26.51650429449553"
+              r="4"
+              style="display: display;"
+            />
+            <circle
+              cx="2.296212748401287e-15"
+              cy="37.5"
+              r="4"
+              style="display: display;"
+            />
+            <circle
+              cx="-26.51650429449553"
+              cy="26.516504294495533"
+              r="4"
+              style="display: display;"
+            />
+            <circle
+              cx="-37.5"
+              cy="4.592425496802574e-15"
+              r="4"
+              style="display: display;"
+            />
+            <circle
+              cx="-26.516504294495537"
+              cy="-26.51650429449553"
+              r="4"
+              style="display: display;"
+            />
+            <circle
+              cx="-6.8886382452038615e-15"
+              cy="-37.5"
+              r="4"
+              style="display: display;"
+            />
+            <circle
+              cx="26.516504294495526"
+              cy="-26.516504294495537"
+              r="4"
+              style="display: none;"
+            />
+          </svg>
+        </div>
+      </div>
+      <p
+        class="wfp--inline-loading__text"
+      >
+        loading...
+      </p>
+    </div>
+  </form>
+</div>
+`;

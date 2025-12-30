@@ -1,0 +1,142 @@
+{
+    "deleteSavedSurveyModal": {
+        "delete": "Are you sure you want to delete the survey.",
+        "actionCannotBeUndone": "This action cannot be undone.",
+        "modalHeading": "Delete Survey"
+    },
+    "actions": {
+        "delete": "Delete",
+        "cancel": "Cancel",
+        "login": "Log in",
+        "logout": "Log out",
+        "help": "Help",
+        "goToHome": "Go to home",
+        "copiedToClipboard": "Copied to clipboard",
+        "close": "Close",
+        "edit": "Edit",
+        "share": "Share",
+        "previous": "Previous",
+        "next": "Next",
+        "save": "Save"
+    },
+    "filters": {
+        "show": "Show Filters",
+        "hide": "Hide Filters",
+        "clear": "Clear All",
+        "apply": "Apply"
+    },
+    "footer": {
+        "address": "Via C. G. Viola 68 Parco dei Medici",
+        "code": "00148 Rome, Italy",
+        "privacy": "Privacy",
+        "terms": "Terms Of Use",
+        "link": "Wfp.org",
+        "version": "ver.",
+        "wfp": "World Food Programme",
+        "description": "The United Nations World Food Programme - saving lives in emergencies\nand changing lives for millions through sustainable development. WFP\nworks in more than 80 countries around the world, feeding people\ncaught in conflict and disasters, and laying the foundations for a\nbetter future."
+    },
+    "generate": {
+        "title": "GENERATE A SURVEY",
+        "download": {
+            "xls": "Download XLSForm",
+            "word": "Download Word Format"
+        },
+        "preview": "Preview Survey",
+        "publish": "Publish Survey",
+        "site": "Site",
+        "projects": "Projects",
+        "notification": {
+            "uploadError": "Error uploading file.",
+            "getProjectError": "Error getting projects",
+            "uploadLocation": "Uploading form to {{name}}…",
+            "uploadConfirmation": "Form has been uploaded to {{name}}"
+        }
+    },
+    "landingPage": {
+        "title": "Survey Designer",
+        "wfp": "WFP",
+        "description": "Welcome to Survey Designer! This tool allows you to build \n high-quality, multi-lingual, standardized surveys in a few \n simple steps. It follows the WFP standard naming conventions \n (Codebook) while giving you flexibility on what to include in \n your survey. It allows you to either generate the survey as an \n XLSForm or to push directly into ODK-based tools such as: MoDa \n and Kobo.",
+        "learnMore": "to learn more!",
+        "welcome": "Welcome"
+    },
+    "modules": {
+        "errors": {
+            "selectOneSubModule": "Please select at least one submodule.",
+            "mandatoryModule": "This is a required module for this type of survey, are you sure you want to delete it?",
+            "noModules": "Modules not found. Please change your selections on the first step.",
+            "mandatoryIndicator": "This is a required indicator for this type of survey, are you sure you want to delete it?"
+        },
+        "indicatorAreas": {
+            "title": "INDICATORS"
+        },
+        "title": "MODULES & SUBMODULES"
+    },
+    "nav": {
+        "codebook": "Codebook",
+        "cms": "CMS",
+        "manageApiKeys": "Manage API Keys",
+        "profile": "Profile"
+    },
+    "review": {
+        "languages": "Languages",
+        "previewSurvey": "Preview Survey"
+    },
+    "sharedLinkLandingPage": {
+        "SurveyNotFound": "Survey not found",
+        "createCopy": "Create a copy",
+        "generatingDocument": "Generating document"
+    },
+    "sharedLinkModal": {
+        "description": "Copy the link below and share it with others. Anyone with the link will be able to view the survey.",
+        "heading": "Share survey"
+    },
+    "submoduleList": {
+        "nothingToReview": "There is nothing to review.",
+        "deleteConfirmationSingular": "These are required questions",
+        "deleteConfirmationPlural": "These are required questions for this submodule, are you sure you want to delete it?"
+    },
+    "submoduleListItem": {
+        "noIndicatorsIncluded": "* No indicators included for this sub-module",
+        "partiallyIncluded": "* Partially included with {{indicatorsList}}",
+        "indicatorPlural": "* The {{indicatorsList}} indicators includes all the questions of this sub-module",
+        "indicatorSingular": "* The {{indicatorsList}} indicator includes all the questions of this sub-module"
+    },
+    "survey": {
+        "title": "Survey title",
+        "organizations": "Organizations",
+        "category": "Category",
+        "type": "Type",
+        "mode": "Mode",
+        "context": "Context"
+    },
+    "surveyTable": {
+        "name": "Name",
+        "organizations": "Organizations",
+        "category": "Category",
+        "type": "Type",
+        "mode": "Mode",
+        "context": "Context",
+        "lastSavedDate": "Last Saved"
+    },
+    "surveyWizard": {
+        "title": "Survey Wizard",
+        "subTitle": "Complete the steps to generate and publish a survey",
+        "steps": {
+            "defineSurvey": "DEFINE YOUR SURVEY",
+            "selectModules": "DESIGN YOUR SURVEY",
+            "selectAdditionQuestions": "CUSTOMIZE YOUR SURVEY",
+            "generatePublishSurvey": "GENERATE & PUBLISH SURVEY"
+        },
+        "stepTitle": "Step: {{currentStep}}/{{stepsCount}} {{currentStepTitle}}",
+        "modulesCount": "{{moduleCount}} modules, {{submoduleCount}} submodules selected",
+        "questionsGeneratedCount": "({{numberOfQuestionsToBeGenerated}} questions to be generated)",
+        "deselectAllSubmodules": "Deselect All Submodules",
+        "selectAllSubmodules": "Select All Submodules",
+        "expandAllSubmodules": "Expand All Submodules",
+        "collapseAllSubmodules": "Collapse All Submodules",
+        "expandAllIndicators": "Expand All Indicators",
+        "collapseAllIndicators": "Collapse All Indicators",
+        "savedSurveys": "Saved Surveys",
+        "createSurvey": "Create Survey"
+    }
+}

@@ -1,0 +1,67 @@
+.djn-group-nested {
+  margin-left: 200px !important;
+  margin-right: 200px !important;
+}
+
+.vForeignKeyRawIdAdminField {
+  display: none !important;
+}
+
+.required:after {
+  content: " *" !important;
+  color: red;
+}
+.bold-link {
+  font-weight: 600;
+}
+[id^="add_id_sub_questions-"][id$="-suffix_2"]:not([id*="__prefix__"]) {
+  display: none !important;
+}
+
+.cancelButton {
+  background: #999;
+  padding: 10px 15px !important;
+  color: #fff;
+  height: 35px;
+  line-height: 15px;
+  margin: 0 0 0 5px !important;
+}
+
+.cancelButton:hover {
+  background: #447e9b;
+  padding: 10px 15px;
+  color: #fff;
+}
+
+#lookup_id_mapping {
+  display: none !important;
+}
+
+#lookup_id_default_submodule_mapping {
+  display: none !important;
+}
+
+.d-flex {
+  display: flex;
+}
+
+.justify-content-space-between {
+  justify-content: space-between;
+}
+
+.align-items-center {
+  align-items: center;
+}
+
+.upload-button {
+  padding: 10px 15px !important;
+  display: inline-block;
+  text-align: center;
+  align-items: flex-start;
+}
+
+.admin-action-buttons {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+}

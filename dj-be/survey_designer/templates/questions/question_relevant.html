@@ -1,0 +1,86 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <link rel="stylesheet" type="text/css" href="/static/admin/css/base.css">
+  <link rel="stylesheet" href="/static/css/admin.css">
+  <link rel="stylesheet" type="text/css" href="/static/admin/css/forms.css">
+  <link rel="stylesheet" type="text/css" href="{% static '/js/tribute/tribute.css' %}">
+  <script src="/static/admin/js/vendor/jquery/jquery.js"></script>
+  <link href="/static/admin/css/vendor/select2/select2.css" type="text/css" media="screen" rel="stylesheet">
+  <link href="/static/admin/css/autocomplete.css" type="text/css" media="screen" rel="stylesheet">
+  <script src="/static/admin/js/vendor/select2/select2.full.js"></script>
+  <script src="{% static '/js/tribute/tribute.js' %}"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      $('#id_base_questions').select2({
+        width: '80%',
+        ajax: {
+          url: '/admin/questions/basequestion/autocomplete/',
+          dataType: 'json'
+        }
+      });
+
+      var tribute = new Tribute({
+        values: function (text, cb) {
+          const url = `/admin/questions/basequestion/autocomplete/?term=${text}`;
+          $.get(url, function (data) {
+            cb(data.results);
+          });
+        },
+        trigger: '$',
+        lookup: 'text',
+        fillAttr: 'text',
+        requireLeadingSpace: false,
+        selectTemplate: (item) => {
+          return '${' + item.original.text + '}';
+        },
+      });
+
+      tribute.attach(document.getElementById("id_relevant"));
+    });
+  </script>
+
+  <style>
+      input {
+          text-align: center;
+      }
+      .fieldMargin {
+          margin-left: 1rem;
+          margin-right: 1rem;
+          text-align: center;
+      }
+      .d-flex {
+          display: flex;
+      }
+      .margin-b {
+          margin-bottom: 1rem;
+      }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <form method="POST">
+    {% csrf_token %}
+    <div class="form-row">
+      <div>
+        Questions:
+        {% for question in form.base_questions_qs %}
+          <span>{% if not forloop.first %},{% endif %} {{ question.name }}</span>
+        {% endfor %}
+      </div>
+      {{ form.base_questions.as_hidden }}
+      <div class="fieldWrapper" style="margin-top: 1rem">
+        <label for="{{ form.relevant.id_for_label }}">Relevant: </label>
+        {{ form.relevant }}
+        {{ form.relevant.errors }}
+      </div>
+    </div>
+
+    <div class="submit-row" style="margin-top: 2rem">
+      <button type="button" class="button cancelButton" onclick="window.history.back()">CANCEL</button>
+      <input type="submit" value="Save" class="default" name="_save">
+    </div>
+  </form>
+{% endblock content %}

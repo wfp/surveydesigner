@@ -1,0 +1,89 @@
+{% load i18n admin_urls %}
+<div class="js-inline-admin-formset inline-group"
+     style="display: flex; border-bottom: 1px solid #eee;"
+     id="{{ inline_admin_formset.formset.prefix }}-group"
+     data-inline-type="stacked"
+     data-inline-formset="{{ inline_admin_formset.inline_formset_data }}">
+  <label style="width: 160px; margin-left: 2rem">Survey Modes: </label>
+  <div>
+    {{ inline_admin_formset.formset.management_form }}
+    {{ inline_admin_formset.formset.non_form_errors }}
+    {% for inline_admin_form in inline_admin_formset %}
+      {% if inline_admin_form.form.non_field_errors %}{{ inline_admin_form.form.non_field_errors }}{% endif %}
+
+      {% if inline_admin_form.form.survey_mode.value %}
+
+        {% if inline_admin_form.needs_explicit_pk_field %}{{ inline_admin_form.pk_field.field }}{% endif %}
+        {% if inline_admin_form.fk_field %}{{ inline_admin_form.fk_field.field }}{% endif %}
+
+
+        <div class="form-wrapper" style="margin-bottom: 0.5rem">
+            <div class="checkbox-row">
+              {{ inline_admin_form.form.include }}
+              <label class="vCheckboxLabel" for="{{ inline_admin_form.form.include.id_for_label }}">
+                {% if inline_admin_form.form.instance.survey_mode.id %}
+                  {{ inline_admin_form.form.instance.survey_mode }}
+                  {% if user.is_global_admins_member or user.is_superuser %}
+                    <label>(</label>
+                    {% for item in inline_admin_form.form.instance.survey_mode.organizations.all %}
+                      {{ item }}
+                    {% endfor %}
+                    <label>)</label>
+                  {% endif %}
+                {% else %}
+                  {{ inline_admin_form.form.survey_mode.initial }}
+                  {% if user.is_global_admins_member or user.is_superuser %}
+                    <label>(</label>
+                    {% for item in inline_admin_form.form.survey_mode.initial.organizations.all %}
+                      {{ item }}
+                    {% endfor %}
+                    <label>)</label>
+                  {% endif %}
+                {% endif %}
+              </label>
+              {{ inline_admin_form.form.include.errors }}
+              {{ inline_admin_form.form.survey_mode.errors }}
+            </div>
+
+          <div class="to-toggle">
+            <div class="checkbox-row" style="margin-left: 1rem; margin-top: 0.5rem">
+              {{ inline_admin_form.form.is_mandatory }}
+              <label class="vCheckboxLabel" for="{{ inline_admin_form.form.is_mandatory.id_for_label }}">
+                Is Mandatory?
+              </label>
+              {{ inline_admin_form.form.is_mandatory.errors }}
+            </div>
+            {{ inline_admin_form.form.survey_mode.as_hidden }}
+
+            {% if inline_admin_formset.formset.can_delete and inline_admin_formset.has_delete_permission and inline_admin_form.original %}
+              <span class="delete hidden">{{ inline_admin_form.deletion_field.field }} {{ inline_admin_form.deletion_field.label_tag }}</span>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+{##}
+{##}
+{#<fieldset class="module {{ inline_admin_formset.classes }}">#}
+{#  {% for inline_admin_form in inline_admin_formset %}#}
+{#    <div#}
+{#        class="inline-related{% if inline_admin_form.original or inline_admin_form.show_url %} has_original{% endif %}{% if forloop.last and inline_admin_formset.has_add_permission %} empty-form last-related{% endif %}"#}
+{#        id="{{ inline_admin_formset.formset.prefix }}-#}
+{#            {% if not forloop.last %}{{ forloop.counter0 }}{% else %}empty{% endif %}">#}
+{#    </div>#}
+{#  {% endfor %}#}
+{#</fieldset>#}

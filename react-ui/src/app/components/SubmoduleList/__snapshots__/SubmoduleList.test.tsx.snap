@@ -1,0 +1,147 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`SubmoduleList > should match snapshot 1`] = `
+<div>
+  <div>
+    <ul
+      class="wfp--list"
+    >
+      <li
+        class="wfp--list__element module-title"
+      >
+        <span
+          class="wfp--list__element__title"
+        >
+          <div
+            class="d-flex"
+            style="cursor: pointer;"
+          >
+            <div
+              role="button"
+            >
+              <svg
+                aria-hidden="true"
+                class="svg-inline--fa fa-caret-down "
+                data-icon="caret-down"
+                data-prefix="fas"
+                focusable="false"
+                role="img"
+                style="vertical-align: middle; margin-right: 0.5rem;"
+                viewBox="0 0 320 512"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M137.4 374.6c12.5 12.5 32.8 12.5 45.3 0l128-128c9.2-9.2 11.9-22.9 6.9-34.9s-16.6-19.8-29.6-19.8L32 192c-12.9 0-24.6 7.8-29.6 19.8s-2.2 25.7 6.9 34.9l128 128z"
+                  fill="currentColor"
+                />
+              </svg>
+            </div>
+            <div />
+          </div>
+        </span>
+        <span
+          class="wfp--list__element__content"
+        />
+      </li>
+      <ul
+        class="wfp--list"
+        style="margin-left: 1rem;"
+      >
+        <li
+          class="wfp--list__element module-title"
+        >
+          <span
+            class="wfp--list__element__title"
+          >
+            <div
+              class="d-flex"
+              style="cursor: pointer;"
+            >
+              <div
+                role="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="svg-inline--fa fa-caret-down "
+                  data-icon="caret-down"
+                  data-prefix="fas"
+                  focusable="false"
+                  role="img"
+                  style="vertical-align: middle; margin-right: 0.5rem;"
+                  viewBox="0 0 320 512"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M137.4 374.6c12.5 12.5 32.8 12.5 45.3 0l128-128c9.2-9.2 11.9-22.9 6.9-34.9s-16.6-19.8-29.6-19.8L32 192c-12.9 0-24.6 7.8-29.6 19.8s-2.2 25.7 6.9 34.9l128 128z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </div>
+              <div
+                style="font-weight: 600;"
+              />
+            </div>
+          </span>
+          <span
+            class="wfp--list__element__content"
+          />
+        </li>
+        <div
+          style="margin-left: 1rem;"
+        >
+          <li
+            class="wfp--list__element submodule-item"
+          >
+            <span
+              class="wfp--list__element__content"
+            >
+              <div
+                class="d-flex"
+              >
+                <div
+                  class="wfp--form-item wfp--checkbox-wrapper"
+                >
+                  <input
+                    class="wfp--checkbox"
+                    id="undefined"
+                    type="checkbox"
+                  />
+                  <label
+                    class="wfp--checkbox-label"
+                    for="undefined"
+                  >
+                    <span
+                      class="wfp--checkbox-label-text"
+                    >
+                      undefined (1)
+                    </span>
+                  </label>
+                </div>
+                <a
+                  class="wfp--link"
+                >
+                  <svg
+                    aria-hidden="true"
+                    class="svg-inline--fa fa-arrow-up-right-from-square wfp--btn__icon cms-link-icon"
+                    data-icon="arrow-up-right-from-square"
+                    data-prefix="fas"
+                    focusable="false"
+                    role="img"
+                    viewBox="0 0 512 512"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M320 0c-17.7 0-32 14.3-32 32s14.3 32 32 32l82.7 0L201.4 265.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L448 109.3l0 82.7c0 17.7 14.3 32 32 32s32-14.3 32-32l0-160c0-17.7-14.3-32-32-32L320 0zM80 32C35.8 32 0 67.8 0 112L0 432c0 44.2 35.8 80 80 80l320 0c44.2 0 80-35.8 80-80l0-112c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 112c0 8.8-7.2 16-16 16L80 448c-8.8 0-16-7.2-16-16l0-320c0-8.8 7.2-16 16-16l112 0c17.7 0 32-14.3 32-32s-14.3-32-32-32L80 32z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </a>
+              </div>
+            </span>
+          </li>
+        </div>
+      </ul>
+    </ul>
+  </div>
+</div>
+`;

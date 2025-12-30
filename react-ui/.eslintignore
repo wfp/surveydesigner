@@ -1,0 +1,3 @@
+**/*.test.ts
+**/*.test.tsx
+survey_designer/apps/frontend/src/app/setupTests.js

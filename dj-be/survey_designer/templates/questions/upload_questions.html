@@ -1,0 +1,124 @@
+{% extends "admin/base_site.html" %} {% load static %} {% block branding %}
+  <h1 id="site-name">
+    <a href="{% url 'admin:index' %}">Survey Designer Admin</a>
+  </h1>
+{% endblock %} {% block extrahead %} {{ block.super }}
+  <link rel="stylesheet" type="text/css" href="/static/admin/css/base.css"/>
+  <link rel="stylesheet" href="/static/css/admin.css"/>
+  <link rel="stylesheet" type="text/css" href="/static/admin/css/forms.css"/>
+  <script src="/static/admin/js/vendor/jquery/jquery.js"></script>
+  <link
+    href="/static/admin/css/vendor/select2/select2.css"
+    type="text/css"
+    media="screen"
+    rel="stylesheet"
+  />
+  <link
+    href="/static/admin/css/autocomplete.css"
+    type="text/css"
+    media="screen"
+    rel="stylesheet"
+  />
+  <script src="/static/admin/js/vendor/select2/select2.full.js"></script>
+
+  <style>
+    input {
+      text-align: center;
+    }
+
+    .fieldMargin {
+      margin-left: 1rem;
+      margin-right: 1rem;
+      text-align: center;
+    }
+
+    .d-flex {
+      display: flex;
+    }
+
+    .margin-b {
+      margin-bottom: 1rem;
+    }
+
+    .error-title {
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      margin-top: 0.5rem;
+    }
+  </style>
+{% endblock %} {% block content %}
+  <form method="POST" enctype="multipart/form-data">
+    <div>
+      {% csrf_token %}
+      <div class="form-row">
+        <button
+          type="submit"
+          class="button upload-button">
+          Download Template
+        </button>
+        <div class="fieldwrapper" style="margin-top: 1rem">
+          <label for="{{ download_form.languages_for_label }}">Languages: </label>
+          {{ download_form.languages }} {{ download_form.languages.errors }}
+        </div>
+      </div>
+    </div>
+  </form>
+  <form method="POST" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    <hr style="margin-top: 1rem; margin-bottom: 1rem"/>
+
+    {% if other_errors %}
+      <div>
+        {% for key, data in other_errors.items %} {% if data.errors %}
+          <div class="error-title">{{ key }} Errors:</div>
+        {% endif %} {% for row_key, value in data.errors.items %}
+          <div style="margin-left: 1rem">
+            <div>Row: <strong>{{ row_key }}</strong></div>
+            <div style="margin-left: 1rem">
+              {% for field_key, field_errors in value.items %}
+                <div>Column: <strong>{{ field_key }}</strong></div>
+                <div style="margin-left: 1rem">
+                  {% for error in field_errors %}
+                    <div>{{ error }}</div>
+                  {% endfor %}
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %} {% if data.non_form_errors %}
+          <div class="error-title">{{ key }} Other Errors:</div>
+        {% endif %} {% for error in data.non_form_errors %}
+          <div style="margin-left: 1rem">{{ error }}</div>
+        {% endfor %}
+          <hr style="margin-top: 0.5rem; margin-bottom: 0.5rem"/>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="form-row">
+      <div class="fieldWrapper" style="margin-top: 1rem">
+        <label for="{{ form.organizations.id_for_label }}">Organizations: </label>
+        {{ form.organizations }} {{ form.organizations.errors }}
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="fieldWrapper" style="margin-top: 1rem">
+        <label for="{{ form.file.id_for_label }}">File: </label>
+        {{ form.file }} {{ form.file.errors }}
+      </div>
+    </div>
+
+    <div class="submit-row" style="margin-top: 2rem">
+      <button
+        type="button"
+        class="button cancelButton"
+        onclick="window.history.back()"
+      >
+        CANCEL
+      </button>
+      <input type="submit" value="Import" class="default" name="_save"/>
+    </div>
+  </form>
+{% endblock content %}

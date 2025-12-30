@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.idea/
+
+# npm
+node_modules/
+dist/
+.cache/
+*.map
+
+# Django
+/static
+uploads/
+vendors/
+.env
+*.logs
+
+# coverage
+.coverage
+coverage/
+htmlcov/
+coverage.xml
+test-results.xml
+.pytest_cache
+
+# Vscode
+.vscode
+
+#os
+.DS_Store

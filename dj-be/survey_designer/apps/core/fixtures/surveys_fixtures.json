@@ -1,0 +1,67 @@
+[
+  {
+    "model": "surveys.surveycategory",
+    "pk": 1,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "Monitoring",
+      "label": "Monitoring",
+      "description": "Monitoring"
+    }
+  },
+  {
+    "model": "surveys.surveytype",
+    "pk": 1,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "PDM",
+      "label": "Post-Distribution Monitoring",
+      "description": "Post-Distribution Monitoring",
+      "category": 1
+    }
+  },
+  {
+    "model": "surveys.surveymode",
+    "pk": 1,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "f2f",
+      "label": "Face-to-face",
+      "description": "Face-to-face"
+    }
+  },
+  {
+    "model": "surveys.surveymode",
+    "pk": 2,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "mobile",
+      "label": "Mobile/Remote",
+      "description": "Mobile/Remote"
+    }
+  },
+  {
+    "model": "surveys.surveyattribute",
+    "pk": 1,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "ENA",
+      "label": "Essential Needs"
+    }
+  },
+  {
+    "model": "surveys.surveyattribute",
+    "pk": 2,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "Urban",
+      "label": "Urban"
+    }
+  }
+]

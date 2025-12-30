@@ -1,0 +1,153 @@
+[
+  {
+    "model": "questions.basequestion",
+    "pk": 1,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "FCSStap",
+      "polymorphic_ctype": [
+        "questions",
+        "rootquestion"
+      ]
+    }
+  },
+  {
+    "model": "questions.basequestion",
+    "pk": 2,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "FCSPr",
+      "polymorphic_ctype": [
+        "questions",
+        "rootquestion"
+      ]
+    }
+  },
+  {
+    "model": "questions.basequestion",
+    "pk": 3,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "rCSILessQlty",
+      "polymorphic_ctype": [
+        "questions",
+        "rootquestion"
+      ]
+    }
+  },
+  {
+    "model": "questions.basequestion",
+    "pk": 4,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "EnuSex",
+      "polymorphic_ctype": [
+        "questions",
+        "rootquestion"
+      ]
+    }
+  },
+
+  {
+    "model": "questions.rootquestion",
+    "pk": 1,
+    "fields": {
+      "basequestion_ptr": 1,
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "FCSStap",
+      "description": "Staples food consumption",
+      "type": "integer",
+      "label": "How many days over the last 7 days, did members of your household eat the following food items, prepared and/or consumed at home, and what was their source? (Use codes below, write 0 if not consumed in last 7 days). Note for enumerator: Determine whether consumption of fish, milk was only in small quantities."
+    }
+  },
+  {
+    "model": "questions.rootquestion",
+    "pk": 2,
+    "fields": {
+      "basequestion_ptr": 2,
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "FCSPr",
+      "description": "Protein food consumption",
+      "type": "integer",
+      "label": "How many days has your household consumed protein-rich foods in the past 7 days?"
+    }
+  },
+  {
+    "model": "questions.rootquestion",
+    "pk": 3,
+    "fields": {
+      "basequestion_ptr": 3,
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "rCSILessQlty",
+      "description": "Rely on less preferred and less expensive food",
+      "type": "integer",
+      "label": "During the last 7 days, were there days (and, if so, how many) when your household had to employ one of the following strategies (to cope with a lack of food or money to buy it)?",
+      "hint": "Answer between 0 and 7 days."
+    }
+  },
+  {
+    "model": "questions.rootquestion",
+    "pk": 4,
+    "fields": {
+      "basequestion_ptr": 4,
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "EnuSex",
+      "description": "Sex of the Interviewer/Enumerator. Can be useful in some bias.",
+      "type": "select_one",
+      "choices": 2,
+      "label": "Sex of the interviewer"
+    }
+  },
+  {
+    "model": "questions.subquestion",
+    "pk": 1,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "root_question": 2,
+      "suffix": 2,
+      "label": "Source of food?"
+    }
+  },
+  {
+    "model": "questions.subquestion",
+    "pk": 2,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "root_question": 3,
+      "suffix": 5,
+      "label": "During the last 7 days, were there days when your household had to employ one of the following strategies (to cope with a lack of food or money to buy it)?"
+    }
+  },
+  {
+    "model": "questions.subquestion",
+    "pk": 3,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "root_question": 3,
+      "suffix": 1,
+      "label": "Other, please specify"
+    }
+  },
+  {
+    "model": "questions.subquestion",
+    "pk": 4,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "root_question": 4,
+      "suffix": 1,
+      "label": "Other, please specify"
+    }
+  }
+]

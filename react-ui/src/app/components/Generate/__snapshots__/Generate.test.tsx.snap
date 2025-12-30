@@ -1,0 +1,90 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Generate > should match snapshot 1`] = `
+<div>
+  <form
+    class="w-100 h-100 d-flex align-items-center"
+  >
+    <div
+      class="d-flex w-100"
+    >
+      <div
+        class="flex-column d-flex"
+        style="flex-direction: column;"
+      >
+        <div
+          class="flex-column d-flex justify-content-center align-items-center"
+          style="flex-direction: column;"
+        >
+          <div
+            style="margin-bottom: 1rem; display: flex; flex-direction: column;"
+          >
+            <button
+              class="wfp--form-controls__next wfp--btn wfp--btn--primary wfp--btn wfp--btn--primary"
+              style="margin-bottom: 1rem; background-color: rgb(0, 135, 103); width: 230px;"
+              type="button"
+            >
+              <div
+                style="display: flex; flex-direction: row; align-items: center; text-align: right;"
+              >
+                <div>
+                  <svg
+                    fill="currentColor"
+                    height="1em"
+                    stroke="currentColor"
+                    stroke-width="0"
+                    style="font-size: x-large; margin-top: 5px; margin-left: -5px;"
+                    viewBox="0 0 384 512"
+                    width="1em"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M224 136V0H24C10.7 0 0 10.7 0 24v464c0 13.3 10.7 24 24 24h336c13.3 0 24-10.7 24-24V160H248c-13.2 0-24-10.8-24-24zm60.1 106.5L224 336l60.1 93.5c5.1 8-.6 18.5-10.1 18.5h-34.9c-4.4 0-8.5-2.4-10.6-6.3C208.9 405.5 192 373 192 373c-6.4 14.8-10 20-36.6 68.8-2.1 3.9-6.1 6.3-10.5 6.3H110c-9.5 0-15.2-10.5-10.1-18.5l60.3-93.5-60.3-93.5c-5.2-8 .6-18.5 10.1-18.5h34.8c4.4 0 8.5 2.4 10.6 6.3 26.1 48.8 20 33.6 36.6 68.5 0 0 6.1-11.7 36.6-68.5 2.1-3.9 6.2-6.3 10.6-6.3H274c9.5-.1 15.2 10.4 10.1 18.4zM384 121.9v6.1H256V0h6.1c6.4 0 12.5 2.5 17 7l97.9 98c4.5 4.5 7 10.6 7 16.9z"
+                    />
+                  </svg>
+                </div>
+                <div
+                  style="margin-left: 5px;"
+                >
+                  generate.download.xls
+                </div>
+              </div>
+            </button>
+            <button
+              class="wfp--form-controls__next wfp--btn wfp--btn--primary wfp--btn wfp--btn--primary"
+              style="width: 230px;"
+              type="button"
+            >
+              <div
+                style="display: flex; flex-direction: row; align-items: center; text-align: right;"
+              >
+                <div>
+                  <svg
+                    fill="currentColor"
+                    height="1em"
+                    stroke="currentColor"
+                    stroke-width="0"
+                    style="font-size: x-large; margin-top: 5px; margin-left: -5px;"
+                    viewBox="0 0 384 512"
+                    width="1em"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M224 136V0H24C10.7 0 0 10.7 0 24v464c0 13.3 10.7 24 24 24h336c13.3 0 24-10.7 24-24V160H248c-13.2 0-24-10.8-24-24zm57.1 120H305c7.7 0 13.4 7.1 11.7 14.7l-38 168c-1.2 5.5-6.1 9.3-11.7 9.3h-38c-5.5 0-10.3-3.8-11.6-9.1-25.8-103.5-20.8-81.2-25.6-110.5h-.5c-1.1 14.3-2.4 17.4-25.6 110.5-1.3 5.3-6.1 9.1-11.6 9.1H117c-5.6 0-10.5-3.9-11.7-9.4l-37.8-168c-1.7-7.5 4-14.6 11.7-14.6h24.5c5.7 0 10.7 4 11.8 9.7 15.6 78 20.1 109.5 21 122.2 1.6-10.2 7.3-32.7 29.4-122.7 1.3-5.4 6.1-9.1 11.7-9.1h29.1c5.6 0 10.4 3.8 11.7 9.2 24 100.4 28.8 124 29.6 129.4-.2-11.2-2.6-17.8 21.6-129.2 1-5.6 5.9-9.5 11.5-9.5zM384 121.9v6.1H256V0h6.1c6.4 0 12.5 2.5 17 7l97.9 98c4.5 4.5 7 10.6 7 16.9z"
+                    />
+                  </svg>
+                </div>
+                <div
+                  style="margin-left: 5px;"
+                >
+                  generate.download.word
+                </div>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+`;

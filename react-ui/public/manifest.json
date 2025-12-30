@@ -1,0 +1,25 @@
+{
+  "short_name": "Survey Designer",
+  "name": "WFP Survey Designer",
+  "icons": [
+    {
+      "src": "//cdn.wfp.org/guides/ui/assets/v0.0.1/favicons/favicon-260x260.png",
+      "sizes": "64x64 32x32 24x24 16x16 144x144 256x256",
+      "type": "image/png"
+    },
+    {
+      "src": "favicon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "favicon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0A6EB4",
+  "background_color": "#ffffff"
+}

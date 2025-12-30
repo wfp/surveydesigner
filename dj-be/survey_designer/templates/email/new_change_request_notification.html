@@ -1,0 +1,5 @@
+{% extends 'email/base.html' %}
+
+{% block content %}
+  New change request: <a href='{{ host_name }}{% url 'admin:requests_changerequest_change' change_request.id  %}'>{{ change_request }}</a>
+{% endblock content %}

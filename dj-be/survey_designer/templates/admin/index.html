@@ -1,0 +1,28 @@
+{% extends "admin/index.html" %}
+{% load static %}
+
+{% block content_title %}
+  <div class="d-flex justify-content-space-between align-items-center">
+    {% if title %}
+      <h1>{{ title }}</h1>
+    {% endif %}
+    <div class="admin-action-buttons">
+      <a
+        href="{% url "submit_change_request" %}"
+        class="button upload-button"
+        style="padding: 7px 15px;"
+      >
+        Submit Change Request
+      </a>
+      {% if user and user.can_bulk_upload %}
+        <a
+          href="{% url "import" %}"
+          class="button upload-button"
+          style="padding: 7px 15px;"
+        >
+          Bulk Upload/Edits
+        </a>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

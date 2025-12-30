@@ -1,0 +1,703 @@
+import { InlineLoading, Modal, Callout } from "@wfp/react";
+import React, {
+  ChangeEvent,
+  Dispatch,
+  SetStateAction,
+  SyntheticEvent,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
+import { useForm } from "react-hook-form";
+import {
+  DragDropContext,
+  Droppable,
+  OnDragEndResponder,
+} from "react-beautiful-dnd";
+import { useTranslation } from "react-i18next";
+import { useAppDispatch, useAppSelector } from "../../redux/store";
+import { fetchModules } from "../../redux/actions/modulesActions";
+import { submodulesActions } from "../../redux/reducers/submodulesReducer";
+import {
+  surveyFormActions,
+  SurveyFormState,
+} from "../../redux/reducers/surveyFormReducer";
+import ModuleListItem from "../ModuleListItem";
+import IndicatorAreaListItem from "../IndicatorAreaListItem";
+import { useModules } from "../../contexts/ModulesContext";
+import { getCompareFunction } from "../../utils";
+import { apiValidation, getErrorDisplay } from "./utils";
+import { fetchIndicatorAreas } from "../../redux/actions/indicatorAreasActions";
+import { Indicator, Module, Submodule } from "../../types/api";
+import { ModulesProps } from "./Modules.interface";
+import { IndicatorAreaWithIndicators } from "../../types";
+
+function Modules({
+  next,
+  selectAll,
+  setSelectAll,
+  collapseAllModules,
+  setCollapseAllModules,
+  collapseAllIndicatorAreas,
+  setCollapseAllIndicatorAreas,
+  prvsStep,
+  step,
+  setSelectedModuleCounts,
+  selectedSurveyToEdit,
+  setIsValidating,
+}: ModulesProps) {
+  const { t } = useTranslation();
+  const dispatch = useAppDispatch();
+  const surveyForm = useAppSelector((state) => state.surveyForm);
+  const { data, isLoading } = useAppSelector((state) => state.modules);
+  const { data: indicatorAreasData, isLoading: indicatorAreasIsLoading } =
+    useAppSelector((state) => state.indicatorAreas);
+  const [submoduleModal, setSubmoduleModal] = useState<{
+    clickedSubmodule: Submodule;
+    event?: ChangeEvent<HTMLInputElement>;
+  } | null>(null);
+  const [indicatorModal, setIndicatorModal] = useState<{
+    clickedIndicator: Indicator;
+    event?: ChangeEvent<HTMLInputElement>;
+  } | null>(null);
+  const [submitError, setSubmitError] = useState<string | string[] | null>(
+    null,
+  );
+  const { control, handleSubmit, setValue, getValues, watch, register } =
+    useForm<SurveyFormState>({
+      defaultValues: {
+        ...surveyForm,
+        sub_questions: [],
+      },
+    });
+  const modulesData = useModules();
+  const [sortedModules, setSortedModules] = useState<Module[]>([]);
+  const [sortedIndicatorAreas, setSortedIndicatorAreas] = useState<
+    IndicatorAreaWithIndicators[]
+  >([]);
+  const [refreshKey, setRefreshKey] = useState(new Date().valueOf());
+  const watchAllFields = watch();
+  const values = {
+    submodules: watchAllFields.submodules || [],
+    indicators: watchAllFields.indicators || [],
+  };
+  function handleIndicatorOnChange(
+    checked: boolean,
+    clickedIndicator: Indicator,
+    event?: ChangeEvent<HTMLInputElement>,
+  ) {
+    const inds = getValues("indicators") || [];
+    const { id } = clickedIndicator;
+    const isMandatory = clickedIndicator.is_mandatory;
+    if (checked) {
+      setValue("indicators", [...inds, id]);
+    } else {
+      if (isMandatory) {
+        setIndicatorModal({ clickedIndicator, event });
+      }
+      setValue(
+        "indicators",
+        inds.filter((ind) => ind !== id),
+      );
+    }
+  }
+
+  function debounce<F extends (...args: any[]) => any>(
+    func: F,
+    delay: number,
+  ): (...funcArgs: Parameters<F>) => void {
+    let debounceTimer: ReturnType<typeof setTimeout>;
+    return (...args: Parameters<F>) => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => func(...args), delay);
+    };
+  }
+
+  const debouncedValidation = useCallback(
+    debounce((proceed, step, setGoToStep) => {
+      handleSubmit((data) => {
+        if (!data.submodules) {
+          data.submodules = [];
+        } else if (!data.submodules.length) {
+          setSubmitError(t("modules.errors.selectOneSubModule"));
+          setGoToStep?.(step ?? 0);
+          setIsValidating(false);
+          return;
+        }
+
+        const {
+          // eslint-disable-next-line camelcase
+          current: { modules_order, submodules_order },
+        } = modulesData;
+
+        apiValidation(
+          getValues("submodules"),
+          getValues("indicators") ?? [],
+          modules_order,
+          submodules_order,
+        ).then((result) => {
+          if (result.ok) {
+            const orderedData = {
+              ...data,
+              // eslint-disable-next-line camelcase
+              submodules: modules_order
+                // eslint-disable-next-line camelcase
+                .flatMap((modId) => submodules_order[modId])
+                .filter((subId) => data.submodules.includes(subId)),
+            };
+            dispatch(surveyFormActions.setSurveyData(orderedData));
+            proceed?.();
+          } else {
+            setSubmitError(result.data);
+            setGoToStep?.(step ?? 0);
+          }
+          setIsValidating(false);
+        });
+      })();
+    }, 100),
+    [handleSubmit, setIsValidating],
+  );
+
+  function handleSubmoduleChange(
+    checked: boolean,
+    clickedSubmodule: Submodule,
+    event?: ChangeEvent<HTMLInputElement>,
+  ) {
+    const submodules = getValues("submodules");
+    const { id } = clickedSubmodule;
+    const isMandatory = clickedSubmodule.is_mandatory;
+    if (checked) {
+      const newSubmodules = [...submodules, id];
+      setValue("submodules", newSubmodules);
+      setModuleCountsFromSubmodules(newSubmodules);
+
+      if (
+        !selectAll.isChecked &&
+        newSubmodules.length === modulesData.current.submodules_count
+      ) {
+        setSelectAll({ isChecked: true, run: false });
+      }
+    } else {
+      if (isMandatory) {
+        setSubmoduleModal({ clickedSubmodule, event });
+      }
+      const newSubmodules = submodules.filter((submodule) => submodule !== id);
+      setValue("submodules", newSubmodules);
+      setModuleCountsFromSubmodules(newSubmodules);
+
+      if (selectAll.isChecked) {
+        setSelectAll({ isChecked: false, run: false });
+      }
+    }
+  }
+
+  function selectAllFunc(checked: boolean) {
+    const ids =
+      checked && data
+        ? data
+            .flatMap((module) =>
+              module.submodules.filter(
+                (submodule) =>
+                  submodule.is_active ||
+                  selectedSurveyToEdit?.submodules?.includes(submodule.id),
+              ),
+            )
+            .map((submodule) => submodule.id)
+        : [];
+    setValue("submodules", ids);
+
+    setSelectedModuleCounts({
+      moduleCount: checked ? modulesData.current.modules_count : 0,
+      submoduleCount: checked ? modulesData.current.submodules_count : 0,
+    });
+  }
+
+  function setNewModuleOrder(newOrder: number[]) {
+    modulesData.current.modules_order = newOrder;
+    const newModulesOrder = [...sortedModules];
+    newModulesOrder.sort(getCompareFunction(modulesData.current.modules_order));
+    setSortedModules(newModulesOrder);
+  }
+
+  function setNewIndicatorAreaOrder(newOrder: number[]) {
+    modulesData.current.indicator_areas_order = newOrder;
+    const newIndicatorAreasOrder = [...sortedIndicatorAreas];
+    newIndicatorAreasOrder.sort(
+      getCompareFunction(modulesData.current.indicator_areas_order),
+    );
+    setSortedIndicatorAreas(newIndicatorAreasOrder);
+  }
+
+  const handleDragEnd: OnDragEndResponder = (result) => {
+    const { destination, source, draggableId, type } = result;
+    if (!destination) {
+      return;
+    }
+
+    if (
+      destination.droppableId === source.droppableId &&
+      destination.index === source.index
+    ) {
+      return;
+    }
+
+    if (type === "MODULES") {
+      const newModuleOrder = [...modulesData.current.modules_order];
+      newModuleOrder.splice(source.index, 1);
+      newModuleOrder.splice(destination.index, 0, parseInt(draggableId, 10));
+      setNewModuleOrder(newModuleOrder);
+      return;
+    }
+    if (type === "INDICATOR-AREAS") {
+      const newIndicatorAreaOrder = [
+        ...modulesData.current.indicator_areas_order,
+      ];
+      newIndicatorAreaOrder.splice(source.index, 1);
+      newIndicatorAreaOrder.splice(
+        destination.index,
+        0,
+        parseInt(draggableId, 10),
+      );
+      setNewIndicatorAreaOrder(newIndicatorAreaOrder);
+      return;
+    }
+
+    if (destination.droppableId !== source.droppableId) {
+      return;
+    }
+    const moduleID = parseInt(type, 10);
+    if (draggableId.includes("indicator")) {
+      const newIndicatorOrder = [
+        ...modulesData.current.indicators_order[moduleID],
+      ];
+      const indicatorID = newIndicatorOrder.splice(source.index, 1)[0];
+      newIndicatorOrder.splice(destination.index, 0, indicatorID);
+
+      const newOrder = {
+        ...modulesData.current.indicators_order,
+      };
+
+      newOrder[moduleID] = newIndicatorOrder;
+      modulesData.current.indicators_order = newOrder;
+    } else {
+      const newSubmodulesOrder = [
+        ...modulesData.current.submodules_order[moduleID],
+      ];
+      const submoduleID = newSubmodulesOrder.splice(source.index, 1)[0];
+      newSubmodulesOrder.splice(destination.index, 0, submoduleID);
+
+      const newOrder = {
+        ...modulesData.current.submodules_order,
+      };
+
+      newOrder[moduleID] = newSubmodulesOrder;
+      modulesData.current.submodules_order = newOrder;
+      setRefreshKey(new Date().valueOf());
+    }
+  };
+
+  function getModulesFromSubmodules(submodules: number[]) {
+    return Object.entries(modulesData.current.submodules_order)
+      .filter((entry) =>
+        entry[1].reduce((acc, cur) => acc || submodules.includes(cur), false),
+      )
+      .map((entry) => +entry[0]);
+  }
+
+  function setModuleCountsFromSubmodules(submodules: number[]) {
+    const visibleSubmodules = submodules.filter((id) =>
+      data?.some((module) =>
+        module.submodules.some(
+          (sub) =>
+            sub.id === id &&
+            ((sub.is_active ||
+              selectedSurveyToEdit?.submodules?.includes(sub.id)) ??
+              false),
+        ),
+      ),
+    );
+
+    const visibleModules =
+      data?.filter((module) =>
+        module.submodules.some(
+          (sub) =>
+            ((sub.is_active ||
+              selectedSurveyToEdit?.submodules?.includes(sub.id)) ??
+              false) &&
+            visibleSubmodules.includes(sub.id),
+        ),
+      ) ?? [];
+
+    setSelectedModuleCounts({
+      moduleCount: visibleModules.length,
+      submoduleCount: visibleSubmodules.length,
+    });
+  }
+
+  useEffect(() => {
+    register("submodules");
+    dispatch(submodulesActions.clearSubmodules());
+    dispatch(fetchModules());
+    setSelectAll({ isChecked: false, run: true });
+    register("indicators");
+    dispatch(fetchIndicatorAreas());
+  }, []);
+
+  useEffect(() => {
+    next((proceed, step, setGoToStep) => {
+      debouncedValidation(proceed, step, setGoToStep);
+    });
+  }, [next, debouncedValidation]);
+
+  useEffect(() => {
+    if (data) {
+      const submodulesIDs: number[] = [];
+      const moduleIDs: number[] = [];
+      let submodulesCounter = 0;
+
+      // Create mapping for submodule order
+      const submoduleOrderMapping = new Map<number, number>();
+      if (selectedSurveyToEdit?.submodules_order) {
+        selectedSurveyToEdit.submodules_order.forEach((id, index) => {
+          submoduleOrderMapping.set(id, index);
+        });
+      }
+
+      const tempSortedModules = [...data].sort(
+        getCompareFunction(modulesData.current.modules_order),
+      );
+
+      tempSortedModules.forEach((module) => {
+        moduleIDs.push(module.id);
+        const tempSubmoduleIDs: number[] = module.submodules.map(
+          (submodule) => submodule.id,
+        );
+
+        module.submodules.forEach((submodule) => {
+          const shouldInclude = selectedSurveyToEdit
+            ? true
+            : submodule.is_active;
+
+          if (shouldInclude) {
+            submodulesCounter += 1;
+          }
+
+          if (
+            surveyForm.submodules.includes(submodule.id) ||
+            (prvsStep <= step && submodule.is_mandatory)
+          ) {
+            submodulesIDs.push(submodule.id);
+          }
+        });
+
+        if (!modulesData.current.modules_order.includes(module.id)) {
+          modulesData.current.modules_order.push(module.id);
+        }
+
+        if (selectedSurveyToEdit?.submodules_order) {
+          modulesData.current.submodules_order[module.id] =
+            selectedSurveyToEdit.submodules_order.filter((submoduleID) =>
+              tempSubmoduleIDs.includes(submoduleID),
+            );
+        } else {
+          modulesData.current.submodules_order[module.id] =
+            tempSubmoduleIDs.filter((submoduleID) =>
+              module.submodules.some(
+                (sub) => sub.id === submoduleID && sub.is_active,
+              ),
+            );
+        }
+      });
+
+      modulesData.current.modules_order =
+        modulesData.current.modules_order.filter((moduleID) =>
+          moduleIDs.includes(moduleID),
+        );
+
+      modulesData.current.modules_count = data.length;
+      modulesData.current.submodules_count = submodulesCounter;
+
+      // Sort submodules within each module based on modulesData.current.submodules_order
+      const tempSortedModulesWithSortedSubmodules = tempSortedModules
+        .map((module) => {
+          const sortedSubmodules = [...module.submodules].sort(
+            getCompareFunction(modulesData.current.submodules_order[module.id]),
+          );
+
+          // Filter submodules to match visibility rules
+          const filteredSubmodules = sortedSubmodules.filter(
+            (submodule) =>
+              submodule.is_active ||
+              (selectedSurveyToEdit?.submodules?.includes(submodule.id) ??
+                false),
+          );
+
+          return {
+            ...module,
+            submodules: filteredSubmodules,
+          };
+        })
+        // Filter out modules that have no visible submodules
+        .filter((module) => module.submodules.length > 0);
+
+      setSortedModules(tempSortedModulesWithSortedSubmodules);
+      modulesData.current.modules_count =
+        tempSortedModulesWithSortedSubmodules.length;
+
+      // This set submodules will override the default values.
+      // This is where we need to set default values for the submodules.
+      const defaultSubModuleIds =
+        selectedSurveyToEdit &&
+        selectedSurveyToEdit.submodules &&
+        prvsStep <= step
+          ? selectedSurveyToEdit.submodules
+          : null;
+
+      const submodulesToUse = defaultSubModuleIds || submodulesIDs;
+
+      setValue("submodules", submodulesToUse);
+      setModuleCountsFromSubmodules(submodulesToUse); // setSelectedModuleCounts on loading data
+    }
+  }, [data]);
+
+  useEffect(() => {
+    if (indicatorAreasData) {
+      const indicatorsIDs: number[] = [];
+      let indicatorsCounter = 0;
+
+      const tempSortedIndicatorAreas = [...indicatorAreasData].sort(
+        getCompareFunction(modulesData.current.indicator_areas_order),
+      );
+
+      tempSortedIndicatorAreas.forEach((indicatorArea) => {
+        const tempIndicatorIDs: number[] = [];
+
+        indicatorArea.indicators.forEach((indicator) => {
+          tempIndicatorIDs.push(indicator.id);
+          indicatorsCounter += 1;
+          if (
+            surveyForm.indicators?.includes(indicator.id) ||
+            (prvsStep <= step && indicator.is_mandatory)
+          ) {
+            indicatorsIDs.push(indicator.id);
+          }
+        });
+
+        if (
+          modulesData.current.indicator_areas_order.indexOf(
+            indicatorArea.id,
+          ) === -1
+        ) {
+          modulesData.current.indicator_areas_order.push(indicatorArea.id);
+        }
+
+        const hasIndicatorsOrder =
+          modulesData.current.indicators_order[indicatorArea.id];
+        if (!hasIndicatorsOrder) {
+          modulesData.current.indicators_order[indicatorArea.id] =
+            tempIndicatorIDs;
+        } else {
+          modulesData.current.indicators_order[indicatorArea.id] =
+            modulesData.current.indicators_order[indicatorArea.id].filter(
+              (indicatorID) => tempIndicatorIDs.includes(indicatorID),
+            );
+
+          tempIndicatorIDs.forEach((indicatorID) => {
+            if (
+              !modulesData.current.indicators_order[indicatorArea.id].includes(
+                indicatorID,
+              )
+            ) {
+              modulesData.current.indicators_order[indicatorArea.id].push(
+                indicatorID,
+              );
+            }
+          });
+        }
+      });
+      const defaultIndicatorIds =
+        selectedSurveyToEdit &&
+        selectedSurveyToEdit.indicators &&
+        prvsStep <= step
+          ? selectedSurveyToEdit.indicators
+          : null;
+      const indicatorsToUse = defaultIndicatorIds || indicatorsIDs;
+      setValue("indicators", indicatorsToUse);
+      setSortedIndicatorAreas([...tempSortedIndicatorAreas]);
+    }
+  }, [indicatorAreasData]);
+
+  useEffect(() => {
+    const { isChecked, run } = selectAll;
+    if (run) {
+      selectAllFunc(isChecked);
+      setSelectAll({ isChecked, run: false });
+    }
+  }, [selectAll]);
+
+  return (
+    <form>
+      <Modal
+        open={!!indicatorModal}
+        primaryButtonText="Yes"
+        secondaryButtonText="No"
+        onRequestSubmit={() => {
+          if (indicatorModal?.event) {
+            indicatorModal.event.target.checked = false;
+            handleIndicatorOnChange(
+              false,
+              indicatorModal.clickedIndicator,
+              indicatorModal.event,
+            );
+          }
+          setIndicatorModal(null);
+        }}
+        onRequestClose={() => {
+          if (!indicatorModal) return;
+          if (indicatorModal.event) {
+            indicatorModal.event.target.checked = true;
+          }
+          handleIndicatorOnChange(
+            true,
+            indicatorModal.clickedIndicator,
+            indicatorModal.event,
+          );
+          setIndicatorModal(null);
+        }}
+      >
+        <p className="wfp--modal-content__text">
+          {t("modules.errors.mandatoryIndicator")}
+        </p>
+      </Modal>
+
+      <Modal
+        open={!!submoduleModal}
+        primaryButtonText="Yes"
+        secondaryButtonText="No"
+        onRequestSubmit={() => {
+          setSubmoduleModal(null);
+        }}
+        onRequestClose={() => {
+          if (!submoduleModal) return;
+          if (submoduleModal.event) {
+            submoduleModal.event.target.checked = true;
+          }
+          handleSubmoduleChange(true, submoduleModal.clickedSubmodule);
+          setSubmoduleModal(null);
+        }}
+      >
+        <p className="wfp--modal-content__text">
+          {t("modules.errors.mandatoryModule")}
+        </p>
+      </Modal>
+
+      <div style={{ position: "fixed", bottom: 20, right: 20, zIndex: 2 }}>
+        {submitError && (
+          <Callout
+            iconDescription="close"
+            kind="error"
+            lowContrast
+            statusIconDescription=""
+            subtitle={getErrorDisplay(submitError)}
+            title="Error"
+            onClick={() => setSubmitError(null)}
+            // eslint-disable-next-line jsx-a11y/aria-role
+            role="error_notification"
+            isDismissible={true}
+          />
+        )}
+      </div>
+
+      {isLoading && <InlineLoading description="loading..." />}
+      {data &&
+        !isLoading &&
+        (!data.length ? (
+          <div>{t("modules.errors.noModules")}</div>
+        ) : (
+          <div className="d-flex">
+            <div className="flex-column">
+              <h6 style={{ marginBottom: "10px" }}>{t("modules.title")}</h6>
+              <DragDropContext onDragEnd={handleDragEnd}>
+                <Droppable droppableId="modulesDroppable" type="MODULES">
+                  {(provided) => (
+                    <div ref={provided.innerRef} {...provided.droppableProps}>
+                      {sortedModules.map((module, index) => {
+                        // Only include active submodules, OR those that are already selected in the edited survey
+                        const filteredSubmodules = module.submodules.filter(
+                          (submodule) =>
+                            submodule.is_active ||
+                            (selectedSurveyToEdit?.submodules?.includes(
+                              submodule.id,
+                            ) ??
+                              false),
+                        );
+
+                        // Clone the module, replacing submodules with the filtered ones
+                        const moduleWithFilteredSubmodules = {
+                          ...module,
+                          submodules: filteredSubmodules,
+                        };
+
+                        return (
+                          <ModuleListItem
+                            key={`${module.id}-${refreshKey}`}
+                            module={moduleWithFilteredSubmodules}
+                            index={index}
+                            handleSubmoduleChange={handleSubmoduleChange}
+                            submodules={values.submodules}
+                            control={control}
+                            collapseAll={collapseAllModules}
+                            setCollapseAll={setCollapseAllModules}
+                            watchAllFields={watchAllFields}
+                          />
+                        );
+                      })}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </DragDropContext>
+            </div>
+            <div className="flex-column">
+              {!!indicatorAreasData?.length && !indicatorAreasIsLoading && (
+                <>
+                  <h6 style={{ marginBottom: "10px" }}>
+                    {t("modules.indicatorAreas.title")}
+                  </h6>
+                  <DragDropContext onDragEnd={handleDragEnd}>
+                    <Droppable
+                      droppableId="modulesDroppable"
+                      type="INDICATOR-AREAS"
+                    >
+                      {(provided) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.droppableProps}
+                        >
+                          {sortedIndicatorAreas.map((indicatorArea, index) => (
+                            <IndicatorAreaListItem
+                              key={indicatorArea.id}
+                              indicatorArea={indicatorArea}
+                              index={index}
+                              handleIndicatorOnChange={handleIndicatorOnChange}
+                              control={control}
+                              collapseAll={collapseAllIndicatorAreas}
+                              setCollapseAll={setCollapseAllIndicatorAreas}
+                              watchAllFields={watchAllFields}
+                            />
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
+                  </DragDropContext>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+    </form>
+  );
+}
+
+export default Modules;

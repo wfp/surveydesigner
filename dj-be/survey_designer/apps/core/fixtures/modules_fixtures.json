@@ -1,0 +1,141 @@
+[
+  {
+    "model": "modules.module",
+    "pk": 1,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "Technical",
+      "description": "...",
+      "label": "Technical"
+    }
+  },
+  {
+    "model": "modules.module",
+    "pk": 2,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "Demographic",
+      "description": "...",
+      "label": "Demographic"
+    }
+  },
+  {
+    "model": "modules.module",
+    "pk": 3,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "CopingStrategies",
+      "description": "Food-based & Livelihood-based coping strategies",
+      "label": "Coping Strategies"
+    }
+  },
+  {
+    "model": "modules.module",
+    "pk": 4,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "FoodConsumption",
+      "description": "Food Consumption",
+      "label": "Food Consumption"
+    }
+  },
+  {
+    "model": "modules.module",
+    "pk": 5,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "Expenditures",
+      "description": "Module that includes a comprehensive list of expenditures, divided in multiple subgroups",
+      "label": "Expenditures"
+    }
+  },
+  {
+    "model": "modules.submodule",
+    "pk": 1,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "PDMInfo",
+      "description": "...",
+      "label": "PDM Info",
+      "module": 1
+    }
+  },
+  {
+    "model": "modules.submodule",
+    "pk": 2,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "RespondentInfo",
+      "description": "...",
+      "label": "Respondent Info",
+      "module": 2
+    }
+  },
+  {
+    "model": "modules.submodule",
+    "pk": 3,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "rCSI",
+      "description": "Reduced Coping Strategy Index",
+      "label": "Reduced Coping Strategies Index (rCSI)",
+      "module": 3
+    }
+  },
+  {
+    "model": "modules.submodule",
+    "pk": 4,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "FCS",
+      "description": "Food Consumption Score",
+      "label": "Food Consumption Score",
+      "module": 3
+    }
+  },
+  {
+    "model": "modules.submodule",
+    "pk": 5,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "ExpF",
+      "description": "Expenditures on food for consumption, divided in groups",
+      "label": "Food",
+      "module": 5
+    }
+  },
+  {
+    "model": "modules.submodule",
+    "pk": 6,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "ExpNF",
+      "description": "Expenditures on non-food soft goods for consumption, divided in groups",
+      "label": "Non-food (Consumption)",
+      "module": 5
+    }
+  },
+  {
+    "model": "modules.submodule",
+    "pk": 7,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "InterviewerInfo",
+      "description": "...",
+      "label": "Interviewer Info",
+      "module": 1
+    }
+  }
+]

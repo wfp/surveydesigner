@@ -1,0 +1,141 @@
+{
+    "deleteSavedSurveyModal": {
+        "delete": "¿Estás seguro de que deseas eliminar la encuesta.",
+        "actionCannotBeUndone": "Esta acción no se puede deshacer.",
+        "modalHeading": "Eliminar encuesta"
+    },
+    "actions": {
+        "delete": "Borrar",
+        "cancel": "Cancelar",
+        "login": "Acceso",
+        "logout": "Cerrar sesión",
+        "help": "Ayuda",
+        "goToHome": "Ir a casa",
+        "copiedToClipboard": "Copiado al portapapeles",
+        "close": "Cerca",
+        "edit": "Editar",
+        "share": "Compartir",
+        "previous": "Anterior",
+        "next": "Próximo",
+        "save": "Ahorrar"
+    },
+    "filters": {
+        "show": "Mostrar filtros",
+        "hide": "Ocultar filtros",
+        "clear": "Limpiar todo",
+        "apply": "Aplicar"
+    },
+    "footer": {
+        "address": "Via C. G. Viola 68 Parque Medici",
+        "code": "00148 Roma, Italia",
+        "privacy": "Privacidad",
+        "terms": "Condiciones de uso",
+        "link": "Wfp.org",
+        "version": "ver.",
+        "wfp": "Programa Mundial de Alimentos",
+        "description": "El Programa Mundial de Alimentos de las Naciones Unidas: salvar vidas en situaciones de emergencia\ny cambiar la vida de millones de personas mediante el desarrollo sostenible. PMA\nTrabaja en más de 80 países alrededor del mundo, alimentando a las personas.\natrapados en conflictos y desastres, y sentando las bases para una\nUn futuro mejor."
+    },
+    "generate": {
+        "title": "GENERAR UNA ENCUESTA",
+        "download": {
+            "xls": "Descargar formulario XLS",
+            "word": "Descargar formato Word"
+        },
+        "preview": "Vista previa de la encuesta",
+        "publish": "Publicar encuesta",
+        "site": "Sitio",
+        "projects": "Proyectos",
+        "notification": {
+            "uploadError": "Error al cargar el archivo.",
+            "getProjectError": "Error al obtener proyectos",
+            "uploadLocation": "Subiendo formulario a {{name}}.…",
+            "uploadConfirmation": "El formulario se ha subido a {{name}}"
+        }
+    },
+    "landingPage": {
+        "title": "Diseñador de encuestas",
+        "wfp": "PMA",
+        "description": "¡Bienvenido al Diseñador de encuestas! Esta herramienta le permite construir\n encuestas estandarizadas, multilingües y de alta calidad en unos pocos\n pasos simples. Sigue las convenciones de nomenclatura estándar del PMA.\n (Libro de códigos) al mismo tiempo que le brinda flexibilidad sobre qué incluir en\n su encuesta. Le permite generar la encuesta como una\n XLSForm o para insertar directamente en herramientas basadas en ODK como: MoDa\n y Kobo.",
+        "learnMore": "¡aprender más!",
+        "welcome": "Bienvenido"
+    },
+    "modules": {
+        "errors": {
+            "selectOneSubModule": "Seleccione al menos un submódulo.",
+            "mandatoryModule": "Este es un módulo obligatorio para este tipo de encuesta, ¿está seguro de que desea eliminarlo?",
+            "noModules": "Módulos no encontrados. Cambie sus selecciones en el primer paso."
+        },
+        "indicatorAreas": {
+            "title": "INDICADORES"
+        },
+        "title": "MÓDULOS Y SUBMÓDULOS"
+    },
+    "nav": {
+        "codebook": "Libro de códigos",
+        "cms": "CMS",
+        "manageApiKeys": "Administrar claves API",
+        "profile": "Perfil"
+    },
+    "review": {
+        "languages": "Idiomas",
+        "previewSurvey": "Vista previa de la encuesta"
+    },
+    "sharedLinkLandingPage": {
+        "SurveyNotFound": "Encuesta no encontrada",
+        "createCopy": "crear una copia",
+        "generatingDocument": "Generando documento"
+    },
+    "sharedLinkModal": {
+        "description": "Copie el enlace a continuación y compártalo con otros. Cualquiera que tenga el enlace podrá ver la encuesta.",
+        "heading": "Compartir encuesta"
+    },
+    "submoduleList": {
+        "nothingToReview": "No hay nada que revisar.",
+        "deleteConfirmationSingular": "Estas son preguntas obligatorias",
+        "deleteConfirmationPlural": "Estas son preguntas obligatorias para este submódulo, ¿está seguro de que desea eliminarlo?"
+    },
+    "submoduleListItem": {
+        "noIndicatorsIncluded": "* No se incluyen indicadores para este submódulo",
+        "partiallyIncluded": "* Parcialmente incluido con {{indicatorsList}}",
+        "indicatorPlural": "* Los indicadores {{indicatorsList}} incluyen todas las preguntas de este submódulo",
+        "indicatorSingular": "* El indicador {{indicatorsList}} incluye todas las preguntas de este submódulo"
+    },
+    "survey": {
+        "title": "Título de la encuesta",
+        "organizations": "Organizaciones",
+        "category": "Categoría",
+        "type": "Tipo",
+        "mode": "Modo",
+        "context": "Contexto"
+    },
+    "surveyTable": {
+        "name": "Nombre de la encuesta",
+        "organizations": "Organizaciones",
+        "category": "Categoría de encuesta",
+        "type": "Tipo de encuesta",
+        "mode": "Modo de encuesta",
+        "context": "Contexto de la encuesta",
+        "lastSavedDate": "Último Guardado"
+    },
+    "surveyWizard": {
+        "title": "Asistente de encuestas",
+        "subTitle": "Complete los pasos para generar y publicar una encuesta.",
+        "steps": {
+            "defineSurvey": "DEFINE TU ENCUESTA",
+            "selectModules": "DISEÑA TU ENCUESTA",
+            "selectAdditionQuestions": "PERSONALIZA TU ENCUESTA",
+            "generatePublishSurvey": "GENERAR Y PUBLICAR ENCUESTA"
+        },
+        "stepTitle": "Paso: {{currentStep}}/{{stepsCount}} {{currentStepTitle}}",
+        "modulesCount": "{{moduleCount}} módulos, {{submoduleCount}} submódulos seleccionados",
+        "questionsGeneratedCount": "(Se generarán {{numberOfQuestionsToBeGenerated}} preguntas)",
+        "deselectAllSubmodules": "Deseleccionar todos los submódulos",
+        "selectAllSubmodules": "Seleccionar todos los submódulos",
+        "expandAllSubmodules": "Expandir todos los submódulos",
+        "collapseAllSubmodules": "Contraer todos los submódulos",
+        "expandAllIndicators": "Expandir todos los indicadores",
+        "collapseAllIndicators": "Contraer todos los indicadores",
+        "savedSurveys": "Encuestas guardadas",
+        "createSurvey": "Crear encuesta"
+    }
+}

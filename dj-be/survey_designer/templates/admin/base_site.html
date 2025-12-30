@@ -1,0 +1,28 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+
+{% block extrastyle %}
+  <link rel="stylesheet" href="{% static "css/admin.css" %}">
+{% endblock extrastyle %}
+
+{% block extrahead %}
+  <!-- Dark mode compatibility for django-auto-complete-light -->
+  <style>
+		.select2-selection__choice{
+			color: #000;
+		}
+		.select2-results__option {
+			color:#000;
+		}
+	</style>
+
+
+    <!-- Global site tag (gtag.js) - Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-R3YKDGPVJ7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());  gtag('config', 'G-R3YKDGPVJ7');
+    </script>
+{% endblock %}

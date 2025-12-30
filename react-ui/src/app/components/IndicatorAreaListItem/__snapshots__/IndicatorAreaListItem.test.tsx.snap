@@ -1,0 +1,236 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`IndicatorList > should match snapshot 1`] = `
+<div>
+  <div
+    aria-describedby="rbd-hidden-text-0-hidden-text-0"
+    class="whiteBackground"
+    data-rbd-drag-handle-context-id="0"
+    data-rbd-drag-handle-draggable-id="0"
+    data-rbd-draggable-context-id="0"
+    data-rbd-draggable-id="0"
+    draggable="false"
+    role="button"
+    tabindex="0"
+  >
+    <ul
+      class="wfp--list"
+    >
+      <li
+        class="wfp--list__element indicator-area-title"
+      >
+        <span
+          class="wfp--list__element__title"
+        >
+          <div
+            class="indicator-area-label-row"
+            style="display: flex; align-items: center; width: 100%; margin-bottom: 1rem;"
+          >
+            <div
+              style="display: flex; align-items: center; flex-grow: 1;"
+            >
+              <div
+                class="wfp--tooltip--trigger"
+                style="display: flex; align-items: center; cursor: pointer;"
+              >
+                <div
+                  role="button"
+                  style="display: flex; align-items: center;"
+                >
+                  <svg
+                    aria-hidden="true"
+                    class="svg-inline--fa fa-caret-down "
+                    data-icon="caret-down"
+                    data-prefix="fas"
+                    focusable="false"
+                    role="img"
+                    style="vertical-align: middle; margin-right: 0.5rem;"
+                    viewBox="0 0 320 512"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M137.4 374.6c12.5 12.5 32.8 12.5 45.3 0l128-128c9.2-9.2 11.9-22.9 6.9-34.9s-16.6-19.8-29.6-19.8L32 192c-12.9 0-24.6 7.8-29.6 19.8s-2.2 25.7 6.9 34.9l128 128z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </div>
+                <div
+                  style="margin-left: 6px;"
+                >
+                  MOCK_LABEL
+                </div>
+                <a
+                  class="wfp--link d-flex align-items-center"
+                  href="MOCK_LABEL"
+                  rel="noopener"
+                  style="margin-left: 10px;"
+                  target="_blank"
+                >
+                  <svg
+                    aria-hidden="true"
+                    class="svg-inline--fa fa-circle-info "
+                    data-icon="circle-info"
+                    data-prefix="fas"
+                    focusable="false"
+                    role="img"
+                    style="width: 15px; height: 15px; vertical-align: middle;"
+                    viewBox="0 0 512 512"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM216 336l24 0 0-64-24 0c-13.3 0-24-10.7-24-24s10.7-24 24-24l48 0c13.3 0 24 10.7 24 24l0 88 8 0c13.3 0 24 10.7 24 24s-10.7 24-24 24l-80 0c-13.3 0-24-10.7-24-24s10.7-24 24-24zm40-208a32 32 0 1 1 0 64 32 32 0 1 1 0-64z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </a>
+              </div>
+            </div>
+            <div
+              style="margin-left: 10px; display: flex; align-items: center;"
+            >
+              <svg
+                aria-hidden="true"
+                class="svg-inline--fa fa-grip-vertical draggable-icon"
+                data-icon="grip-vertical"
+                data-prefix="fas"
+                focusable="false"
+                role="img"
+                style="width: 14px; height: 14px;"
+                viewBox="0 0 320 512"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M40 352l48 0c22.1 0 40 17.9 40 40l0 48c0 22.1-17.9 40-40 40l-48 0c-22.1 0-40-17.9-40-40l0-48c0-22.1 17.9-40 40-40zm192 0l48 0c22.1 0 40 17.9 40 40l0 48c0 22.1-17.9 40-40 40l-48 0c-22.1 0-40-17.9-40-40l0-48c0-22.1 17.9-40 40-40zM40 320c-22.1 0-40-17.9-40-40l0-48c0-22.1 17.9-40 40-40l48 0c22.1 0 40 17.9 40 40l0 48c0 22.1-17.9 40-40 40l-48 0zM232 192l48 0c22.1 0 40 17.9 40 40l0 48c0 22.1-17.9 40-40 40l-48 0c-22.1 0-40-17.9-40-40l0-48c0-22.1 17.9-40 40-40zM40 160c-22.1 0-40-17.9-40-40L0 72C0 49.9 17.9 32 40 32l48 0c22.1 0 40 17.9 40 40l0 48c0 22.1-17.9 40-40 40l-48 0zM232 32l48 0c22.1 0 40 17.9 40 40l0 48c0 22.1-17.9 40-40 40l-48 0c-22.1 0-40-17.9-40-40l0-48c0-22.1 17.9-40 40-40z"
+                  fill="currentColor"
+                />
+              </svg>
+            </div>
+          </div>
+        </span>
+        <span
+          class="wfp--list__element__content"
+        />
+      </li>
+      <div>
+        <div
+          data-rbd-droppable-context-id="0"
+          data-rbd-droppable-id="indicatorsDroppable0"
+        >
+          <div
+            aria-describedby="rbd-hidden-text-0-hidden-text-0"
+            class="whiteBackground"
+            data-rbd-drag-handle-context-id="0"
+            data-rbd-drag-handle-draggable-id="indicator-0"
+            data-rbd-draggable-context-id="0"
+            data-rbd-draggable-id="indicator-0"
+            draggable="false"
+            role="button"
+            tabindex="0"
+          >
+            <li
+              class="wfp--list__element submodule-item"
+            >
+              <span
+                class="wfp--list__element__content"
+              >
+                <div
+                  class="d-flex"
+                >
+                  <div
+                    class="wfp--form-item wfp--checkbox-wrapper"
+                  >
+                    <input
+                      class="wfp--checkbox"
+                      id="id-indicator-0"
+                      type="checkbox"
+                    />
+                    <label
+                      class="wfp--checkbox-label"
+                      for="id-indicator-0"
+                    >
+                      <span
+                        class="wfp--checkbox-label-text"
+                      >
+                        <div
+                          style="min-width: fit-content;"
+                        >
+                          MOCK_LABEL
+                        </div>
+                      </span>
+                    </label>
+                  </div>
+                  <a
+                    class="wfp--link"
+                    style="margin-left: 5px;"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="svg-inline--fa fa-arrow-up-right-from-square wfp--btn__icon cms-link-icon"
+                      data-icon="arrow-up-right-from-square"
+                      data-prefix="fas"
+                      focusable="false"
+                      role="img"
+                      viewBox="0 0 512 512"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M320 0c-17.7 0-32 14.3-32 32s14.3 32 32 32l82.7 0L201.4 265.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L448 109.3l0 82.7c0 17.7 14.3 32 32 32s32-14.3 32-32l0-160c0-17.7-14.3-32-32-32L320 0zM80 32C35.8 32 0 67.8 0 112L0 432c0 44.2 35.8 80 80 80l320 0c44.2 0 80-35.8 80-80l0-112c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 112c0 8.8-7.2 16-16 16L80 448c-8.8 0-16-7.2-16-16l0-320c0-8.8 7.2-16 16-16l112 0c17.7 0 32-14.3 32-32s-14.3-32-32-32L80 32z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  </a>
+                  <a
+                    class="wfp--link"
+                    href="MOCK_URL"
+                    rel="noopener"
+                    style="margin-left: 5px;"
+                    target="_blank"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="svg-inline--fa fa-circle-info "
+                      data-icon="circle-info"
+                      data-prefix="fas"
+                      focusable="false"
+                      role="img"
+                      style="width: 15px; height: 15px; vertical-align: middle;"
+                      viewBox="0 0 512 512"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM216 336l24 0 0-64-24 0c-13.3 0-24-10.7-24-24s10.7-24 24-24l48 0c13.3 0 24 10.7 24 24l0 88 8 0c13.3 0 24 10.7 24 24s-10.7 24-24 24l-80 0c-13.3 0-24-10.7-24-24s10.7-24 24-24zm40-208a32 32 0 1 1 0 64 32 32 0 1 1 0-64z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  </a>
+                  <div
+                    class="d-flex"
+                    style="align-items: center; margin-bottom: 1rem; margin-left: 10px;"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="svg-inline--fa fa-grip-vertical draggable-icon"
+                      data-icon="grip-vertical"
+                      data-prefix="fas"
+                      focusable="false"
+                      role="img"
+                      style="width: 14px; height: 14px;"
+                      viewBox="0 0 320 512"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M40 352l48 0c22.1 0 40 17.9 40 40l0 48c0 22.1-17.9 40-40 40l-48 0c-22.1 0-40-17.9-40-40l0-48c0-22.1 17.9-40 40-40zm192 0l48 0c22.1 0 40 17.9 40 40l0 48c0 22.1-17.9 40-40 40l-48 0c-22.1 0-40-17.9-40-40l0-48c0-22.1 17.9-40 40-40zM40 320c-22.1 0-40-17.9-40-40l0-48c0-22.1 17.9-40 40-40l48 0c22.1 0 40 17.9 40 40l0 48c0 22.1-17.9 40-40 40l-48 0zM232 192l48 0c22.1 0 40 17.9 40 40l0 48c0 22.1-17.9 40-40 40l-48 0c-22.1 0-40-17.9-40-40l0-48c0-22.1 17.9-40 40-40zM40 160c-22.1 0-40-17.9-40-40L0 72C0 49.9 17.9 32 40 32l48 0c22.1 0 40 17.9 40 40l0 48c0 22.1-17.9 40-40 40l-48 0zM232 32l48 0c22.1 0 40 17.9 40 40l0 48c0 22.1-17.9 40-40 40l-48 0c-22.1 0-40-17.9-40-40l0-48c0-22.1 17.9-40 40-40z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  </div>
+                </div>
+              </span>
+            </li>
+          </div>
+        </div>
+      </div>
+    </ul>
+  </div>
+</div>
+`;

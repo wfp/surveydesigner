@@ -1,0 +1,59 @@
+[
+  {
+    "model": "questions.suffix",
+    "pk": 1,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "_oth",
+      "description": "Other",
+      "type": "string"
+    }
+  },
+  {
+    "model": "questions.suffix",
+    "pk": 2,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "_SRf",
+      "description": "Source of Food",
+      "type": "select_one",
+      "choices": 3
+    }
+  },
+  {
+    "model": "questions.suffix",
+    "pk": 3,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "_MN",
+      "description": "Monetary value",
+      "type": "decimal"
+    }
+  },
+  {
+    "model": "questions.suffix",
+    "pk": 4,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "_CRD",
+      "description": "Credit value",
+      "type": "decimal"
+    }
+  },
+  {
+    "model": "questions.suffix",
+    "pk": 5,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "_YN",
+      "description": "Yes/No",
+      "type": "select_one",
+      "choices": 1
+    }
+  }
+]

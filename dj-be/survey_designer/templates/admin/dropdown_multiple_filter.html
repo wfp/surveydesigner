@@ -1,0 +1,37 @@
+{% load i18n %}
+<script type="text/javascript">
+  const goFromSelectMultiple = function(selectElem) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const parameterName = selectElem.dataset.parameterName;
+    const selected = [];
+
+    for (let item of selectElem.selectedOptions) {
+      selected.push(item.value);
+    }
+
+    urlParams.set(parameterName, selected.join(','));
+    window.location = window.location.pathname + '?' + urlParams.toString();
+  };
+</script>
+<h3>{% blocktrans with title as filter_title %} By {{ filter_title }} {% endblocktrans %}</h3>
+<ul class="admin-filter-{{ title|cut:' ' }}">
+    <li>
+      <select multiple id='id_filter_{{ spec.parameter_name }}' data-parameter-name='{{ spec.parameter_name }}'
+              class="form-control" style="width: 95%;margin-left: 2%;"
+              onchange="goFromSelectMultiple(this)">
+        {% for choice in choices %}
+          <option
+            {% if choice.selected %} selected="selected"{% endif %}
+            value="{{ choice.query_string|iriencode }}"
+          >
+            {{ choice.display }}
+          </option>
+        {% endfor %}
+      </select>
+    </li>
+</ul>
+
+<script type="text/javascript">
+  const $ = django.jQuery;
+  $('#id_filter_{{ spec.parameter_name }}').select2();
+</script>

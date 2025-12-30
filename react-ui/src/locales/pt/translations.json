@@ -1,0 +1,141 @@
+{
+    "deleteSavedSurveyModal": {
+        "delete": "Tem certeza de que deseja excluir a pesquisa.",
+        "actionCannotBeUndone": "Essa ação não pode ser desfeita.",
+        "modalHeading": "Excluir pesquisa"
+    },
+    "actions": {
+        "delete": "Excluir",
+        "cancel": "Cancelar",
+        "login": "Conecte-se",
+        "logout": "Sair",
+        "help": "Ajuda",
+        "goToHome": "Vá para casa",
+        "copiedToClipboard": "Copiado para a área de transferência",
+        "close": "Fechar",
+        "edit": "Editar",
+        "share": "Compartilhar",
+        "previous": "Anterior",
+        "next": "Próximo",
+        "save": "Salvar"
+    },
+    "filters": {
+        "show": "Mostrar filtros",
+        "hide": "Ocultar filtros",
+        "clear": "Limpar tudo",
+        "apply": "Aplicar"
+    },
+    "footer": {
+        "address": "Via C. G. Viola 68 Parque Medici",
+        "code": "00148 Roma, Itália",
+        "privacy": "Privacidade",
+        "terms": "Termos de uso",
+        "link": "www.wfp.org",
+        "version": "ver.",
+        "wfp": "Programa Alimentar Mundial",
+        "description": "O Programa Alimentar Mundial das Nações Unidas - salvando vidas em emergências\ne mudar vidas de milhões de pessoas através do desenvolvimento sustentável. PMA\ntrabalha em mais de 80 países ao redor do mundo, alimentando pessoas\napanhados em conflitos e catástrofes, e lançando as bases para uma\nfuturo melhor."
+    },
+    "generate": {
+        "title": "GERAR UMA PESQUISA",
+        "download": {
+            "xls": "Baixar XLSForm",
+            "word": "Baixar formato Word"
+        },
+        "preview": "Visualizar pesquisa",
+        "publish": "Publicar pesquisa",
+        "site": "Site",
+        "projects": "Projetos",
+        "notification": {
+            "uploadError": "Erro ao carregar o arquivo.",
+            "getProjectError": "Erro ao obter projetos",
+            "uploadLocation": "Enviando formulário para {{name}}…",
+            "uploadConfirmation": "O formulário foi enviado para {{name}}"
+        }
+    },
+    "landingPage": {
+        "title": "Designer de pesquisa",
+        "wfp": "PMA",
+        "description": "Bem-vindo ao Survey Designer! Esta ferramenta permite que você construa\n pesquisas padronizadas, multilíngues e de alta qualidade em alguns\n passos simples. Segue as convenções de nomenclatura padrão do WFP\n (Livro de códigos), ao mesmo tempo que oferece flexibilidade sobre o que incluir no\n sua pesquisa. Ele permite que você gere a pesquisa como um\n XLSForm ou para enviar diretamente para ferramentas baseadas em ODK, como: MoDa\n e Kobo.",
+        "learnMore": "aprender mais!",
+        "welcome": "Bem-vindo"
+    },
+    "modules": {
+        "errors": {
+            "selectOneSubModule": "Selecione pelo menos um submódulo.",
+            "mandatoryModule": "Este é um módulo obrigatório para este tipo de pesquisa. Tem certeza de que deseja excluí-lo?",
+            "noModules": "Módulos não encontrados. Altere suas seleções na primeira etapa."
+        },
+        "indicatorAreas": {
+            "title": "INDICADORES"
+        },
+        "title": "MÓDULOS E SUBMÓDULOS"
+    },
+    "nav": {
+        "codebook": "Livro de códigos",
+        "cms": "CMS",
+        "manageApiKeys": "Gerenciar chaves de API",
+        "profile": "Perfil"
+    },
+    "review": {
+        "languages": "línguas",
+        "previewSurvey": "Visualizar pesquisa"
+    },
+    "sharedLinkLandingPage": {
+        "SurveyNotFound": "Pesquisa não encontrada",
+        "createCopy": "Crie uma cópia",
+        "generatingDocument": "Gerando documento"
+    },
+    "sharedLinkModal": {
+        "description": "Copie o link abaixo e compartilhe-o com outras pessoas. Qualquer pessoa com o link poderá visualizar a pesquisa.",
+        "heading": "Compartilhar pesquisa"
+    },
+    "submoduleList": {
+        "nothingToReview": "Não há nada para revisar.",
+        "deleteConfirmationSingular": "Estas são perguntas obrigatórias",
+        "deleteConfirmationPlural": "Estas são perguntas obrigatórias para este submódulo. Tem certeza de que deseja excluí-lo?"
+    },
+    "submoduleListItem": {
+        "noIndicatorsIncluded": "*Nenhum indicador incluído para este submódulo",
+        "partiallyIncluded": "* Parcialmente incluído em {{indicatorsList}}",
+        "indicatorPlural": "* Os indicadores {{indicatorsList}} incluem todas as questões deste submódulo",
+        "indicatorSingular": "* O indicador {{indicatorsList}} inclui todas as questões deste submódulo"
+    },
+    "survey": {
+        "title": "Título da pesquisa",
+        "organizations": "Organizações",
+        "category": "Categoria",
+        "type": "Tipo",
+        "mode": "Modo",
+        "context": "Contexto"
+    },
+    "surveyTable": {
+        "name": "Nome da pesquisa",
+        "organizations": "Organizações",
+        "category": "Categoria de pesquisa",
+        "type": "Tipo de pesquisa",
+        "mode": "Modo de pesquisa",
+        "context": "Contexto da pesquisa",
+        "lastSavedDate": "Último Salvo"
+    },
+    "surveyWizard": {
+        "title": "Assistente de pesquisa",
+        "subTitle": "Conclua as etapas para gerar e publicar uma pesquisa",
+        "steps": {
+            "defineSurvey": "DEFINA SUA PESQUISA",
+            "selectModules": "CRIE A SUA PESQUISA",
+            "selectAdditionQuestions": "PERSONALIZE A SUA PESQUISA",
+            "generatePublishSurvey": "GERAR E PUBLICAR PESQUISA"
+        },
+        "stepTitle": "Etapa: {{currentStep}}/{{stepsCount}} {{currentStepTitle}}",
+        "modulesCount": "{{moduleCount}} módulos, {{submoduleCount}} submódulos selecionados",
+        "questionsGeneratedCount": "({{numberOfQuestionsToBeGenerated}} perguntas a serem geradas)",
+        "deselectAllSubmodules": "Desmarcar todos os submódulos",
+        "selectAllSubmodules": "Selecione todos os submódulos",
+        "expandAllSubmodules": "Expanda todos os submódulos",
+        "collapseAllSubmodules": "Recolher todos os submódulos",
+        "expandAllIndicators": "Expanda todos os indicadores",
+        "collapseAllIndicators": "Recolher todos os indicadores",
+        "savedSurveys": "Pesquisas salvas",
+        "createSurvey": "Criar pesquisa"
+    }
+}

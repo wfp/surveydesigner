@@ -1,0 +1,12 @@
+{% extends "admin/submit_line.html" %}
+
+{% block submit-row %}
+  <button
+    type="button"
+    class="button cancelButton"
+    onclick="window.opener ? window.close() : window.history.back()"
+  >
+    CANCEL
+  </button>
+  {{ block.super }}
+{% endblock %}

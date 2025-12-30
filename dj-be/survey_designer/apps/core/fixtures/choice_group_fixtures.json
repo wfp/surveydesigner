@@ -1,0 +1,96 @@
+[
+  {
+    "model": "questions.choicegroup",
+    "pk": 1,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "Yesno"
+    }
+  },
+  {
+    "model": "questions.choicegroup",
+    "pk": 2,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "Sex"
+    }
+  },
+  {
+    "model": "questions.choicegroup",
+    "pk": 3,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "SRf",
+      "description": "Source of food"
+    }
+  },
+  {
+    "model": "questions.choice",
+    "pk": 1,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "0",
+      "label": "No",
+      "choice_group" : 1
+    }
+  },
+  {
+    "model": "questions.choice",
+    "pk": 2,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "1",
+      "label": "Yes",
+      "choice_group" : 1
+    }
+  },
+  {
+    "model": "questions.choice",
+    "pk": 3,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "0",
+      "label": "female",
+      "choice_group" : 2
+    }
+  },
+  {
+    "model": "questions.choice",
+    "pk": 4,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "1",
+      "label": "male",
+      "choice_group" : 2
+    }
+  },
+  {
+    "model": "questions.choice",
+    "pk": 5,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "100",
+      "label": "Own production",
+      "choice_group" : 3
+    }
+  },
+  {
+    "model": "questions.choice",
+    "pk": 6,
+    "fields": {
+      "date_created": "2021-02-01T08:00:00.000Z",
+      "date_updated": "2021-02-01T08:00:00.000Z",
+      "name": "200",
+      "label": "Hunting/fishing",
+      "choice_group" : 3
+    }
+  }
+]
