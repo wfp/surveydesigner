@@ -1,6 +1,7 @@
 import io
 import os
 import uuid
+import zipfile
 from json import JSONDecodeError
 from xml.etree import ElementTree as ET
 
@@ -408,9 +409,39 @@ class GenerateXLSForm(GenericAPIView):
 
     @extend_schema(responses={200: generate_xls_form_response})
     def post(self, request, *args, **kwargs):
-        xlsx = get_xlsx_from_request(self.get_serializer, request)
+        xlsx_form = get_xlsx_from_request(self.get_serializer, request, as_wb=True)
+        xlsx_bytes = xlsx_form.generate()
+
+        external_files = getattr(xlsx_form, "external_files", {})
+        if external_files:
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                zip_file.writestr("survey.xlsx", xlsx_bytes)
+                for filename, file_obj in external_files.items():
+                    try:
+                        data = PreviewXLSForm._read_file_content(file_obj)
+                        if data:
+                            zip_file.writestr(filename, data)
+                        else:
+                            return JsonResponse(
+                                {"detail": f"File {filename} read as empty."},
+                                status=status.HTTP_400_BAD_REQUEST,
+                            )
+                    except Exception as e:
+                        return JsonResponse(
+                            {"detail": f"Error reading external file {filename}: {e}"},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
+            response = HttpResponse(
+                zip_buffer.getvalue(),
+                content_type="application/zip",
+            )
+            response["Content-Disposition"] = "attachment; filename=survey.zip"
+            return response
+
         response = HttpResponse(
-            xlsx,
+            xlsx_bytes,
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
         response["Content-Disposition"] = "attachment; filename=survey.xlsx"

@@ -41,6 +41,8 @@
             "xls": "Descargar formulario XLS",
             "word": "Descargar formato Word"
         },
+        "downloadingXls": "Descargando XLS...",
+        "generatingDoc": "Generando documento...",
         "preview": "Vista previa de la encuesta",
         "publish": "Publicar encuesta",
         "site": "Sitio",

@@ -1,5 +1,4 @@
-import django.db.models.deletion
-from django.db import migrations, models
+from django.db import migrations
 
 
 def migrate_modes_to_types(apps, schema_editor):

@@ -4277,7 +4277,7 @@ exports[`SurveyWizard > should render 1`] = `
         <div
           class="wfp--footer__meta__content"
         >
-          2025 ©footer.wfp
+          2026 ©footer.wfp
         </div>
       </div>
     </footer>

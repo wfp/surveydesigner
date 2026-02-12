@@ -42,6 +42,7 @@ function Generate({ next }: GenerateProps) {
     null,
   );
   const [uploading, setUploading] = useState(false);
+  const [xlsLoading, setXlsLoading] = useState(false);
   const surveyForm = useAppSelector((state) => state.surveyForm);
   const modulesData = useModules();
 
@@ -95,11 +96,10 @@ function Generate({ next }: GenerateProps) {
         setUploading(false);
         dispatch(
           notificationsActions.setErrorNotification({
-            msg: `${
-              err.response.data.message
+            msg: `${err.response.data.message
                 ? err.response.data.message
                 : err.message
-            }`,
+              }`,
             title: t("generate.notification.uploadError"),
           }),
         );
@@ -110,9 +110,8 @@ function Generate({ next }: GenerateProps) {
       const err = projects.error;
       dispatch(
         notificationsActions.setErrorNotification({
-          msg: `${
-            err.response?.data.message ? err.response.data.message : err.message
-          }`,
+          msg: `${err.response?.data.message ? err.response.data.message : err.message
+            }`,
           title: t("generate.notification.getProjectError"),
         }),
       );
@@ -161,34 +160,44 @@ function Generate({ next }: GenerateProps) {
               <Button
                 kind="primary"
                 className="wfp--form-controls__next wfp--btn wfp--btn--primary"
-                onClick={() => getXLS(dispatch, surveyForm, modulesData)}
+                onClick={() => {
+                  setXlsLoading(true);
+                  getXLS(dispatch, surveyForm, modulesData).finally(() =>
+                    setXlsLoading(false),
+                  );
+                }}
                 style={{
                   marginBottom: "1rem",
-                  backgroundColor: "#008767",
+                  backgroundColor: xlsLoading ? undefined : "#008767",
                   width: "230px",
                 }}
+                disabled={xlsLoading}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "row",
-                    alignItems: "center",
-                    textAlign: "right",
-                  }}
-                >
-                  <div>
-                    <FaFileExcel
-                      style={{
-                        fontSize: "x-large",
-                        marginTop: "5px",
-                        marginLeft: "-5px",
-                      }}
-                    />
+                {xlsLoading ? (
+                  <InlineLoading description={t("generate.downloadingXls")} />
+                ) : (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      textAlign: "right",
+                    }}
+                  >
+                    <div>
+                      <FaFileExcel
+                        style={{
+                          fontSize: "x-large",
+                          marginTop: "5px",
+                          marginLeft: "-5px",
+                        }}
+                      />
+                    </div>
+                    <div style={{ marginLeft: "5px" }}>
+                      {t("generate.download.xls")}
+                    </div>
                   </div>
-                  <div style={{ marginLeft: "5px" }}>
-                    {t("generate.download.xls")}
-                  </div>
-                </div>
+                )}
               </Button>
               <Button
                 kind="primary"
@@ -197,37 +206,37 @@ function Generate({ next }: GenerateProps) {
                 style={{ width: "230px" }}
                 disabled={!!jobId}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "row",
-                    alignItems: "center",
-                    textAlign: "right",
-                  }}
-                >
-                  <div>
-                    <FaFileWord
-                      style={{
-                        fontSize: "x-large",
-                        marginTop: "5px",
-                        marginLeft: "-5px",
-                      }}
-                    />
-                  </div>
-                  <div style={{ marginLeft: "5px" }}>
-                    {jobId ? (
-                      <InlineLoading
-                        description={
-                          status
-                            ? `${capitalize(status)} generating doc...`
-                            : "generating doc..."
-                        }
+                {jobId ? (
+                  <InlineLoading
+                    description={
+                      status
+                        ? `${capitalize(status)} ${t("generate.generatingDoc")}`
+                        : t("generate.generatingDoc")
+                    }
+                  />
+                ) : (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      textAlign: "right",
+                    }}
+                  >
+                    <div>
+                      <FaFileWord
+                        style={{
+                          fontSize: "x-large",
+                          marginTop: "5px",
+                          marginLeft: "-5px",
+                        }}
                       />
-                    ) : (
-                      t("generate.download.word")
-                    )}
+                    </div>
+                    <div style={{ marginLeft: "5px" }}>
+                      {t("generate.download.word")}
+                    </div>
                   </div>
-                </div>
+                )}
               </Button>
               {jobId && (
                 // eslint-disable-next-line jsx-a11y/anchor-is-valid, jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions

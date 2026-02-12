@@ -41,6 +41,8 @@
             "xls": "تحميل XLSForm",
             "word": "تحميل تنسيق وورد"
         },
+        "downloadingXls": "جارٍ تنزيل XLS...",
+        "generatingDoc": "جارٍ إنشاء المستند...",
         "preview": "معاينة المسح",
         "publish": "نشر الاستطلاع",
         "site": "موقع",

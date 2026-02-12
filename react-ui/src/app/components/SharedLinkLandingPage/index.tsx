@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FaFileExcel, FaFileWord, FaCopy } from "react-icons/fa";
@@ -22,6 +22,7 @@ import { clearJob } from "../../redux/actions/docFetcherActions";
 import DocFetcher from "../DocFetcher";
 
 interface ActionButtonInterface {
+  id: string;
   label: string | JSX.Element;
   onClick: () => void;
   icon: IconType;
@@ -40,6 +41,7 @@ function SharedLinkLandingPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { uuid } = useParams<{ uuid: string }>();
+  const [xlsLoading, setXlsLoading] = useState(false);
 
   useEffect(() => {
     dispatch(fetchSavedSurvey({ uuid }));
@@ -62,6 +64,7 @@ function SharedLinkLandingPage() {
 
   const actionButtons: ActionButtonInterface[] = [
     {
+      id: "copy",
       label: `${t("sharedLinkLandingPage.createCopy")}`,
       onClick: async () => {
         const res = await dispatch(
@@ -77,21 +80,31 @@ function SharedLinkLandingPage() {
       icon: FaCopy,
     },
     {
-      label: t("generate.download.xls"),
-      onClick: () => getXLS(dispatch, sharedSurvey, undefined, true),
+      id: "xls",
+      label: xlsLoading ? (
+        <InlineLoading description={t("generate.downloadingXls")} />
+      ) : (
+        t("generate.download.xls")
+      ),
+      onClick: () => {
+        setXlsLoading(true);
+        getXLS(dispatch, sharedSurvey, undefined, true).finally(() =>
+          setXlsLoading(false),
+        );
+      },
       kind: "primary",
       icon: FaFileExcel,
       backgroundColor: "#008767",
+      disabled: xlsLoading,
     },
     {
+      id: "word",
       label: jobId ? (
         <InlineLoading
           description={
             status
-              ? `${capitalize(status)} ${t(
-                  "sharedLinkLandingPage.generatingDocument",
-                )}...`
-              : `${t("sharedLinkLandingPage.generatingDocument")}...`
+              ? `${capitalize(status)} ${t("generate.generatingDoc")}`
+              : t("generate.generatingDoc")
           }
         />
       ) : (
@@ -122,39 +135,43 @@ function SharedLinkLandingPage() {
       <Divider />
       <div className="shared-survey-content">
         <div className="shared-survey-actions">
-          {actionButtons.map(({ icon: Icon, ...actionButton }) => (
+          {actionButtons.map(({ icon: Icon, id, ...actionButton }) => (
             <Button
-              key={
-                typeof actionButton.label === "string"
-                  ? actionButton.label
-                  : "word"
-              }
+              key={id}
               kind="primary"
               className="wfp--form-controls__next wfp--btn wfp--btn--primary"
               onClick={actionButton.onClick}
+              disabled={actionButton.disabled}
               style={{
                 marginBottom: "1rem",
-                backgroundColor: actionButton.backgroundColor,
+                backgroundColor: actionButton.disabled
+                  ? undefined
+                  : actionButton.backgroundColor,
                 width: "230px",
+                overflow: "hidden",
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  textAlign: "right",
-                }}
-              >
-                <Icon
+              {actionButton.disabled ? (
+                actionButton.label
+              ) : (
+                <div
                   style={{
-                    fontSize: "x-large",
-                    marginTop: "5px",
-                    marginLeft: "-5px",
+                    display: "flex",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    textAlign: "right",
                   }}
-                />
-                <div style={{ marginLeft: "5px" }}>{actionButton.label}</div>
-              </div>
+                >
+                  <Icon
+                    style={{
+                      fontSize: "x-large",
+                      marginTop: "5px",
+                      marginLeft: "-5px",
+                    }}
+                  />
+                  <div style={{ marginLeft: "5px" }}>{actionButton.label}</div>
+                </div>
+              )}
             </Button>
           ))}
         </div>
