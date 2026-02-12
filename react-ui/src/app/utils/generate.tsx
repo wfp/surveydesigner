@@ -88,19 +88,24 @@ export const getXLS = (
   const data = getDataForGeneration(surveyForm, modulesData, isSharedSurvey);
   const cookies = new Cookies();
   const csrfToken = cookies.get("csrftoken");
-  API.post("/generate/", data, {
+  return API.post("/generate/", data, {
     responseType: "blob",
     headers: {
       "X-CSRFToken": csrfToken,
     },
   })
     .then((res) => {
-      downloadFile(
-        res,
-        timestamp,
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "xlsx"
-      );
+      const contentType = res.headers["content-type"];
+      let mimeType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      let extension = "xlsx";
+
+      if (contentType?.startsWith("application/zip")) {
+        mimeType = "application/zip";
+        extension = "zip";
+      }
+
+      downloadFile(res, timestamp, mimeType, extension);
     })
     .catch((err) => {
       const errorMessage =

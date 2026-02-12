@@ -41,6 +41,8 @@
             "xls": "Baixar XLSForm",
             "word": "Baixar formato Word"
         },
+        "downloadingXls": "Baixando XLS...",
+        "generatingDoc": "Gerando documento...",
         "preview": "Visualizar pesquisa",
         "publish": "Publicar pesquisa",
         "site": "Site",

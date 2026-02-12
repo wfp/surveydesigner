@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Cookies } from "react-cookie";
 import {
   docFetcherActions,
@@ -14,14 +14,14 @@ function DocFetcher() {
   const [job, setJob] = useState<(DocFetcherState & { doc: string }) | null>(
     null
   );
-  const [intervalId, setIntervalId] = useState<NodeJS.Timer | undefined>(
-    undefined
-  );
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const currentJobIdRef = useRef<number | null>(null);
+  const downloadedJobIdRef = useRef<number | null>(null);
   const { jobId } = useAppSelector((state) => state.docFetcher);
 
   const dispatch = useAppDispatch();
 
-  const fetchDoc = () => {
+  const fetchDoc = (activeJobId: number) => {
     const cookies = new Cookies();
     const csrfToken = cookies.get("csrftoken");
     API.get("/generate-doc/", {
@@ -29,10 +29,11 @@ function DocFetcher() {
         "X-CSRFToken": csrfToken,
       },
       params: {
-        jobId,
+        jobId: activeJobId,
       },
     })
       .then((res) => {
+        if (currentJobIdRef.current !== activeJobId) return;
         const {
           status: statusRes,
           position: positionRes,
@@ -49,22 +50,21 @@ function DocFetcher() {
       .catch((err) => {
         dispatch(
           notificationsActions.setErrorNotification({
-            msg: `${
-              err.response.data.message
+            msg: `${err.response.data.message
                 ? err.response.data.message
                 : err.message
-            }`,
+              }`,
           })
         );
         dispatch(clearJob());
       });
   };
 
-  const downloadDoc = () => {
+  const downloadDoc = (docUrl: string) => {
     const timestamp = new Date().getTime().toString();
-    if (!job) return;
+    if (!docUrl) return;
 
-    API.get(job.doc, {
+    API.get(docUrl, {
       responseType: "blob",
       baseURL: "",
     })
@@ -92,22 +92,47 @@ function DocFetcher() {
 
   useEffect(() => {
     if (jobId) {
+      currentJobIdRef.current = jobId;
+      downloadedJobIdRef.current = null;
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
       dispatch(
         notificationsActions.setInfoNotification({
           msg: "Your file is being generated. This may take some time.",
         })
       );
-      setIntervalId(setInterval(() => fetchDoc(), 5000));
+      intervalRef.current = setInterval(() => fetchDoc(jobId), 5000);
     } else {
-      clearInterval(intervalId);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
       setJob(null);
     }
-  }, [jobId]);
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [jobId, dispatch]);
 
   useEffect(() => {
     if (job) {
+      if (currentJobIdRef.current !== job.jobId) return;
       dispatch(docFetcherActions.setJobId(job));
-      if (job.status === "finished" && job.doc) {
+      if (
+        job.status === "finished" &&
+        job.doc &&
+        downloadedJobIdRef.current !== job.jobId
+      ) {
+        downloadedJobIdRef.current = job.jobId;
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
         dispatch(
           notificationsActions.setSuccessNotification({
             msg: [
@@ -119,7 +144,7 @@ function DocFetcher() {
             ],
           })
         );
-        downloadDoc();
+        downloadDoc(job.doc);
       }
       if (
         !!job.status &&

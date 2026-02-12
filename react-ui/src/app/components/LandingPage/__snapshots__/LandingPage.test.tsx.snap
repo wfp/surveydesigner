@@ -70,7 +70,7 @@ exports[`LandingPage > should match snapshot 1`] = `
                 >
                   <a
                     class="wfp--link"
-                    href="http://localhost:8080/auth/login/"
+                    href="/auth/login/"
                   >
                     actions.login
                   </a>
@@ -3904,7 +3904,7 @@ exports[`LandingPage > should match snapshot 1`] = `
         <div
           class="wfp--footer__meta__content"
         >
-          2025 ©footer.wfp
+          2026 ©footer.wfp
         </div>
       </div>
     </footer>

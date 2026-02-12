@@ -41,6 +41,8 @@
             "xls": "Download XLSForm",
             "word": "Download Word Format"
         },
+        "downloadingXls": "Downloading XLS...",
+        "generatingDoc": "Generating doc...",
         "preview": "Preview Survey",
         "publish": "Publish Survey",
         "site": "Site",

@@ -41,6 +41,8 @@
             "xls": "Télécharger XLSForm",
             "word": "Télécharger le format Word"
         },
+        "downloadingXls": "Téléchargement du fichier XLS...",
+        "generatingDoc": "Génération du document...",
         "preview": "Aperçu de l'enquête",
         "publish": "Publier l'enquête",
         "site": "Site",
