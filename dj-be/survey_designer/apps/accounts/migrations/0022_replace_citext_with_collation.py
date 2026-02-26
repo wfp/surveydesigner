@@ -11,11 +11,15 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunSQL(
+            sql='DROP COLLATION IF EXISTS "case_insensitive" CASCADE;',
+            reverse_sql=migrations.RunSQL.noop,
+        ),
         CreateCollation(
             "case_insensitive",
             "und-u-ks-level2",
             provider="icu",
-            deterministic=False,
+            deterministic=True,
         ),
         migrations.RunSQL(
             sql='ALTER TABLE "accounts_user" ALTER COLUMN "email" TYPE varchar(255) COLLATE "case_insensitive" USING email::text;',
