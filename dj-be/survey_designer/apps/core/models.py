@@ -1,6 +1,5 @@
 from core.validators import validate_name
 from django.conf import settings
-from django.contrib.postgres.fields.citext import CICharField
 from django.db import models
 
 
@@ -50,7 +49,13 @@ class UserTrackingMixin(models.Model):
 
 
 class BaseWFPModelMixin(UserTrackingMixin, TimestampMixin, SoftDeleteMixin):
-    name = CICharField("Name", max_length=255, unique=True, validators=[validate_name])
+    name = models.CharField(
+        "Name",
+        max_length=255,
+        unique=True,
+        validators=[validate_name],
+        db_collation="case_insensitive",
+    )
     description = models.TextField(blank=True)
     label = models.TextField("Label (en)")
 
