@@ -8,7 +8,6 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
-from django.contrib.postgres.fields.citext import CICharField, CIEmailField
 from django.db import models
 from django.db.models import Q
 from django.utils.functional import cached_property
@@ -22,9 +21,10 @@ from .managers import UserManager
 class User(SoftDeleteMixin, TimestampMixin, PermissionsMixin, AbstractBaseUser):
     """Custom user model."""
 
-    email = CIEmailField(
+    email = models.EmailField(
         max_length=255,
         unique=True,
+        db_collation="case_insensitive",
     )
 
     organization = models.ForeignKey(
@@ -140,7 +140,7 @@ class UserAPISite(TimestampMixin):
 class UserAPIKey(TimestampMixin):
     user = models.ForeignKey(User, related_name="api_keys", on_delete=models.CASCADE)
     key = models.TextField()
-    name = CICharField(max_length=255, blank=True)
+    name = models.CharField(max_length=255, blank=True, db_collation="case_insensitive")
     salt = models.BinaryField()
     site = models.ForeignKey(
         UserAPISite, on_delete=models.CASCADE, related_name="user_api_keys", null=True
