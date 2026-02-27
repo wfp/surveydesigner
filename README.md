@@ -3,11 +3,18 @@
 Survey Designer is an application that allows users in the field to build
 surveys in a fast and easy way while giving them the flexibility to make
 necessary adjustments while also maintaining WFP standard labeling & naming
-conventions (based on the WFP Codebook/standard list of questions and answers).
+conventions.
 This is to improve the overall data quality when it comes to survey design,
 data collection & analysis (saving time and resources) as well as allowing for
 reproducibility and sharing resources between users. This tool is targeted for
 users that are using XLSForm or ODK-based tools (such as: MoDa or Kobo).
+
+## Frontend Architecture
+
+The application's frontend is designed as a decoupled solution from the backend.
+
+- **Authentication**: The login process is managed securely via Keycloak.
+- **Localization**: Multi-language support is handled locally, based on translation files located directly within the frontend part of the repository.
 
 ## Requirements
 
@@ -30,8 +37,8 @@ Example when running in a local environemnt:
 DJANGO_SETTINGS_MODULE="wfp.settings"
 SECRET_KEY='django-insecure-=!&_i6qv%8pd!l7-+d=2&-s(bu=h5pc*!^&3)c^4wc)iz8d7*3'
 DEBUG=True
-ALLOWED_HOSTS='wfp.org;localhost;127.0.0.1'
-CORS_ALLOWED_ORIGINS='http://dev.surveydesigner.vam.wfp.org;http://localhost:3000'
+ALLOWED_HOSTS='domain.org;localhost;127.0.0.1'
+CORS_ALLOWED_ORIGINS='http://domain.org;http://localhost:3000'
 # ENV types: local, ci, dev, qa, prod
 ENV=local
 
@@ -82,10 +89,10 @@ OIDC_CLIENT_SECRET=""
 2. If `DEBUG` is `True` then run `pnpm dev`. This will build and start the frontend.
 3. Navigate to `http://localhost:8080` to view the site.
 
-
-
 ## Developing translations
+
 With the container running
+
 1. Add the translation key and text inside: `survey_designer/apps/frontend/src/public/locales/en/translations.json`
 2. run `pnpm run translate` - This translates the files into all supported languages and creates a production build.
 3. Start the Docker container. `docker compose up -d`
