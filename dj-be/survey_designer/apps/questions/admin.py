@@ -32,6 +32,7 @@ from questions.admin_filters import (
     ChoiceListFilter,
     ParentSuffixListFilter,
     QuestionChoiceFilter,
+    QuestionChoiceFileFilter,
     QuestionIndicatorFilter,
     QuestionLevelFilter,
     QuestionModuleFilter,
@@ -365,7 +366,7 @@ class ChoiceGroupFileAdmin(
         if not obj.id:
             return "-"
         question_count = getattr(obj, "question_count", "-")
-        query_params = f"?choice_file_filter={obj.id}"
+        query_params = f"?{QuestionChoiceFileFilter.parameter_name}={obj.id}"
         url = get_model_admin_base_url(BaseQuestion, "_changelist") + query_params
         on_click = f"window.open('{url}', 'popup', 'width=1200,height=600')"
         return format_html(
@@ -938,6 +939,7 @@ class BaseQuestionAdmin(SortableAdminMixin, admin.ModelAdmin):
         QuestionSubmoduleFilter,
         QuestionModuleFilter,
         QuestionChoiceFilter,
+        QuestionChoiceFileFilter,
         QuestionSuffixFilter,
         QuestionSuffix2Filter,
         QuestionRecallPeriodFilter,

@@ -1,8 +1,11 @@
 from core.utils import get_model_admin_base_url
+from django.core.files.uploadedfile import SimpleUploadedFile
 from lxml import html
+from questions.const import QuestionType
 from questions.models import (
     BaseQuestion,
     ChoiceGroup,
+    ChoiceGroupFile,
     RecallPeriod,
     RepeatSection,
     RootQuestion,
@@ -35,6 +38,45 @@ def test_base_questions_list_view(logged_admin_client, xls_form_data):
     url = get_model_admin_base_url(BaseQuestion, "_changelist")
     response = logged_admin_client.get(url)
     assert response.status_code == 200
+
+
+def test_choice_group_file_number_of_questions_filters_base_question_list(
+    logged_admin_client,
+    root_question_1,
+    root_question_2,
+):
+    choices_file = ChoiceGroupFile.objects.create(
+        name="ext123",
+        csv_file=SimpleUploadedFile(
+            "fruits.csv",
+            b"name,label\na,Apple\nb,Banana\n",
+            content_type="text/csv",
+        ),
+    )
+    root_question_1.type = QuestionType.SELECT_ONE_FROM_FILE
+    root_question_1.choices = None
+    root_question_1.choices_file = choices_file
+    root_question_1.save()
+
+    choice_file_url = get_model_admin_base_url(ChoiceGroupFile, "_changelist")
+    response = logged_admin_client.get(choice_file_url)
+    assert response.status_code == 200
+    assert f"choices_file__pk={choices_file.id}" in response.content.decode("utf-8")
+
+    url = get_model_admin_base_url(BaseQuestion, "_changelist")
+    response = logged_admin_client.get(
+        url + f"?choices_file__pk={choices_file.id}",
+        follow=True,
+    )
+    assert response.status_code == 200
+    assert response.redirect_chain == []
+
+    tree = html.fromstring(response.content)
+    rows = tree.xpath("//tr")
+    rows_text_content = [row.text_content().strip() for row in rows]
+
+    assert root_question_1.name in "\n".join(rows_text_content)
+    assert root_question_2.name not in "\n".join(rows_text_content)
 
 
 def test_root_question_admin_edit_view(
