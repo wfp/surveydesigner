@@ -1,4 +1,5 @@
 @import '@wfp/styles/styles.css';
+@import url("https://fonts.googleapis.com/css2?family=Tajawal:wght@200;300;400;500;700;800;900&display=swap");
 
 .checkbox-row .allCheckboxWrapper {
   min-width: 130px;
@@ -573,6 +574,15 @@ html {
     font-family: var(--font-family-primary);
 }
 
+html:lang(ar) {
+    font-family: "Tajawal", var(--font-family-primary);
+}
+
+html:lang(ar) body,
+html:lang(ar) body * {
+  font-family: "Tajawal", var(--font-family-primary) !important;
+}
+
 /* pointer on clickable steps */
 nav.custom-step-navigation .wfp--step-navigation__nav .wfp--step-navigation__nav-item {
   cursor: pointer;
@@ -589,12 +599,8 @@ nav.custom-step-navigation .wfp--step-navigation__nav .wfp--step-navigation__nav
 }
 
 .wfp--footer {
-  position:fixed;
-  left:0;
-  bottom:0;
-  right:0;
-  z-index: 0; /* Lower than popups and notifications */
-  background: #0d2a56;         /* dark navy */
+  position: relative;
+  background: #0d2a56;
   color: #fff;
   border-top: 1px solid rgba(255,255,255,.25);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
