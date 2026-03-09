@@ -1,6 +1,11 @@
 import pytest
 from core.utils import get_model_admin_base_url
+from django.test import TestCase
+from modules.models import Module, Submodule
+from organization.models import Organization
+from questions.const import QuestionType
 from questions.models import RootQuestionTranslation
+from questions.models import RootQuestion, SubQuestion, Suffix
 
 
 def _admin_post_change_or_fail(
@@ -246,3 +251,78 @@ def test_regex_does_not_replace_similar_names(root_question_1, root_question_2):
     assert f"prefix{old} suffix" in root_question_1.label
     assert f"{old}X" in root_question_1.label
     assert f"${{{old}}}" not in root_question_1.label
+
+
+@pytest.mark.django_db
+def test_case_only_root_question_rename_updates_tokens_and_subquestion_names(
+    root_question_1, root_question_2, sub_question_1, suffix_1
+):
+    old = root_question_1.name
+    new = old.lower()
+
+    root_question_2.relevant = f"${{{old}}} > 10"
+    root_question_2.save()
+    root_question_2.relevant_dependencies.set([root_question_1.base_question])
+
+    root_question_1.name = new
+    root_question_1.save()
+
+    root_question_2.refresh_from_db()
+    sub_question_1.refresh_from_db()
+
+    assert root_question_2.relevant == f"${{{new}}} > 10"
+    assert sub_question_1.name == f"{new}{suffix_1.name}"
+
+
+class TestCaseInsensitiveRootQuestionRenameSignals(TestCase):
+    def setUp(self):
+        organization = Organization.objects.create(name="Signals Org")
+        module = Module.objects.create(name="SignalsModule", label="Signals Module")
+        module.organizations.add(organization)
+        self.submodule = Submodule.objects.create(
+            name="SignalsSubmodule",
+            label="Signals Submodule",
+            module=module,
+            appearance="test",
+        )
+        self.root_question_1 = RootQuestion.objects.create(
+            name="TestQuestion1",
+            label="Test Question 1",
+            type=QuestionType.INTEGER,
+            appearance="test",
+        )
+        self.root_question_1.submodule.add(self.submodule)
+        self.root_question_2 = RootQuestion.objects.create(
+            name="TestQuestion2",
+            label="Test Question 2",
+            type=QuestionType.INTEGER,
+            appearance="test",
+        )
+        self.root_question_2.submodule.add(self.submodule)
+        self.suffix = Suffix.objects.create(
+            name="Suffix1",
+            description="Suffix 1",
+            type=QuestionType.TEXT,
+        )
+        self.sub_question = SubQuestion.objects.create(
+            root_question=self.root_question_1,
+            suffix=self.suffix,
+            label="SubQuestion 1",
+        )
+
+    def test_case_only_rename_updates_tokens_and_subquestion_names(self):
+        old = self.root_question_1.name
+        new = old.lower()
+
+        self.root_question_2.relevant = f"${{{old}}} > 10"
+        self.root_question_2.save()
+        self.root_question_2.relevant_dependencies.set([self.root_question_1.base_question])
+
+        self.root_question_1.name = new
+        self.root_question_1.save()
+
+        self.root_question_2.refresh_from_db()
+        self.sub_question.refresh_from_db()
+
+        self.assertEqual(self.root_question_2.relevant, f"${{{new}}} > 10")
+        self.assertEqual(self.sub_question.name, f"{new}{self.suffix.name}")

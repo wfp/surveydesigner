@@ -1,4 +1,7 @@
 import pytest
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from rest_framework.test import APIClient
 
 from .factories import UserAPIKeyFactory, UserAPISiteFactory
 
@@ -46,6 +49,22 @@ class TestUserAPIKeyViewSet:
         assert response.json()["site"] == site.id
         assert response.json()["name"] == "test"
         assert response.json()["raw_key"] == "test_key"
+
+    def test_create_user_api_key_rejects_case_variant_duplicate_name(
+        self, api_client, user
+    ):
+        api_client.login(email=user.email, password="test_user")
+        site = UserAPISiteFactory()
+        UserAPIKeyFactory(user=user, site=site, name="ProdKey")
+
+        response = api_client.post(
+            "/api/accounts/api-keys/",
+            data={"site": site.id, "name": "prodkey", "raw_key": "test_key_2"},
+            format="json",
+        )
+
+        assert response.status_code == 400
+        assert response.json()["non_field_errors"] == ["Please provide a unique name."]
 
     def test_update_user_api_key(self, api_client, user):
         api_key = UserAPIKeyFactory(user=user)
@@ -108,3 +127,27 @@ class TestUserAPISiteAPI:
             "/api/accounts/api-sites/",
         )
         assert response.status_code == 200
+
+
+class TestCaseInsensitiveUserAPIKeyViewSet(TestCase):
+    def setUp(self):
+        self.api_client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            email="api@example.com", password="test_user"
+        )
+        self.api_client.login(email=self.user.email, password="test_user")
+
+    def test_create_user_api_key_rejects_case_variant_duplicate_name(self):
+        site = UserAPISiteFactory()
+        UserAPIKeyFactory(user=self.user, site=site, name="ProdKey")
+
+        response = self.api_client.post(
+            "/api/accounts/api-keys/",
+            data={"site": site.id, "name": "prodkey", "raw_key": "test_key_2"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["non_field_errors"], ["Please provide a unique name."]
+        )
