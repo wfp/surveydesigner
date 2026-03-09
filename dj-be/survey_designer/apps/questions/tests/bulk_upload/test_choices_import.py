@@ -3,7 +3,9 @@
 from io import BytesIO
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.conf import settings
+from django.test import TestCase
 from openpyxl import Workbook, load_workbook
 from openpyxl.writer.excel import save_virtual_workbook
 from questions.models import Choice, ChoiceGroup
@@ -220,3 +222,30 @@ def test_multiple_choice_lists_have_independent_row_order(admin):
         .order_by("order")
         .values_list("name", flat=True)
     ) == ["0", "1"]
+
+
+class TestCaseInsensitiveChoicesImport(TestCase):
+    def setUp(self):
+        self.admin = get_user_model().objects.create_user(
+            email="choices-import@example.com",
+            password="test_user",
+            is_superuser=True,
+            is_staff=True,
+        )
+        self.choice_group = ChoiceGroup.objects.create(name="YesNoDkRef")
+
+    def test_reuses_existing_choice_group_for_case_variant_name(self):
+        rows = [
+            {"choice_list": "yesnodkref", "name": "1", "labels": {"en": "Yes"}},
+            {"choice_list": "yesnodkref", "name": "0", "labels": {"en": "No"}},
+        ]
+        wb = load_workbook(build_choices_wb(rows, with_other_sheets=False))
+        ci = ChoicesImport(wb["choices"], dict(settings.LANGUAGES), self.admin)
+        ci.process()
+
+        self.assertTrue(ci.is_valid())
+
+        created = ci.create()
+
+        self.assertEqual(ChoiceGroup.objects.filter(name__iexact="yesnodkref").count(), 1)
+        self.assertEqual(created["yesnodkref"].id, self.choice_group.id)
