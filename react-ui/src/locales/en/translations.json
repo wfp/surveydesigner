@@ -70,43 +70,43 @@
         "items": {
           "surveyDesigner": {
             "question": "What is Survey Designer?",
-            "paragraph1": "Survey Designer is an application that allows users in the field to build surveys in a fast and easy way while also giving them the flexibility to make necessary adjustments, all while maintaining WFP standard labeling and naming conventions based on the WFP Codebook and standard list of questions and answers. This improves overall data quality for survey design, data collection, and analysis by saving time and resources, while also allowing reproducibility and resource sharing between users. This tool is targeted to users working with XLSForm or ODK-based tools such as MoDa or Kobo."
+            "paragraph1": "Survey Designer is an application that allows users in the field to build surveys in a fast and easy way while giving them the flexibility to make necessary adjustments while also maintaining WFP standard labeling and naming conventions (based on the WFP Codebook and standard list of questions and answers). This is to improve the overall data quality when it comes to survey design, data collection, and analysis (saving time and resources) as well as allowing for reproducibility and sharing resources between users. This tool is targeted for users that are using XLSForm or ODK-based tools (such as: MoDa or Kobo)."
           },
           "codebook": {
             "question": "What is the Codebook?",
             "paragraph1": "The WFP <codebook>Codebook</codebook> is a dataset containing all possible standard questions and answers included in WFP surveys.",
             "paragraph2": "It is linked to an XLSForm database that can be subject to integrations and revisions based on data collection needs.",
             "paragraph3": "Questions are organized into <modules>Modules</modules> and <submodules>Submodules</submodules>.",
-            "paragraph4": "The <codebook>Codebook</codebook> in Survey Designer cannot be directly modified, but there is a <requestChangeProcedure>Request Change Procedure</requestChangeProcedure> that allows you to propose modifications to the administrators."
+            "paragraph4": "The <codebook>Codebook</codebook> in the Survey Designer cannot be directly modified, but there exists a <requestChangeProcedure>Request Change Procedure</requestChangeProcedure> that allows you to propose your modifications to the administrators."
           },
           "categoriesTypesModesContext": {
             "question": "What are Survey Categories, Types, Modes and Context?",
             "paragraph1": "These are filters that you can use to structure or define your survey.",
             "paragraph2": "Based on your choices, different submodules of questions are included in your survey.",
-            "paragraph3": "<surveyCategories>Survey Categories</surveyCategories> are general macro-categories, currently Monitoring, Market, and Vulnerability Assessments, that define your survey.",
-            "paragraph4": "<surveyTypes>Survey Types</surveyTypes> are sub-categories specific to each category you select, for example for Monitoring you have PDM, Baseline Monitoring, and others.",
+            "paragraph3": "<surveyCategories>Survey Categories</surveyCategories> are general macro-categories (currently: Monitoring, Market and Vulnerability Assessments) that define your survey.",
+            "paragraph4": "<surveyTypes>Survey Types</surveyTypes> are sub-categories specific to each category you select (e.g.: for Monitoring you have PDM, Baseline Monitoring... etc.).",
             "paragraph5": "<surveyModes>Survey Modes</surveyModes> are the three data collection modes allowed for WFP surveys: Face-to-face, Remote/CATI, and Web Surveys.",
-            "paragraph6": "<context>Context</context> consists of additional sets of questions that can be optionally added to specific modules, for example COVID-19-related questions or migration-related questions."
+            "paragraph6": "Finally, <context>Context</context> are additional sets of questions that can be optionally added to specific modules (for example, COVID-19-related questions or migration-related questions)."
           },
           "modulesSubmodules": {
             "question": "What are Modules and Submodules?",
-            "paragraph1": "<modules>Modules</modules> and <submodules>Submodules</submodules>, sometimes also referred to as sections, are a way to group questions based on thematic areas such as Nutrition or Food Security, and on how they are normally grouped in surveys.",
+            "paragraph1": "<modules>Modules</modules> and <submodules>Submodules</submodules> (sometimes also referred as sections) are a way to group questions based on thematic areas (eg: Nutrition, Food Security... etc.) and/or on how they are normally grouped in surveys.",
             "paragraph2": "They are organized and labelled based on standard WFP Codebook conventions.",
             "paragraph3": "<submodules>Submodules</submodules> are the basic unit that you will use to create a survey in Survey Designer."
           },
           "suffixesRecallPeriods": {
             "question": "What are Suffixes and Recall Periods?",
-            "paragraph1": "In the Codebook, each question may have several optional variations.",
-            "paragraph2": "For every question, we identify a Root Question, which expresses the basic corporate formulation of a question.",
-            "paragraph3": "<suffixes>Suffixes</suffixes> indicate logic variations of the Root Question. For example, Root Question <strong>HHExpFood</strong> is read as \"What is your total food expenditure?\" If we add the suffix <strong>_Loc</strong>, which is related to locations, we obtain the subquestion <strong>HHExpFood_Loc</strong>, read as \"Where do you purchase your food?\" The Codebook allows up to a maximum of two suffixes for a single subquestion. In that case, the second suffix is called a nested suffix.",
-            "paragraph4": "<recallPeriods>Recall Periods</recallPeriods> indicate the time reference for a question. For example, if we add the recall period <strong>_7D</strong>, indicating a weekly time reference, we obtain the subquestion <strong>HHExpFood_7D</strong>, read as \"What was your total food expenditure in the last 7 days?\"",
-            "paragraph5": "<suffixes>Suffixes</suffixes> and <recallPeriods>Recall Periods</recallPeriods> can also be combined to create subquestions that are both logic and temporal variations of the Root Question. For example, <strong>HHExpFood_Loc_7D</strong> is read as \"Where did you purchase your food in the last 7 days?\""
+            "paragraph1": "In the Codebook, for every question there exists several variations that are considered optional.",
+            "paragraph2": "For every question, we identify a Root Question, which expresses the basic/corporate formulation of a question. To every Root Question, we may attach different <suffixes>Suffixes</suffixes> and <recallPeriods>Recall Periods</recallPeriods> that indicate the variations of the Root Question.",
+            "paragraph3": "<suffixes>Suffixes</suffixes> indicate logic variations of the Root Question (e.g.: Root Question <strong>HHExpFood</strong> is to be read \"What is your total food expenditure?\". If we add the suffix <strong>_Loc</strong> (which is related to locations), we obtain the Subquestion <strong>HHExpFood_Loc</strong> to be read \"Where do you purchase your food?\". The Codebook allows up to a maximum of two suffixes for a single subquestion. In this case, we call the second suffix a nested suffix.",
+            "paragraph4": "<recallPeriods>Recall Periods</recallPeriods> indicate the time reference for a questions (e.g.: If we add the recall period <strong>_7D</strong>, indicating a weekly time reference, we obtain the Subquestion <strong>HHExpFood_7D</strong> to be read \"What was your total food expenditure in the last 7 days?\").",
+            "paragraph5": "<suffixes>Suffixes</suffixes> and <recallPeriods>Recall Periods</recallPeriods> can also be combined to create Subquestions that are both logic and temporal variations of the Root Question (e.g.: <strong>HHExpFood_Loc_7D</strong> should be read \"Where did you purchase your food in the last 7 days?\")."
           },
           "calculationsRepeatSections": {
             "question": "What are Calculations and Repeat Sections?",
-            "paragraph1": "<calculations>Calculations</calculations> and <repeatSections>Repeat Sections</repeatSections> are elements that structure your survey but do not necessarily appear in the final questionnaire.",
-            "paragraph2": "<calculations>Calculations</calculations> produce standard calculations, such as aggregations or indicator scores, based on collected data. Those calculations may appear in the survey or not, depending on your decision.",
-            "paragraph3": "<repeatSections>Repeat Sections</repeatSections> define how a set of questions is repeated in the survey based on specific information, for example asking about the age and sex of each household member based on household size."
+            "paragraph1": "<calculations>Calculations</calculations> and <repeatSections>Repeat Sections</repeatSections> are elements that will structure your survey but would not necessarily appear in the survey.",
+            "paragraph2": "<calculations>Calculations</calculations> are elements that produce standard calculations (aggregation, indicators scores...etc.) based on collected data. Those calculations might appear in the survey or not, based on your decision.",
+            "paragraph3": "<repeatSections>Repeat Sections</repeatSections> are sections that define how a set of questions are repeated in the survey based on specific information (e.g.: asking about the age and sex of each household member, based on the household size)."
           }
         }
       },
@@ -142,18 +142,18 @@
           "accessCodebook": {
             "question": "How can I access the Codebook?",
             "paragraph1": "You can access the <codebook>Codebook</codebook> by clicking the \"<codebook>Codebook</codebook>\" button at the top right next to your username.",
-            "paragraph2": "From there you can access all the back-end content that contributes to building surveys, including Questions, Answers, Suffixes, Calculations, Survey Categories, Types, Modes, and others.",
+            "paragraph2": "From there you should be able to access all the back-end content that contributes to building the surveys (Questions, Answers, Suffixes, Calculations, Survey Categories, Types, Modes...and others).",
             "imageAlt": "Codebook Screenshot"
           },
           "exportExcel": {
             "question": "Can I export the Codebook content in Excel format?",
-            "paragraph1": "Yes. You can export Codebook content in Excel format by selecting one or more <modules>Modules</modules>, <submodules>Submodules</submodules>, or <questions>Questions</questions>, then clicking the \"Export Questions\" action button.",
+            "paragraph1": "Yes you can do that by selecting one or more <modules>Modules</modules>, <submodules>Submodules</submodules> or <questions>Questions</questions> and clicking the \"Export Questions\" action button.",
             "imageAlt": "Export Action Screenshot"
           },
           "contributeChanges": {
             "question": "How can I contribute to the Codebook (request addition or changes)?",
-            "paragraph1": "You can submit requests to add, edit, or delete questions or answers by accessing <submitChangeRequest>this link</submitChangeRequest>.",
-            "paragraph2": "Alternatively, you may send your request to <supportEmail>global.surveydesigner@wfp.org</supportEmail> and attach an Excel sheet with the required changes.",
+            "paragraph1": "You can submit requests to add, edit and/or delete any list of questions or answers (choices) to the Codebook by accessing <submitChangeRequest>this link</submitChangeRequest>.",
+            "paragraph2": "Alternatively, you may send your request to <supportEmail>global.surveydesigner@wfp.org</supportEmail> by attaching an excel sheet with the required changes.",
             "paragraph3": "Please use <changeRequestTemplate>this template</changeRequestTemplate>."
           }
         }

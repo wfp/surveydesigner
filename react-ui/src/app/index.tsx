@@ -97,14 +97,7 @@ function App() {
             </PrivateRoute>
           }
         />
-        <Route
-          path="/help"
-          element={
-            <PrivateRoute>
-              <Faq />
-            </PrivateRoute>
-          }
-        />
+        <Route path="/help" element={<Faq />} />
         <Route
           path="/survey/copy/:uuid"
           element={

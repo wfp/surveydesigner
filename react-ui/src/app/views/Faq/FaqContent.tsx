@@ -10,7 +10,7 @@ interface FaqSectionProps {
 function FaqSection({ title, children }: FaqSectionProps) {
   return (
     <section>
-      <h3>{title}</h3>
+      <h3 className="faq-section-title">{title}</h3>
       {children}
     </section>
   );
@@ -63,10 +63,24 @@ interface FaqTextProps {
   components?: Record<string, JSX.Element>;
 }
 
-function FaqText({ i18nKey, components }: FaqTextProps) {
+function FaqTextInline({ i18nKey, components }: FaqTextProps) {
+  return <Trans components={components} i18nKey={i18nKey} />;
+}
+
+interface FaqTextGroupProps {
+  i18nKeys: string[];
+  components?: Record<string, JSX.Element>;
+}
+
+function FaqTextGroup({ i18nKeys, components }: FaqTextGroupProps) {
   return (
     <FaqParagraph>
-      <Trans components={components} i18nKey={i18nKey} />
+      {i18nKeys.map((i18nKey, index) => (
+        <React.Fragment key={i18nKey}>
+          {index > 0 ? " " : null}
+          <FaqTextInline components={components} i18nKey={i18nKey} />
+        </React.Fragment>
+      ))}
     </FaqParagraph>
   );
 }
@@ -120,24 +134,24 @@ function FaqContent() {
             "helpPage.sections.definitions.items.surveyDesigner.question",
           )}
         >
-          <FaqText i18nKey="helpPage.sections.definitions.items.surveyDesigner.paragraph1" />
+          <FaqTextGroup
+            i18nKeys={[
+              "helpPage.sections.definitions.items.surveyDesigner.paragraph1",
+            ]}
+          />
         </FaqItem>
 
         <FaqItem
           question={t("helpPage.sections.definitions.items.codebook.question")}
         >
-          <FaqText
+          <FaqTextGroup
             components={transComponents}
-            i18nKey="helpPage.sections.definitions.items.codebook.paragraph1"
-          />
-          <FaqText i18nKey="helpPage.sections.definitions.items.codebook.paragraph2" />
-          <FaqText
-            components={transComponents}
-            i18nKey="helpPage.sections.definitions.items.codebook.paragraph3"
-          />
-          <FaqText
-            components={transComponents}
-            i18nKey="helpPage.sections.definitions.items.codebook.paragraph4"
+            i18nKeys={[
+              "helpPage.sections.definitions.items.codebook.paragraph1",
+              "helpPage.sections.definitions.items.codebook.paragraph2",
+              "helpPage.sections.definitions.items.codebook.paragraph3",
+              "helpPage.sections.definitions.items.codebook.paragraph4",
+            ]}
           />
         </FaqItem>
 
@@ -146,23 +160,16 @@ function FaqContent() {
             "helpPage.sections.definitions.items.categoriesTypesModesContext.question",
           )}
         >
-          <FaqText i18nKey="helpPage.sections.definitions.items.categoriesTypesModesContext.paragraph1" />
-          <FaqText i18nKey="helpPage.sections.definitions.items.categoriesTypesModesContext.paragraph2" />
-          <FaqText
+          <FaqTextGroup
             components={transComponents}
-            i18nKey="helpPage.sections.definitions.items.categoriesTypesModesContext.paragraph3"
-          />
-          <FaqText
-            components={transComponents}
-            i18nKey="helpPage.sections.definitions.items.categoriesTypesModesContext.paragraph4"
-          />
-          <FaqText
-            components={transComponents}
-            i18nKey="helpPage.sections.definitions.items.categoriesTypesModesContext.paragraph5"
-          />
-          <FaqText
-            components={transComponents}
-            i18nKey="helpPage.sections.definitions.items.categoriesTypesModesContext.paragraph6"
+            i18nKeys={[
+              "helpPage.sections.definitions.items.categoriesTypesModesContext.paragraph1",
+              "helpPage.sections.definitions.items.categoriesTypesModesContext.paragraph2",
+              "helpPage.sections.definitions.items.categoriesTypesModesContext.paragraph3",
+              "helpPage.sections.definitions.items.categoriesTypesModesContext.paragraph4",
+              "helpPage.sections.definitions.items.categoriesTypesModesContext.paragraph5",
+              "helpPage.sections.definitions.items.categoriesTypesModesContext.paragraph6",
+            ]}
           />
         </FaqItem>
 
@@ -171,14 +178,13 @@ function FaqContent() {
             "helpPage.sections.definitions.items.modulesSubmodules.question",
           )}
         >
-          <FaqText
+          <FaqTextGroup
             components={transComponents}
-            i18nKey="helpPage.sections.definitions.items.modulesSubmodules.paragraph1"
-          />
-          <FaqText i18nKey="helpPage.sections.definitions.items.modulesSubmodules.paragraph2" />
-          <FaqText
-            components={transComponents}
-            i18nKey="helpPage.sections.definitions.items.modulesSubmodules.paragraph3"
+            i18nKeys={[
+              "helpPage.sections.definitions.items.modulesSubmodules.paragraph1",
+              "helpPage.sections.definitions.items.modulesSubmodules.paragraph2",
+              "helpPage.sections.definitions.items.modulesSubmodules.paragraph3",
+            ]}
           />
         </FaqItem>
 
@@ -187,19 +193,15 @@ function FaqContent() {
             "helpPage.sections.definitions.items.suffixesRecallPeriods.question",
           )}
         >
-          <FaqText i18nKey="helpPage.sections.definitions.items.suffixesRecallPeriods.paragraph1" />
-          <FaqText i18nKey="helpPage.sections.definitions.items.suffixesRecallPeriods.paragraph2" />
-          <FaqText
+          <FaqTextGroup
             components={transComponents}
-            i18nKey="helpPage.sections.definitions.items.suffixesRecallPeriods.paragraph3"
-          />
-          <FaqText
-            components={transComponents}
-            i18nKey="helpPage.sections.definitions.items.suffixesRecallPeriods.paragraph4"
-          />
-          <FaqText
-            components={transComponents}
-            i18nKey="helpPage.sections.definitions.items.suffixesRecallPeriods.paragraph5"
+            i18nKeys={[
+              "helpPage.sections.definitions.items.suffixesRecallPeriods.paragraph1",
+              "helpPage.sections.definitions.items.suffixesRecallPeriods.paragraph2",
+              "helpPage.sections.definitions.items.suffixesRecallPeriods.paragraph3",
+              "helpPage.sections.definitions.items.suffixesRecallPeriods.paragraph4",
+              "helpPage.sections.definitions.items.suffixesRecallPeriods.paragraph5",
+            ]}
           />
         </FaqItem>
 
@@ -208,17 +210,13 @@ function FaqContent() {
             "helpPage.sections.definitions.items.calculationsRepeatSections.question",
           )}
         >
-          <FaqText
+          <FaqTextGroup
             components={transComponents}
-            i18nKey="helpPage.sections.definitions.items.calculationsRepeatSections.paragraph1"
-          />
-          <FaqText
-            components={transComponents}
-            i18nKey="helpPage.sections.definitions.items.calculationsRepeatSections.paragraph2"
-          />
-          <FaqText
-            components={transComponents}
-            i18nKey="helpPage.sections.definitions.items.calculationsRepeatSections.paragraph3"
+            i18nKeys={[
+              "helpPage.sections.definitions.items.calculationsRepeatSections.paragraph1",
+              "helpPage.sections.definitions.items.calculationsRepeatSections.paragraph2",
+              "helpPage.sections.definitions.items.calculationsRepeatSections.paragraph3",
+            ]}
           />
         </FaqItem>
       </FaqSection>
@@ -229,10 +227,12 @@ function FaqContent() {
             "helpPage.sections.buildingSurveys.items.buildSurvey.question",
           )}
         >
-          <FaqText i18nKey="helpPage.sections.buildingSurveys.items.buildSurvey.paragraph1" />
-          <FaqText
+          <FaqTextGroup
             components={transComponents}
-            i18nKey="helpPage.sections.buildingSurveys.items.buildSurvey.paragraph2"
+            i18nKeys={[
+              "helpPage.sections.buildingSurveys.items.buildSurvey.paragraph1",
+              "helpPage.sections.buildingSurveys.items.buildSurvey.paragraph2",
+            ]}
           />
         </FaqItem>
 
@@ -241,15 +241,14 @@ function FaqContent() {
             "helpPage.sections.buildingSurveys.items.surveyTypes.question",
           )}
         >
-          <FaqText i18nKey="helpPage.sections.buildingSurveys.items.surveyTypes.paragraph1" />
-          <FaqText
+          <FaqTextGroup
             components={transComponents}
-            i18nKey="helpPage.sections.buildingSurveys.items.surveyTypes.paragraph2"
-          />
-          <FaqText i18nKey="helpPage.sections.buildingSurveys.items.surveyTypes.paragraph3" />
-          <FaqText
-            components={transComponents}
-            i18nKey="helpPage.sections.buildingSurveys.items.surveyTypes.paragraph4"
+            i18nKeys={[
+              "helpPage.sections.buildingSurveys.items.surveyTypes.paragraph1",
+              "helpPage.sections.buildingSurveys.items.surveyTypes.paragraph2",
+              "helpPage.sections.buildingSurveys.items.surveyTypes.paragraph3",
+              "helpPage.sections.buildingSurveys.items.surveyTypes.paragraph4",
+            ]}
           />
         </FaqItem>
 
@@ -258,13 +257,12 @@ function FaqContent() {
             "helpPage.sections.buildingSurveys.items.exportPublish.question",
           )}
         >
-          <FaqText
+          <FaqTextGroup
             components={transComponents}
-            i18nKey="helpPage.sections.buildingSurveys.items.exportPublish.paragraph1"
-          />
-          <FaqText
-            components={transComponents}
-            i18nKey="helpPage.sections.buildingSurveys.items.exportPublish.paragraph2"
+            i18nKeys={[
+              "helpPage.sections.buildingSurveys.items.exportPublish.paragraph1",
+              "helpPage.sections.buildingSurveys.items.exportPublish.paragraph2",
+            ]}
           />
         </FaqItem>
 
@@ -273,7 +271,11 @@ function FaqContent() {
             "helpPage.sections.buildingSurveys.items.selectionLimit.question",
           )}
         >
-          <FaqText i18nKey="helpPage.sections.buildingSurveys.items.selectionLimit.paragraph1" />
+          <FaqTextGroup
+            i18nKeys={[
+              "helpPage.sections.buildingSurveys.items.selectionLimit.paragraph1",
+            ]}
+          />
         </FaqItem>
       </FaqSection>
 
@@ -283,11 +285,13 @@ function FaqContent() {
             "helpPage.sections.codebookAccess.items.accessCodebook.question",
           )}
         >
-          <FaqText
+          <FaqTextGroup
             components={transComponents}
-            i18nKey="helpPage.sections.codebookAccess.items.accessCodebook.paragraph1"
+            i18nKeys={[
+              "helpPage.sections.codebookAccess.items.accessCodebook.paragraph1",
+              "helpPage.sections.codebookAccess.items.accessCodebook.paragraph2",
+            ]}
           />
-          <FaqText i18nKey="helpPage.sections.codebookAccess.items.accessCodebook.paragraph2" />
           <FaqImage
             alt={t(
               "helpPage.sections.codebookAccess.items.accessCodebook.imageAlt",
@@ -301,9 +305,11 @@ function FaqContent() {
             "helpPage.sections.codebookAccess.items.exportExcel.question",
           )}
         >
-          <FaqText
+          <FaqTextGroup
             components={transComponents}
-            i18nKey="helpPage.sections.codebookAccess.items.exportExcel.paragraph1"
+            i18nKeys={[
+              "helpPage.sections.codebookAccess.items.exportExcel.paragraph1",
+            ]}
           />
           <FaqImage
             alt={t(
@@ -318,26 +324,22 @@ function FaqContent() {
             "helpPage.sections.codebookAccess.items.contributeChanges.question",
           )}
         >
-          <FaqText
+          <FaqTextGroup
             components={transComponents}
-            i18nKey="helpPage.sections.codebookAccess.items.contributeChanges.paragraph1"
-          />
-          <FaqText
-            components={transComponents}
-            i18nKey="helpPage.sections.codebookAccess.items.contributeChanges.paragraph2"
-          />
-          <FaqText
-            components={transComponents}
-            i18nKey="helpPage.sections.codebookAccess.items.contributeChanges.paragraph3"
+            i18nKeys={[
+              "helpPage.sections.codebookAccess.items.contributeChanges.paragraph1",
+              "helpPage.sections.codebookAccess.items.contributeChanges.paragraph2",
+              "helpPage.sections.codebookAccess.items.contributeChanges.paragraph3",
+            ]}
           />
         </FaqItem>
       </FaqSection>
 
       <FaqSection title={t("helpPage.sections.contact.title")}>
         <FaqItem>
-          <FaqText
+          <FaqTextGroup
             components={transComponents}
-            i18nKey="helpPage.sections.contact.paragraph1"
+            i18nKeys={["helpPage.sections.contact.paragraph1"]}
           />
         </FaqItem>
       </FaqSection>
