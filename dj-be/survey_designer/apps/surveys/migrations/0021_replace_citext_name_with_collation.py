@@ -10,6 +10,33 @@ SURVEYS_TABLES = [
     ("surveys_surveyattribute", "surveyattribute"),
 ]
 
+LIKE_INDEX_FILTER = " OR ".join(
+    f"(tbl.relname = '{table_name}' AND attr.attname = 'name')"
+    for table_name, _ in SURVEYS_TABLES
+)
+
+
+DROP_LIKE_INDEXES_SQL = f"""
+DO $$
+DECLARE index_record record;
+BEGIN
+    FOR index_record IN
+        SELECT DISTINCT ns.nspname AS schema_name, idx.relname AS index_name
+        FROM pg_class idx
+        JOIN pg_index i ON idx.oid = i.indexrelid
+        JOIN pg_class tbl ON tbl.oid = i.indrelid
+        JOIN pg_namespace ns ON ns.oid = idx.relnamespace
+        JOIN pg_attribute attr ON attr.attrelid = tbl.oid AND attr.attnum = ANY(i.indkey)
+        WHERE idx.relkind = 'i'
+          AND idx.relname LIKE '%\\_like' ESCAPE '\\'
+          AND pg_get_indexdef(idx.oid) ~ '(varchar|text)_pattern_ops'
+          AND ({LIKE_INDEX_FILTER})
+    LOOP
+        EXECUTE format('DROP INDEX IF EXISTS %I.%I', index_record.schema_name, index_record.index_name);
+    END LOOP;
+END $$;
+"""
+
 run_sql_operations = []
 for table_name, _ in SURVEYS_TABLES:
     run_sql_operations.append(
@@ -74,6 +101,11 @@ class Migration(migrations.Migration):
         ("surveys", "0020_surveymode_attributes"),
     ]
 
-    operations = run_sql_operations + [
+    operations = [
+        migrations.RunSQL(
+            sql=DROP_LIKE_INDEXES_SQL,
+            reverse_sql=migrations.RunSQL.noop,
+        ),
+    ] + run_sql_operations + [
         migrations.SeparateDatabaseAndState(state_operations=state_operations),
     ]
