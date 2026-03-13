@@ -207,9 +207,12 @@ class RootQuestion(BaseWFPModelMixin, QuestionFieldsMixin):
         return self.type
 
     def duplicate(self):
-        duplicates_count = RootQuestion.objects.filter(
-            name__istartswith=self.name
-        ).count()
+        prefix = self.name.casefold()
+        duplicates_count = sum(
+            1
+            for existing_name in RootQuestion.objects.values_list("name", flat=True)
+            if existing_name.casefold().startswith(prefix)
+        )
 
         translations = self.translations.all()
         sub_questions = self.sub_questions.all()
