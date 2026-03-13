@@ -816,7 +816,11 @@ class ImportRowForm(Form):
 
         if submodule_name:
             submodule = Submodule.objects.filter(name__iexact=submodule_name).first()
-            if submodule and module_name and submodule.module.name != module_name:
+            if (
+                submodule
+                and module_name
+                and submodule.module.name.casefold() != module_name.casefold()
+            ):
                 self.add_error(
                     "submodule_name",
                     f"Submodule ({submodule_name}) already exists and does not belong to the {module_name} module.",

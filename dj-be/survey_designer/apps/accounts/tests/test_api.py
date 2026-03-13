@@ -1,4 +1,5 @@
 import pytest
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient
@@ -64,7 +65,9 @@ class TestUserAPIKeyViewSet:
         )
 
         assert response.status_code == 400
-        assert response.json()["non_field_errors"] == ["Please provide a unique name."]
+        assert response.json()[settings.REST_FRAMEWORK["NON_FIELD_ERRORS_KEY"]] == [
+            "Please provide a unique name."
+        ]
 
     def test_update_user_api_key(self, api_client, user):
         api_key = UserAPIKeyFactory(user=user)
@@ -149,5 +152,6 @@ class TestCaseInsensitiveUserAPIKeyViewSet(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
-            response.json()["non_field_errors"], ["Please provide a unique name."]
+            response.json()[settings.REST_FRAMEWORK["NON_FIELD_ERRORS_KEY"]],
+            ["Please provide a unique name."],
         )
