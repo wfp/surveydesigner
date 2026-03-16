@@ -1,0 +1,41 @@
+name: 🛠️ Task / Chore
+description: General improvements, maintenance, or internal tasks
+title: "task: <title>"
+labels: ["internal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for tasks that aren't bugs or features (e.g., refactoring, documentation, configuration, etc.).
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 🛠️ Task Description
+      description: What needs to be done?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: todo
+    attributes:
+      label: 📋 To-do List
+      options:
+        - label: "Step 1"
+        - label: "Step 2"
+        - label: "Step 3"
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: 📜 Additional Context
+      description: Add any other context or screenshots here.
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true

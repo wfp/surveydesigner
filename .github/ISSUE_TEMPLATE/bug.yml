@@ -1,0 +1,75 @@
+name: 🐛 Bug Report
+description: Report errors or unexpected behavior
+title: "bug: <title>"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the details below so we can fix it as soon as possible.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 🐛 Description
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: 📋 Steps to Reproduce
+      description: Steps to recreate the issue.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. Scroll down to '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: ✅ Expected Behavior
+      description: A clear and concise description of what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: ❌ Actual Behavior
+      description: A clear and concise description of what actually happened.
+    validations:
+      required: true
+
+  - type: input
+    id: screenshots
+    attributes:
+      label: 🖼️ Screenshots or Videos
+      description: Drag and drop or paste images/videos here, or provide a link.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 📜 Relevant Logs or Error Output
+      description: Please copy and paste any relevant logs.
+      render: shell
+
+  - type: input
+    id: environment
+    attributes:
+      label: 💻 Environment
+      description: Operating System, Browser version, App version, etc.
+      placeholder: "e.g. Chrome 122, macOS Sonoma, v1.0.4"
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true

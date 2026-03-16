@@ -1,0 +1,60 @@
+name: 🚀 Feature Request
+description: Suggest a new feature or improvement
+title: "feat: <title>"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! Please fill out the details below.
+
+  - type: textarea
+    id: user-story
+    attributes:
+      label: 📖 User Story
+      description: What is the goal of this feature?
+      placeholder: |
+        As a [user/admin/developer]
+        I need to [perform this action]
+        So that [I receive this value/benefit]
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: acceptance-criteria
+    attributes:
+      label: 📋 Acceptance Criteria (Testability)
+      description: List the conditions that must be met for this feature to be considered complete.
+      options:
+        - label: "Condition 1 (e.g., The 'Export' button is visible on the dashboard)"
+        - label: "Condition 2 (e.g., Clicking the button downloads a file named survey_id.pdf)"
+        - label: "Condition 3 (e.g., The PDF contains the correct chart data)"
+        - label: "Edge Case (e.g., If the survey is empty, show a toast notification error)"
+
+  - type: input
+    id: mockups
+    attributes:
+      label: 🎨 UI/UX Mockups (Optional)
+      description: Use Penpot
+      placeholder: "Attached Penpot in the issue"
+
+  - type: textarea
+    id: implementation-notes
+    attributes:
+      label: ⚙️ Technical Implementation Notes
+      description: Describe proposed implementation details or technical constraints.
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: 🛑 Impact / Breaking Changes
+      description: Does this affect existing features or require migrations?
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true

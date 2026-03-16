@@ -1,0 +1,92 @@
+name: 📊 Indicator Request
+description: Request the modification or addition of an indicator
+title: "[Indicator]: <name>"
+labels: ["new", "enhancements"]
+assignees:
+  - ValerioGiuffrida
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this request. Please keep the **[Indicator]** tag at the beginning of the title.
+
+  - type: input
+    id: indicator-name
+    attributes:
+      label: 📊 Indicator Name
+      description: Please provide the full name of the indicator.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: create-or-modify
+    attributes:
+      label: Create or Modify?
+      options:
+        - Create
+        - Modify
+    validations:
+      required: true
+
+  - type: input
+    id: contact
+    attributes:
+      label: 📧 Contact Details
+      description: How can we get in touch with you?
+      placeholder: ex. email@example.com
+
+  - type: dropdown
+    id: isCrf
+    attributes:
+      label: 🏗️ Corporate Result Framework
+      description: Is this CRF or piloted?
+      options:
+        - Not included nor piloted
+        - CRF
+        - Pilot
+    validations:
+      required: true
+
+  - type: input
+    id: owner-unit
+    attributes:
+      label: 🏛️ Unit Owning the Indicator
+      description: Which unit designed the indicator?
+      placeholder: ex. RAM-E
+
+  - type: textarea
+    id: batch-creation
+    attributes:
+      label: 📋 Batch of Tasks (DO NOT MODIFY)
+      value: |
+        - [ ] [Task]: R script - {{ data.indicator-name }}
+        - [ ] [Task]: SPSS script - {{ data.indicator-name }}
+        - [ ] [Task]: Stata script - {{ data.indicator-name }}
+    validations:
+      required: false
+
+  - type: dropdown
+    id: software-version
+    attributes:
+      label: 💻 Software Version
+      multiple: true
+      description: What software would you like to use for calculation?
+      options:
+        - Typescript
+        - Python
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 📜 Relevant Logs
+      description: Paste any relevant output here.
+      render: shell
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true
