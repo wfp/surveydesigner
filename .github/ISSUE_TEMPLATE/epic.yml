@@ -26,11 +26,10 @@ body:
     id: software-layer
     attributes:
       label: 💻 Software layer
-      multiple: true
       description: What parts are affected?
       options:
-        - Front-end
-        - Back-end
+        - label: Front-end
+        - label: Back-end
 
   - type: textarea
     id: included-features

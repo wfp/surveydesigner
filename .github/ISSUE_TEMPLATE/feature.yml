@@ -39,11 +39,10 @@ body:
     id: software-layer
     attributes:
       label: 💻 Software layer
-      multiple: true
       description: What part is affected?
       options:
-        - Front-end
-        - Back-end
+        - label: Front-end
+        - label: Back-end
 
   - type: checkboxes
     id: acceptance-criteria
