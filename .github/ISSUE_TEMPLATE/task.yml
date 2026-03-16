@@ -3,10 +3,24 @@ description: General improvements, maintenance, or internal tasks
 title: "task: <title>"
 labels: ["internal"]
 body:
+  - type: input
+    id: parent-issue
+    attributes:
+      label: 📖 Parent User Story
+      description: Enter the link or issue number of the Parent User Story (#123).
+      placeholder: "#123"
+    validations:
+      required: true
+
   - type: markdown
     attributes:
       value: |
         Use this template for tasks that aren't bugs or features (e.g., refactoring, documentation, configuration, etc.).
+        
+        > [!IMPORTANT]
+        > **Hierarchy Rules:**
+        > - **Tasks** MUST have a **Parent User Story**.
+        > - **Tasks** **cannot** have children and cannot have another Task or Feature as parent.
 
   - type: textarea
     id: description
@@ -15,6 +29,16 @@ body:
       description: What needs to be done?
     validations:
       required: true
+
+  - type: checkboxes
+    id: software-layer
+    attributes:
+      label: 💻 Software layer
+      multiple: true
+      description: What part is affected?
+      options:
+        - Front-end
+        - Back-end
 
   - type: checkboxes
     id: todo

@@ -1,13 +1,13 @@
-name: 🚀 Feature Request
-description: Suggest a new feature or improvement
-title: "feat: <title>"
-labels: ["enhancement"]
+name: 📖 User Story
+description: Define a specific technical or user-facing requirement
+title: "user-story: <title>"
+labels: ["user-story"]
 body:
   - type: input
-    id: parent-epic
+    id: parent-issue
     attributes:
-      label: 🏆 Parent Epic
-      description: Enter the link or issue number of the Parent Epic (#123).
+      label: 🚀 Parent Feature
+      description: Enter the link or issue number of the Parent Feature (#123).
       placeholder: "#123"
     validations:
       required: true
@@ -15,20 +15,19 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for suggesting a new feature! Please fill out the details below.
+        Use this template to detail a specific user story.
         
         > [!IMPORTANT]
         > **Hierarchy Rules:**
-        > - **Features** MUST have a **Parent Epic**.
-        > - **Features** contain **ONLY User Stories** as children.
-        > - **Features** **cannot** have another Feature as parent/child, and cannot contain Tasks directly.
+        > - **User Stories** MUST have a **Parent Feature**.
+        > - **User Stories** contain **ONLY Tasks** as children.
+        > - **User Stories** **cannot** have another User Story or Epic as parent/child.
 
   - type: textarea
     id: user-story
     attributes:
       label: 📖 User Story
-      description: What is the goal of this feature?
-      placeholder: |
+      description: |
         As a [user/admin/developer]
         I need to [perform this action]
         So that [I receive this value/benefit]
@@ -48,21 +47,20 @@ body:
   - type: checkboxes
     id: acceptance-criteria
     attributes:
-      label: 📋 Acceptance Criteria (Testability)
-      description: List the conditions that must be met for this feature to be considered complete.
+      label: 📋 Acceptance Criteria
+      description: List the conditions that must be met for this story to be considered complete.
       options:
-        - label: "Condition 1 (e.g., The 'Export' button is visible on the dashboard)"
-        - label: "Condition 2 (e.g., Clicking the button downloads a file named survey_id.pdf)"
-        - label: "Condition 3 (e.g., The PDF contains the correct chart data)"
-        - label: "Edge Case (e.g., If the survey is empty, show a toast notification error)"
+        - label: "Condition 1"
+        - label: "Condition 2"
+        - label: "Edge Case"
 
   - type: textarea
-    id: included-user-stories
+    id: included-tasks
     attributes:
-      label: 📖 Included User Stories
-      description: List the User Stories that belong to this Feature.
+      label: 🛠️ Included Tasks
+      description: List the technical tasks that belong to this User Story.
       placeholder: |
-        - [ ] #789
+        - [ ] #101
     validations:
       required: false
 
@@ -74,7 +72,7 @@ body:
       placeholder: "Attached Penpot in the issue"
 
   - type: textarea
-    id: implementation-notes
+    id: technical-notes
     attributes:
       label: ⚙️ Technical Implementation Notes
       description: Describe proposed implementation details or technical constraints.

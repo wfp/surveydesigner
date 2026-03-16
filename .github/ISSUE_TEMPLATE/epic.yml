@@ -1,0 +1,65 @@
+name: 🏆 Epic
+description: A large scope of work containing multiple features
+title: "epic: <title>"
+labels: ["epic"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to define a large milestone or a collection of related features.
+
+        > [!IMPORTANT]
+        > **Hierarchy Rules:**
+        > - **Epics** are top-level items. They **cannot** be children of other issues.
+        > - **Epics** contain **ONLY Features** as children.
+        > - **Epics** **cannot** contain other Epics or User Stories directly.
+
+  - type: textarea
+    id: overview
+    attributes:
+      label: 📊 Overview
+      description: What is the high-level goal and business value of this Epic?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: software-layer
+    attributes:
+      label: 💻 Software layer
+      multiple: true
+      description: What parts are affected?
+      options:
+        - Front-end
+        - Back-end
+
+  - type: textarea
+    id: included-features
+    attributes:
+      label: 🚀 Included Features
+      description: List the Features that are part of this Epic.
+      placeholder: |
+        - [ ] #123
+        - [ ] #456
+    validations:
+      required: false
+
+  - type: textarea
+    id: success-criteria
+    attributes:
+      label: ✅ Success Criteria
+      description: How will we know when this Epic is complete?
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: 📜 Additional Context
+      description: Links to documents, research, or cross-team dependencies.
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true

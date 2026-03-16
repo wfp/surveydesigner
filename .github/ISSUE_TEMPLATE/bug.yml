@@ -29,6 +29,16 @@ body:
     validations:
       required: true
 
+  - type: checkboxes
+    id: software-layer
+    attributes:
+      label: 💻 Software layer
+      multiple: true
+      description: What part is affected?
+      options:
+        - Front-end
+        - Back-end
+
   - type: textarea
     id: expected-behavior
     attributes:
