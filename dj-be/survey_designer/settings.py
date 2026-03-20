@@ -226,11 +226,15 @@ LOCALE_PATHS = (BASE_DIR.joinpath("locale"),)
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR.joinpath("static")
 
-# Whitenoise
-STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
-
 MEDIA_URL = "/uploads/"
 MEDIA_ROOT = BASE_DIR.joinpath("uploads")
+
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"
+    },
+}
 
 # Allow larger POSTs from Django Admin forms (default is 1000).
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
@@ -259,11 +263,11 @@ if UPLOAD_TO_S3:  # pragma: no cover
     # Static files
     # STATIC_LOCATION = "static"
     # STATIC_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/"
-    # STATICFILES_STORAGE = "core.storage_backends.StaticStorage"
+    # STORAGES["staticfiles"] = {"BACKEND": "core.storage_backends.StaticStorage"}
     # Media files
     PUBLIC_MEDIA_LOCATION = "media"
     MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/{PUBLIC_MEDIA_LOCATION}/"
-    DEFAULT_FILE_STORAGE = "core.storage_backends.PublicMediaStorage"
+    STORAGES["default"] = {"BACKEND": "core.storage_backends.PublicMediaStorage"}
 
 
 # Default primary key field type
@@ -395,7 +399,7 @@ UPLOADED_PHOTO_MAX_SIZE = int(environ.get("UPLOADED_PHOTO_MAX_SIZE", "1024"))
 # Silk profiler
 # SILKY_PYTHON_PROFILER = True
 # SILKY_PYTHON_PROFILER_BINARY = True
-# SILKY_STORAGE_CLASS = DEFAULT_FILE_STORAGE
+# SILKY_STORAGE_CLASS = STORAGES["default"]["BACKEND"]
 # SILKY_PYTHON_PROFILER_RESULT_PATH = "/profiling/"  # TODO: does not work
 # SILKY_AUTHENTICATION = True  # User must login
 # SILKY_AUTHORISATION = True  # User must have permissions

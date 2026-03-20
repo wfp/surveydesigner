@@ -35,7 +35,12 @@ _TEST_MEDIA_ROOT = tempfile.mkdtemp(prefix="survey_designer_zip_test_")
 
 
 @override_settings(
-    DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage",
+    STORAGES={
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+        },
+    },
     MEDIA_ROOT=_TEST_MEDIA_ROOT,
 )
 class GenerateXLSZipTestCase(APITestCase):
