@@ -1,21 +1,21 @@
-import React, { useEffect } from "react";
-import { NavLink, useLocation } from "react-router-dom";
-import { Link } from "@wfp/react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faClipboardList,
-  faGlobe,
-  faUsers,
-  faShieldAlt,
-  faFileLines,
-  faDiagramProject,
   faArrowRight,
+  faClipboardList,
+  faDiagramProject,
+  faFileLines,
+  faGlobe,
+  faShieldAlt,
+  faUsers,
 } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { Button, Link, Select, SelectItem } from "@wfp/react";
+import React, { useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { NavLink, useLocation } from "react-router-dom";
 import Footer from "../Footer";
-import { LanguageDropdown } from "../languageSelect/LanguageDropdown";
 import { LandingPageLocation } from "./LandingPage.interface";
 import styles from "./styles.module.scss";
+import { LanguageDropdown } from "../languageSelect/LanguageDropdown";
 
 function LandingPage() {
   const { t } = useTranslation();
@@ -49,12 +49,11 @@ function LandingPage() {
             </nav>
             <div className={styles.headerActions}>
               <LanguageDropdown />
-              <Link
+              <Button
                 href={`${import.meta.env.VITE_APP_API_ENDPOINT}/auth/login/`}
-                className={styles.ctaButton}
               >
                 {t("actions.login")}
-              </Link>
+              </Button>
             </div>
           </div>
         </header>
@@ -72,13 +71,13 @@ function LandingPage() {
               <p className={styles.heroSubtitle}>
                 {t("landingPage.heroSubtitle")}
               </p>
-              <Link
+              <Button
                 href={`${import.meta.env.VITE_APP_API_ENDPOINT}/auth/login/`}
-                className={styles.primaryCta}
+                icon={<FontAwesomeIcon icon={faArrowRight} />}
+                kind="primary"
               >
                 {t("landingPage.heroPrimaryCta")}
-                <FontAwesomeIcon icon={faArrowRight} className={styles.ctaArrow} />
-              </Link>
+              </Button>
             </div>
             <div className={styles.heroVisual}>
               <div className={styles.screenshotCard}>
@@ -94,16 +93,28 @@ function LandingPage() {
         <section className={styles.stats}>
           <div className={styles.statsInner}>
             <div className={styles.statItem}>
-              <span className={styles.statValue}>{t("landingPage.stat1Value")}</span>
-              <span className={styles.statLabel}>{t("landingPage.stat1Label")}</span>
+              <span className={styles.statValue}>
+                {t("landingPage.stat1Value")}
+              </span>
+              <span className={styles.statLabel}>
+                {t("landingPage.stat1Label")}
+              </span>
             </div>
             <div className={styles.statItem}>
-              <span className={styles.statValue}>{t("landingPage.stat2Value")}</span>
-              <span className={styles.statLabel}>{t("landingPage.stat2Label")}</span>
+              <span className={styles.statValue}>
+                {t("landingPage.stat2Value")}
+              </span>
+              <span className={styles.statLabel}>
+                {t("landingPage.stat2Label")}
+              </span>
             </div>
             <div className={styles.statItem}>
-              <span className={styles.statValue}>{t("landingPage.stat3Value")}</span>
-              <span className={styles.statLabel}>{t("landingPage.stat3Label")}</span>
+              <span className={styles.statValue}>
+                {t("landingPage.stat3Value")}
+              </span>
+              <span className={styles.statLabel}>
+                {t("landingPage.stat3Label")}
+              </span>
             </div>
           </div>
         </section>
