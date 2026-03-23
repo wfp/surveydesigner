@@ -3,11 +3,9 @@ import {
   MainNavigationItem,
   SubNavigation,
   SubNavigationContent,
-  SubNavigationItem,
-  Button,
 } from "@wfp/react";
-import { langFlags } from "./flags";
-import { languages, onChangeLanguage, getUserLanguage } from "../../utils/i18n";
+import { getUserLanguage } from "../../utils/i18n";
+import { LanguageDropdown } from "./LanguageDropdown";
 
 export const languageSelect = () => (
   <MainNavigationItem
@@ -15,24 +13,7 @@ export const languageSelect = () => (
     subNavigation={
       <SubNavigation>
         <SubNavigationContent>
-          {languages.map((language) => (
-            <SubNavigationItem key={`navbar-languages-${language.value}`}>
-              <Button
-                kind="ghost"
-                small
-                icon={
-                  langFlags[language.value]
-                    ? React.createElement(langFlags[language.value])
-                    : undefined
-                }
-                iconReverse
-                onClick={() => onChangeLanguage(language)}
-                style={{ fontWeight: "bold" }}
-              >
-                {language.label}
-              </Button>
-            </SubNavigationItem>
-          ))}
+          <LanguageDropdown />
         </SubNavigationContent>
       </SubNavigation>
     }

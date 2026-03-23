@@ -123,9 +123,8 @@
   width: 100%;
   max-width: 520px;
   background: #fff;
-  border-radius: 12px;
+  border-radius: 2px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
-  padding: 1.25rem;
   border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
@@ -217,7 +216,7 @@
   flex-direction: column;
   gap: 0.5rem;
   padding: 1.25rem 1.5rem;
-  border-radius: 12px;
+  border-radius: 2px;
   background-color: #ffffff;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
   border: 1px solid rgba(0, 0, 0, 0.04);
@@ -227,6 +226,7 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  margin-bottom: 0.25rem;
 }
 
 .featureIcon {
@@ -258,8 +258,7 @@
 .screenshotWrapper {
   max-width: 520px;
   width: 100%;
-  padding: 1.5rem;
-  border-radius: 12px;
+  border-radius: 2px;
   background-color: #ffffff;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
   border: 1px solid rgba(0, 0, 0, 0.04);
