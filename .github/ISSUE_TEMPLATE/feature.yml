@@ -16,7 +16,7 @@ body:
     attributes:
       value: |
         Thanks for suggesting a new feature! Please fill out the details below.
-        
+
         > [!IMPORTANT]
         > **Hierarchy Rules:**
         > - **Features** MUST have a **Parent Epic**.
@@ -44,16 +44,15 @@ body:
         - label: Front-end
         - label: Back-end
 
-  - type: checkboxes
+  - type: textarea
     id: acceptance-criteria
     attributes:
       label: 📋 Acceptance Criteria (Testability)
       description: List the conditions that must be met for this feature to be considered complete.
-      options:
-        - label: "Condition 1 (e.g., The 'Export' button is visible on the dashboard)"
-        - label: "Condition 2 (e.g., Clicking the button downloads a file named survey_id.pdf)"
-        - label: "Condition 3 (e.g., The PDF contains the correct chart data)"
-        - label: "Edge Case (e.g., If the survey is empty, show a toast notification error)"
+      placeholder: |
+        - [ ] Condition 1
+        - [ ] Condition 2
+        - [ ] Condition 3
 
   - type: textarea
     id: included-user-stories

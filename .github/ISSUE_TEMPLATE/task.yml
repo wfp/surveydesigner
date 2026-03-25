@@ -16,7 +16,7 @@ body:
     attributes:
       value: |
         Use this template for tasks that aren't bugs or features (e.g., refactoring, documentation, configuration, etc.).
-        
+
         > [!IMPORTANT]
         > **Hierarchy Rules:**
         > - **Tasks** MUST have a **Parent User Story**.
@@ -39,14 +39,15 @@ body:
         - label: Front-end
         - label: Back-end
 
-  - type: checkboxes
+  - type: textarea
     id: todo
     attributes:
       label: 📋 To-do List
-      options:
-        - label: "Step 1"
-        - label: "Step 2"
-        - label: "Step 3"
+      description: Steps
+      placeholder: |
+        - [ ] Step 1
+        - [ ] Step 2
+        - [ ] Step 3
 
   - type: textarea
     id: additional-context

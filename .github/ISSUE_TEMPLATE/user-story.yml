@@ -16,7 +16,7 @@ body:
     attributes:
       value: |
         Use this template to detail a specific user story.
-        
+
         > [!IMPORTANT]
         > **Hierarchy Rules:**
         > - **User Stories** MUST have a **Parent Feature**.
@@ -43,15 +43,15 @@ body:
         - label: Front-end
         - label: Back-end
 
-  - type: checkboxes
+  - type: textarea
     id: acceptance-criteria
     attributes:
-      label: 📋 Acceptance Criteria
-      description: List the conditions that must be met for this story to be considered complete.
-      options:
-        - label: "Condition 1"
-        - label: "Condition 2"
-        - label: "Edge Case"
+      label: 📋 Acceptance Criteria (Testability)
+      description: List the conditions that must be met for this feature to be considered complete.
+      placeholder: |
+        - [ ] Condition 1
+        - [ ] Condition 2
+        - [ ] Condition 3
 
   - type: textarea
     id: included-tasks
