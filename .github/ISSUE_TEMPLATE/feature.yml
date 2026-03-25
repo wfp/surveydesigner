@@ -1,0 +1,93 @@
+name: 🚀 Feature Request
+description: Suggest a new feature or improvement
+title: "feat: <title>"
+labels: ["enhancement"]
+body:
+  - type: input
+    id: parent-epic
+    attributes:
+      label: 🏆 Parent Epic
+      description: Enter the link or issue number of the Parent Epic (#123).
+      placeholder: "#123"
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! Please fill out the details below.
+
+        > [!IMPORTANT]
+        > **Hierarchy Rules:**
+        > - **Features** MUST have a **Parent Epic**.
+        > - **Features** contain **ONLY User Stories** as children.
+        > - **Features** **cannot** have another Feature as parent/child, and cannot contain Tasks directly.
+
+  - type: textarea
+    id: user-story
+    attributes:
+      label: 📖 User Story
+      description: What is the goal of this feature?
+      placeholder: |
+        As a [user/admin/developer]
+        I need to [perform this action]
+        So that [I receive this value/benefit]
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: software-layer
+    attributes:
+      label: 💻 Software layer
+      description: What part is affected?
+      options:
+        - label: Front-end
+        - label: Back-end
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: 📋 Acceptance Criteria (Testability)
+      description: List the conditions that must be met for this feature to be considered complete.
+      placeholder: |
+        - [ ] Condition 1
+        - [ ] Condition 2
+        - [ ] Condition 3
+
+  - type: textarea
+    id: included-user-stories
+    attributes:
+      label: 📖 Included User Stories
+      description: List the User Stories that belong to this Feature.
+      placeholder: |
+        - [ ] #789
+    validations:
+      required: false
+
+  - type: input
+    id: mockups
+    attributes:
+      label: 🎨 UI/UX Mockups (Optional)
+      description: Use Penpot
+      placeholder: "Attached Penpot in the issue"
+
+  - type: textarea
+    id: implementation-notes
+    attributes:
+      label: ⚙️ Technical Implementation Notes
+      description: Describe proposed implementation details or technical constraints.
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: 🛑 Impact / Breaking Changes
+      description: Does this affect existing features or require migrations?
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true

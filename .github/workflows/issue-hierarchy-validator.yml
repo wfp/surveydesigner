@@ -1,0 +1,127 @@
+name: Issue Hierarchy Validator
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  validate-hierarchy:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Validate Parent/Child Relationship
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || "";
+            const labels = issue.labels.map(l => l.name);
+
+            // Hierarchy Map: [Current Label] -> [Expected Parent Label]
+            const rules = {
+              'enhancement': { parentLabel: 'epic', name: 'Feature' },
+              'user-story': { parentLabel: 'enhancement', name: 'User Story' },
+              'internal': { parentLabel: 'user-story', name: 'Task' }
+            };
+
+            // Determine current issue type
+            let currentType = null;
+            for (const label of labels) {
+              if (rules[label]) {
+                currentType = label;
+                break;
+              }
+            }
+
+            // If it's an Epic, ensure it has NO parent of type Epic
+            if (labels.includes('epic')) {
+               if (body.includes('Parent Epic')) {
+                 const match = body.match(/### Parent Epic\s*\n\n?#(\d+)/i);
+                 if (match) {
+                    await github.rest.issues.createComment({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: issue.number,
+                      body: "⚠️ **Hierarchy Violation**: An **Epic** cannot have a parent Epic. It should be a top-level item."
+                    });
+                    await github.rest.issues.addLabels({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: issue.number,
+                      labels: ['invalid-hierarchy']
+                    });
+                 }
+               }
+               return;
+            }
+
+            if (!currentType) return; // Not a hierarchy-tracked issue (e.g. Bug)
+
+            const rule = rules[currentType];
+            
+            // Extract parent number
+            // Matches "### Parent ... \n\n #123" or similar from YAML form rendering
+            const parentMatch = body.match(/### Parent .*\s*\n\n?#(\d+)/i);
+            
+            if (!parentMatch) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `⚠️ **Hierarchy Violation**: This **${rule.name}** is missing a valid Parent reference (e.g. #123). Please ensure you link the correct parent issue.`
+              });
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: ['invalid-hierarchy']
+              });
+              return;
+            }
+
+            const parentNumber = parseInt(parentMatch[1]);
+
+            try {
+              const { data: parentIssue } = await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: parentNumber
+              });
+
+              const parentLabels = parentIssue.labels.map(l => l.name);
+
+              if (!parentLabels.includes(rule.parentLabel)) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `⚠️ **Hierarchy Violation**: A **${rule.name}** must have a parent of type **${rule.parentLabel === 'enhancement' ? 'Feature' : rule.parentLabel}**. \n\nParent issue #${parentNumber} does not have the required label.`
+                });
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  labels: ['invalid-hierarchy']
+                });
+              } else {
+                // Success: remove invalid label if it exists
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    name: 'invalid-hierarchy'
+                  });
+                } catch (e) {
+                  // Ignore if label not present
+                }
+              }
+            } catch (error) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `⚠️ **Hierarchy Error**: Could not find parent issue #${parentNumber}. Please check the issue number.`
+              });
+            }
