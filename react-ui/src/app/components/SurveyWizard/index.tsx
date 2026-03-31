@@ -2,13 +2,10 @@ import React, { useState, useCallback, useEffect, useRef } from "react";
 
 import {
   Button,
-  Checkbox,
   Module,
   ModuleBody,
   ModuleFooter,
   ModuleHeader,
-  StepNavigation,
-  StepNavigationItem,
   Wrapper,
   Tooltip,
   InlineLoading,
@@ -60,6 +57,8 @@ import {
   ShareSavedSurveyModalOptionsInterface,
 } from "../ShareSurveyModal";
 import { modulesActions } from "../../redux/reducers/modulesReducer";
+import { StepNavigationWrapper } from "./UI/StepNavigationWrapper";
+import { SurveyWizardHeader } from "./UI/SurveyWizardHeader";
 
 function SurveyWizard() {
   const { t } = useTranslation();
@@ -135,13 +134,6 @@ function SurveyWizard() {
   ];
   const paths = ["survey", "modules", "review", "generate"];
 
-  interface StepNavigationWrapperProps {
-    steps: string[];
-    currentStep: number;
-    className?: string;
-    onStepClick: (index: number) => void;
-  }
-
   const handleStepClick = useCallback(
     (targetIndex: number) => {
       if (targetIndex === step) return;
@@ -155,35 +147,6 @@ function SurveyWizard() {
     },
     [step],
   );
-
-  const StepNavigationWrapper: React.FC<StepNavigationWrapperProps> = ({
-    steps,
-    currentStep,
-    className,
-    onStepClick,
-  }) => {
-    return (
-      <div className="step-navigation-container">
-        <StepNavigation
-          selectedStep={currentStep}
-          className={`custom-step-navigation ${className || ""}`}
-          role="navigation"
-        >
-          {steps.map((label, index) => (
-            <StepNavigationItem
-              key={`${label}-${index}`}
-              label={label}
-              page={index}
-              onClick={(_e) => {
-                onStepClick(index);
-                return {};
-              }}
-            />
-          ))}
-        </StepNavigation>
-      </div>
-    );
-  };
 
   useEffect(() => {
     // If a copiedSurvey is present in navigation state, use it directly
@@ -419,11 +382,7 @@ function SurveyWizard() {
         }}
       >
         {step > 0 ? t("actions.previous") : t("surveyWizard.savedSurveys")}
-        <FontAwesomeIcon
-          icon={faArrowLeft}
-          className="wfp--btn__icon"
-          description="previous"
-        />
+        <FontAwesomeIcon icon={faArrowLeft} className="wfp--btn__icon" />
       </Button>
     );
     if (isDisabled) {
@@ -479,161 +438,26 @@ function SurveyWizard() {
           <aside className="wfp--form-wizard__sidebar">{sidebar}</aside>
           <Module className="survey-module">
             <ModuleHeader>
-              <div
-                className="d-flex"
-                style={{ justifyContent: "space-between" }}
-              >
-                <div className="d-flex align-items-center">
-                  {t("surveyWizard.stepTitle", {
-                    currentStep: step + 1,
-                    stepsCount,
-                    currentStepTitle: steps[step],
-                  })}
-                  {stepTooltips[step] && (
-                    <Tooltip
-                      createRefWrapper
-                      content={stepTooltips[step]}
-                      dark
-                      placement="top"
-                      trigger="hover"
-                    >
-                      <FontAwesomeIcon
-                        icon={faCircleQuestion}
-                        className="wfp--btn__icon info-icon"
-                        description="help"
-                        style={{ marginLeft: "0.5rem" }}
-                      />
-                    </Tooltip>
-                  )}
-                  {(showModulesCount || showQuestionsCount) && (
-                    <span
-                      style={{
-                        color: "red",
-                        marginLeft: "10px",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {showModulesCount &&
-                        t("surveyWizard.modulesCount", {
-                          moduleCount: selectedModuleCounts.moduleCount,
-                          submoduleCount: selectedModuleCounts.submoduleCount,
-                        })}
-                      {showQuestionsCount &&
-                        t("surveyWizard.questionsGeneratedCount", {
-                          numberOfQuestionsToBeGenerated,
-                        })}
-                    </span>
-                  )}
-                </div>
-                {[1, 2].includes(step) && (
-                  <div className="checkbox-row">
-                    <div className="d-flex">
-                      {step === 1 && (
-                        <>
-                          <div style={{ marginRight: "3px" }}>
-                            <Checkbox
-                              id="id-submodule-select-all"
-                              labelText={
-                                selectAllModules.isChecked
-                                  ? t("surveyWizard.deselectAllSubmodules")
-                                  : t("surveyWizard.selectAllSubmodules")
-                              }
-                              checked={selectAllModules.isChecked}
-                              onChange={(
-                                event: React.ChangeEvent<HTMLInputElement>,
-                              ) => {
-                                setSelectAllModules({
-                                  isChecked: event.target.checked,
-                                  run: true,
-                                });
-                              }}
-                              wrapperClassName="allCheckboxWrapper"
-                            />
-                          </div>
-                          <Checkbox
-                            id="id-module-collapse-all"
-                            labelText={
-                              collapseAllModules.isChecked
-                                ? t("surveyWizard.expandAllSubmodules")
-                                : t("surveyWizard.collapseAllSubmodules")
-                            }
-                            checked={collapseAllModules.isChecked}
-                            onChange={(
-                              event: React.ChangeEvent<HTMLInputElement>,
-                            ) => {
-                              setCollapseAllModules({
-                                isChecked: event.target.checked,
-                                run: true,
-                              });
-                            }}
-                            wrapperClassName="allCheckboxWrapper"
-                          />
-                          <Checkbox
-                            id="id-indicator-area-collapse-all"
-                            labelText={
-                              collapseAllIndicatorAreas.isChecked
-                                ? t("surveyWizard.expandAllIndicators")
-                                : t("surveyWizard.collapseAllIndicators")
-                            }
-                            checked={collapseAllIndicatorAreas.isChecked}
-                            onChange={(
-                              event: React.ChangeEvent<HTMLInputElement>,
-                            ) => {
-                              setCollapseAllIndicatorAreas({
-                                isChecked: event.target.checked,
-                                run: true,
-                              });
-                            }}
-                            wrapperClassName="allCheckboxWrapper"
-                          />
-                        </>
-                      )}
-                      {step === 2 && (
-                        <>
-                          <div style={{ marginRight: "3px" }}>
-                            <Checkbox
-                              id="id-submodule-select-all"
-                              labelText={
-                                selectAllReview.isChecked
-                                  ? t("surveyWizard.deselectAllSubmodules")
-                                  : t("surveyWizard.selectAllSubmodules")
-                              }
-                              checked={selectAllReview.isChecked}
-                              onChange={(
-                                event: React.ChangeEvent<HTMLInputElement>,
-                              ) => {
-                                setSelectAllReview({
-                                  isChecked: event.target.checked,
-                                  run: true,
-                                });
-                              }}
-                              wrapperClassName="allCheckboxWrapper"
-                            />
-                          </div>
-                          <Checkbox
-                            id="id-module-collapse-all"
-                            labelText={
-                              collapseAllReview.isChecked
-                                ? t("surveyWizard.expandAllSubmodules")
-                                : t("surveyWizard.collapseAllSubmodules")
-                            }
-                            checked={collapseAllReview.isChecked}
-                            onChange={(
-                              event: React.ChangeEvent<HTMLInputElement>,
-                            ) => {
-                              setCollapseAllReview({
-                                isChecked: event.target.checked,
-                                run: true,
-                              });
-                            }}
-                            wrapperClassName="allCheckboxWrapper"
-                          />
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <SurveyWizardHeader
+                step={step}
+                stepsCount={stepsCount}
+                steps={steps}
+                stepTooltips={stepTooltips}
+                showModulesCount={showModulesCount}
+                showQuestionsCount={showQuestionsCount}
+                selectedModuleCounts={selectedModuleCounts}
+                numberOfQuestionsToBeGenerated={numberOfQuestionsToBeGenerated}
+                selectAllModules={selectAllModules}
+                setSelectAllModules={setSelectAllModules}
+                collapseAllModules={collapseAllModules}
+                setCollapseAllModules={setCollapseAllModules}
+                collapseAllIndicatorAreas={collapseAllIndicatorAreas}
+                setCollapseAllIndicatorAreas={setCollapseAllIndicatorAreas}
+                selectAllReview={selectAllReview}
+                setSelectAllReview={setSelectAllReview}
+                collapseAllReview={collapseAllReview}
+                setCollapseAllReview={setCollapseAllReview}
+              />
             </ModuleHeader>
             <ModulesProvider>
               <ModuleBody className="survey-content">
@@ -691,11 +515,7 @@ function SurveyWizard() {
                       }}
                     >
                       {t("actions.next")}
-                      <FontAwesomeIcon
-                        icon={faArrowRight}
-                        className="wfp--btn__icon"
-                        description="next"
-                      />
+                      <FontAwesomeIcon icon={faArrowRight} className="wfp--btn__icon" />
                     </Button>
                   ) : (
                     step === 0 && (
@@ -726,11 +546,7 @@ function SurveyWizard() {
                       }}
                     >
                       {t("actions.save")}
-                      <FontAwesomeIcon
-                        icon={faFloppyDisk}
-                        className="wfp--btn__icon"
-                        description="save"
-                      />
+                      <FontAwesomeIcon icon={faFloppyDisk} className="wfp--btn__icon" />
                     </Button>
                   </div>
                 )}
