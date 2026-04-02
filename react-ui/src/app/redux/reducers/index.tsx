@@ -14,6 +14,7 @@ import notificationReducer from "./notificationReducer";
 import organizationsReducer from "./organizationsReducer";
 import frontendContentReducer from "./frontendContentReducer";
 import savedSurveysReducer from "./savedSurveysReducer";
+import surveyWizardUiReducer from "./surveyWizardUiReducer";
 
 const rootReducer = combineReducers({
   app: appReducer,
@@ -30,6 +31,7 @@ const rootReducer = combineReducers({
   organizations: organizationsReducer,
   frontendContent: frontendContentReducer,
   savedSurveys: savedSurveysReducer,
+  surveyWizardUi: surveyWizardUiReducer,
 });
 
 // Exports
