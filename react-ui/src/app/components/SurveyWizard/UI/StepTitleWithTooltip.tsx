@@ -3,32 +3,26 @@ import { Tooltip } from "@wfp/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircleQuestion } from "@fortawesome/free-solid-svg-icons";
 import { useTranslation } from "react-i18next";
+import { useAppSelector } from "../../../redux/store";
 
 type StepTitleWithTooltipProps = {
-  step: number;
-  stepsCount: number;
-  steps: string[];
   tooltipContent: React.ReactNode | null;
-  showModulesCount: boolean;
-  showQuestionsCount: boolean;
-  selectedModuleCounts: {
-    moduleCount?: number;
-    submoduleCount?: number;
-  };
-  numberOfQuestionsToBeGenerated: number;
 };
 
-export function StepTitleWithTooltip({
-  step,
-  stepsCount,
-  steps,
-  tooltipContent,
-  showModulesCount,
-  showQuestionsCount,
-  selectedModuleCounts,
-  numberOfQuestionsToBeGenerated,
-}: StepTitleWithTooltipProps) {
+export function StepTitleWithTooltip({ tooltipContent }: StepTitleWithTooltipProps) {
   const { t } = useTranslation();
+  const { step, selectedModuleCounts, numberOfQuestionsToBeGenerated } =
+    useAppSelector((state) => state.surveyWizardUi);
+  const steps = [
+    t("surveyWizard.steps.defineSurvey"),
+    t("surveyWizard.steps.selectModules"),
+    t("surveyWizard.steps.selectAdditionQuestions"),
+    t("surveyWizard.steps.generatePublishSurvey"),
+  ];
+  const stepsCount = steps.length;
+  const showModulesCount = step === 1 && !!selectedModuleCounts.submoduleCount;
+  const showQuestionsCount =
+    step === 2 && !!numberOfQuestionsToBeGenerated;
 
   return (
     <div className="d-flex align-items-center">

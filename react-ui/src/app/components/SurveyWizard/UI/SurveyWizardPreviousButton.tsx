@@ -3,22 +3,18 @@ import { Button, InlineLoading, Tooltip } from "@wfp/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 import { useTranslation } from "react-i18next";
-import { SavedSurvey } from "../../../types/api";
-
-type SurveyWizardPreviousButtonProps = {
-  step: number;
-  isCreatingSurvey: boolean;
-  savedSurveysData: SavedSurvey[] | null | undefined;
-  onPreviousClick: () => void;
-};
+import { useAppSelector } from "../../../redux/store";
 
 export function SurveyWizardPreviousButton({
-  step,
-  isCreatingSurvey,
-  savedSurveysData,
   onPreviousClick,
-}: SurveyWizardPreviousButtonProps) {
+}: {
+  onPreviousClick: () => void;
+}) {
   const { t } = useTranslation();
+  const { step, isCreatingSurvey } = useAppSelector(
+    (state) => state.surveyWizardUi,
+  );
+  const savedSurveysData = useAppSelector((state) => state.savedSurveys.data);
 
   const shouldShowButton =
     step > 0 || (isCreatingSurvey && savedSurveysData);

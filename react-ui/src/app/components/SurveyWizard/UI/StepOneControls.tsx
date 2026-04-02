@@ -1,26 +1,14 @@
 import React from "react";
 import { Checkbox } from "@wfp/react";
 import { useTranslation } from "react-i18next";
-import { CheckboxState } from "../../../types";
+import { surveyWizardUiActions } from "../../../redux/reducers/surveyWizardUiReducer";
+import { useAppDispatch, useAppSelector } from "../../../redux/store";
 
-type StepOneControlsProps = {
-  selectAllModules: CheckboxState;
-  setSelectAllModules: (value: CheckboxState) => void;
-  collapseAllModules: CheckboxState;
-  setCollapseAllModules: (value: CheckboxState) => void;
-  collapseAllIndicatorAreas: CheckboxState;
-  setCollapseAllIndicatorAreas: (value: CheckboxState) => void;
-};
-
-export function StepOneControls({
-  selectAllModules,
-  setSelectAllModules,
-  collapseAllModules,
-  setCollapseAllModules,
-  collapseAllIndicatorAreas,
-  setCollapseAllIndicatorAreas,
-}: StepOneControlsProps) {
+export function StepOneControls() {
   const { t } = useTranslation();
+  const dispatch = useAppDispatch();
+  const { selectAllModules, collapseAllModules, collapseAllIndicatorAreas } =
+    useAppSelector((state) => state.surveyWizardUi);
 
   return (
     <>
@@ -34,10 +22,12 @@ export function StepOneControls({
           }
           checked={selectAllModules.isChecked}
           onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
-            setSelectAllModules({
-              isChecked: event.target.checked,
-              run: true,
-            });
+            dispatch(
+              surveyWizardUiActions.setSelectAllModules({
+                isChecked: event.target.checked,
+                run: true,
+              }),
+            );
           }}
           wrapperClassName="allCheckboxWrapper"
         />
@@ -51,10 +41,12 @@ export function StepOneControls({
         }
         checked={collapseAllModules.isChecked}
         onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
-          setCollapseAllModules({
-            isChecked: event.target.checked,
-            run: true,
-          });
+          dispatch(
+            surveyWizardUiActions.setCollapseAllModules({
+              isChecked: event.target.checked,
+              run: true,
+            }),
+          );
         }}
         wrapperClassName="allCheckboxWrapper"
       />
@@ -67,10 +59,12 @@ export function StepOneControls({
         }
         checked={collapseAllIndicatorAreas.isChecked}
         onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
-          setCollapseAllIndicatorAreas({
-            isChecked: event.target.checked,
-            run: true,
-          });
+          dispatch(
+            surveyWizardUiActions.setCollapseAllIndicatorAreas({
+              isChecked: event.target.checked,
+              run: true,
+            }),
+          );
         }}
         wrapperClassName="allCheckboxWrapper"
       />

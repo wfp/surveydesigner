@@ -1,22 +1,15 @@
 import React from "react";
 import { Checkbox } from "@wfp/react";
 import { useTranslation } from "react-i18next";
-import { CheckboxState } from "../../../types";
+import { surveyWizardUiActions } from "../../../redux/reducers/surveyWizardUiReducer";
+import { useAppDispatch, useAppSelector } from "../../../redux/store";
 
-type StepTwoControlsProps = {
-  selectAllReview: CheckboxState;
-  setSelectAllReview: (value: CheckboxState) => void;
-  collapseAllReview: CheckboxState;
-  setCollapseAllReview: (value: CheckboxState) => void;
-};
-
-export function StepTwoControls({
-  selectAllReview,
-  setSelectAllReview,
-  collapseAllReview,
-  setCollapseAllReview,
-}: StepTwoControlsProps) {
+export function StepTwoControls() {
   const { t } = useTranslation();
+  const dispatch = useAppDispatch();
+  const { selectAllReview, collapseAllReview } = useAppSelector(
+    (state) => state.surveyWizardUi,
+  );
 
   return (
     <>
@@ -30,10 +23,12 @@ export function StepTwoControls({
           }
           checked={selectAllReview.isChecked}
           onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
-            setSelectAllReview({
-              isChecked: event.target.checked,
-              run: true,
-            });
+            dispatch(
+              surveyWizardUiActions.setSelectAllReview({
+                isChecked: event.target.checked,
+                run: true,
+              }),
+            );
           }}
           wrapperClassName="allCheckboxWrapper"
         />
@@ -47,10 +42,12 @@ export function StepTwoControls({
         }
         checked={collapseAllReview.isChecked}
         onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
-          setCollapseAllReview({
-            isChecked: event.target.checked,
-            run: true,
-          });
+          dispatch(
+            surveyWizardUiActions.setCollapseAllReview({
+              isChecked: event.target.checked,
+              run: true,
+            }),
+          );
         }}
         wrapperClassName="allCheckboxWrapper"
       />
