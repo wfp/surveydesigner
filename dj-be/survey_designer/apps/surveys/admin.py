@@ -1,5 +1,9 @@
 from adminsortable2.admin import SortableAdminMixin
-from core.admin import AdminUserTrackingMixin, FormFieldOverridesMixin
+from core.admin import (
+    AdminUserTrackingMixin,
+    CollationSafeSearchAdminMixin,
+    FormFieldOverridesMixin,
+)
 from core.forms import TranslationForm
 from core.utils import get_model_admin_base_url
 from django.contrib import admin
@@ -53,6 +57,7 @@ class SurveyAttributeTranslationInline(FormFieldOverridesMixin, admin.TabularInl
 
 @admin.register(SurveyCategory)
 class SurveyCategoryAdmin(
+    CollationSafeSearchAdminMixin,
     RestrictedVisibilityFieldMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
@@ -88,6 +93,7 @@ class SurveyCategoryAdmin(
 
 @admin.register(SurveyMode)
 class SurveyModeAdmin(
+    CollationSafeSearchAdminMixin,
     RestrictedVisibilityFieldMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
@@ -123,6 +129,7 @@ class SurveyModeAdmin(
 
 @admin.register(SurveyType)
 class SurveyTypeAdmin(
+    CollationSafeSearchAdminMixin,
     RestrictedVisibilityFieldMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
@@ -182,6 +189,7 @@ class SurveyTypeAdmin(
 
 @admin.register(SurveyAttribute)
 class SurveyAttributeAdmin(
+    CollationSafeSearchAdminMixin,
     RestrictedVisibilityFieldMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,

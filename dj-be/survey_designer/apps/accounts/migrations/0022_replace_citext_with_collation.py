@@ -3,7 +3,6 @@
 from django.contrib.postgres.operations import CreateCollation
 from django.db import migrations, models
 
-
 LIKE_INDEX_FILTER = "(tbl.relname = 'accounts_user' AND attr.attname = 'email')"
 
 
