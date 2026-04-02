@@ -297,12 +297,12 @@ function Surveys({
               <Controller
                 name="name"
                 control={control}
+                defaultValue=""
                 rules={{ required: "This field is required" }}
                 render={({ field: { onChange, value } }) => (
                   <TextInput
                     id="id_name_input"
-                    value={value}
-                    formItemClassName="w-100"
+                    value={value || ""}
                     placeholder="A clear, memorable title for your survey"
                     invalid={errors.name}
                     invalidText={_.get(errors, "name.message")}
@@ -316,7 +316,7 @@ function Surveys({
                     }
                     name="survey_name"
                     onChange={(e) => {
-                      onChange(e);
+                      onChange(e?.target?.value || "");
                     }}
                   />
                 )}

@@ -102,7 +102,7 @@ function SurveyWizard() {
     if (!savedSurveys.data) {
       dispatch(fetchSavedSurveys({})).then((res: any) => {
         if (state && state.surveyId) {
-          const data = res?.payload?.data;
+          const data = res?.payload;
           if (Array.isArray(data)) {
             const selectedSurveyFromCopy = data.find(
               (survey) => survey.uuid === state.surveyId,
@@ -121,8 +121,8 @@ function SurveyWizard() {
       dispatch(savedSurveysActions.completeInitialRequest());
     }
   }, []);
-  const next = useCallback(
-    (): PrevNextStepCallback => (nextCallback, prevCallback) => {
+  const next: PrevNextStepCallback = useCallback(
+    (nextCallback, prevCallback) => {
       if (step !== goToStep) {
         const proceed = () => {
           dispatch(surveyWizardUiActions.setStep(goToStep));
@@ -217,18 +217,62 @@ function SurveyWizard() {
     mode: surveyForm.mode,
     attributes: surveyForm.attributes,
   };
-  const setGoToStepAction: React.Dispatch<React.SetStateAction<number>> = (
-    value,
-  ) => {
-    const nextValue = typeof value === "function" ? value(goToStep) : value;
-    dispatch(surveyWizardUiActions.setGoToStep(nextValue));
-  };
-  const setSelectedModuleCountsAction = (value: {
-    moduleCount?: number;
-    submoduleCount?: number;
-  }) => {
-    dispatch(surveyWizardUiActions.setSelectedModuleCounts(value));
-  };
+  const setGoToStepAction: React.Dispatch<React.SetStateAction<number>> =
+    useCallback(
+      (value) => {
+        const nextValue = typeof value === "function" ? value(goToStep) : value;
+        dispatch(surveyWizardUiActions.setGoToStep(nextValue));
+      },
+      [dispatch, goToStep],
+    );
+  const setSelectedModuleCountsAction = useCallback(
+    (value: { moduleCount?: number; submoduleCount?: number }) => {
+      dispatch(surveyWizardUiActions.setSelectedModuleCounts(value));
+    },
+    [dispatch],
+  );
+  const setSelectAllModulesAction = useCallback(
+    (value) => {
+      dispatch(surveyWizardUiActions.setSelectAllModules(value));
+    },
+    [dispatch],
+  );
+  const setCollapseAllModulesAction = useCallback(
+    (value) => {
+      dispatch(surveyWizardUiActions.setCollapseAllModules(value));
+    },
+    [dispatch],
+  );
+  const setCollapseAllIndicatorAreasAction = useCallback(
+    (value) => {
+      dispatch(surveyWizardUiActions.setCollapseAllIndicatorAreas(value));
+    },
+    [dispatch],
+  );
+  const setIsValidatingAction = useCallback(
+    (value: boolean) => {
+      dispatch(surveyWizardUiActions.setIsValidating(value));
+    },
+    [dispatch],
+  );
+  const setSelectAllReviewAction = useCallback(
+    (value) => {
+      dispatch(surveyWizardUiActions.setSelectAllReview(value));
+    },
+    [dispatch],
+  );
+  const setCollapseAllReviewAction = useCallback(
+    (value) => {
+      dispatch(surveyWizardUiActions.setCollapseAllReview(value));
+    },
+    [dispatch],
+  );
+  const setNumberOfQuestionsToBeGeneratedAction = useCallback(
+    (value: number) => {
+      dispatch(surveyWizardUiActions.setNumberOfQuestionsToBeGenerated(value));
+    },
+    [dispatch],
+  );
 
   const surveyTableRef = useRef<{ clearFilters: () => void }>(null);
   useEffect(() => {
@@ -298,7 +342,7 @@ function SurveyWizard() {
   const step0Content =
     initialRequest || isCreatingSurvey ? (
       <Surveys
-        next={next()}
+        next={next}
         frontendContent={frontendContent}
         selectedSurveyToEdit={selectedSurveyToEdit}
       />
@@ -338,59 +382,38 @@ function SurveyWizard() {
                 {step === 0 && step0Content}
                 {step === 1 && (
                   <Modules
-                    next={next()}
+                    next={next}
                     selectAll={selectAllModules}
-                    setSelectAll={(value) => {
-                      dispatch(surveyWizardUiActions.setSelectAllModules(value));
-                    }}
+                    setSelectAll={setSelectAllModulesAction}
                     collapseAllModules={collapseAllModules}
-                    setCollapseAllModules={(value) => {
-                      dispatch(
-                        surveyWizardUiActions.setCollapseAllModules(value),
-                      );
-                    }}
+                    setCollapseAllModules={setCollapseAllModulesAction}
                     collapseAllIndicatorAreas={collapseAllIndicatorAreas}
-                    setCollapseAllIndicatorAreas={(value) => {
-                      dispatch(
-                        surveyWizardUiActions.setCollapseAllIndicatorAreas(value),
-                      );
-                    }}
+                    setCollapseAllIndicatorAreas={setCollapseAllIndicatorAreasAction}
                     selectedSurveyToEdit={selectedSurveyToEdit}
                     {...{
                       prvsStep,
                       step,
                       setSelectedModuleCounts: setSelectedModuleCountsAction,
                     }}
-                    setIsValidating={(value: boolean) => {
-                      dispatch(surveyWizardUiActions.setIsValidating(value));
-                    }}
+                    setIsValidating={setIsValidatingAction}
                   />
                 )}
                 {step === 2 && (
                   <Review
-                    next={next()}
+                    next={next}
                     selectAll={selectAllReview}
-                    setSelectAll={(value) => {
-                      dispatch(surveyWizardUiActions.setSelectAllReview(value));
-                    }}
+                    setSelectAll={setSelectAllReviewAction}
                     collapseAll={collapseAllReview}
-                    setCollapseAll={(value) => {
-                      dispatch(surveyWizardUiActions.setCollapseAllReview(value));
-                    }}
+                    setCollapseAll={setCollapseAllReviewAction}
                     selectedSurveyToEdit={selectedSurveyToEdit}
                     {...{
                       numberOfQuestionsToBeGenerated,
-                      setNumberOfQuestionsToBeGenerated: (value: number) => {
-                        dispatch(
-                          surveyWizardUiActions.setNumberOfQuestionsToBeGenerated(
-                            value,
-                          ),
-                        );
-                      },
+                      setNumberOfQuestionsToBeGenerated:
+                        setNumberOfQuestionsToBeGeneratedAction,
                     }}
                   />
                 )}
-                {step === 3 && <Generate next={next()} />}
+                {step === 3 && <Generate next={next} />}
               </ModuleBody>
             </ModulesProvider>
             <SurveyWizardFooter

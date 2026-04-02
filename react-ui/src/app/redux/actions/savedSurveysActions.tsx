@@ -31,7 +31,7 @@ export const fetchSavedSurveys = createAppAsyncThunk(
       const res = await API.get<SavedSurvey[]>("/saved-surveys/", { params });
       dispatch(savedSurveysActions.setSavedSurveys(res.data));
       dispatch(savedSurveysActions.completeInitialRequest());
-      return res;
+      return res.data;
     } catch (err: any) {
       dispatch(savedSurveysActions.setSavedSurveysError(err));
     }
