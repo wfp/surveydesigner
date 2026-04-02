@@ -1,4 +1,3 @@
-import { Dispatch, SetStateAction } from "react";
 import { PrevNextStepCallback, CheckboxState } from "../../types";
 import { SavedSurvey } from "../../types/api";
 
@@ -12,12 +11,10 @@ export interface ModulesProps {
   setCollapseAllIndicatorAreas: (checkboxState: CheckboxState) => void;
   prvsStep: number;
   step: number;
-  setSelectedModuleCounts: Dispatch<
-    SetStateAction<{
-      moduleCount?: number;
-      submoduleCount?: number;
-    }>
-  >;
+  setSelectedModuleCounts: (counts: {
+    moduleCount?: number;
+    submoduleCount?: number;
+  }) => void;
   selectedSurveyToEdit: SavedSurvey | null;
   setIsValidating: (isValidating: boolean) => void;
 }

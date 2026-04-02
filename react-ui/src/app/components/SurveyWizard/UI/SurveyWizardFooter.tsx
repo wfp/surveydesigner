@@ -3,7 +3,10 @@ import { Button, ModuleFooter } from "@wfp/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowRight, faFloppyDisk } from "@fortawesome/free-solid-svg-icons";
 import { useTranslation } from "react-i18next";
-import { surveyWizardUiActions } from "../../../redux/reducers/surveyWizardUiReducer";
+import {
+  selectSurveyWizardUi,
+  surveyWizardUiActions,
+} from "../../../redux/reducers/surveyWizardUiReducer";
 import { useAppDispatch, useAppSelector } from "../../../redux/store";
 import { SurveyWizardPreviousButton } from "./SurveyWizardPreviousButton";
 
@@ -19,7 +22,7 @@ export function SurveyWizardFooter({
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const { step, isCreatingSurvey, isValidating } = useAppSelector(
-    (state) => state.surveyWizardUi,
+    selectSurveyWizardUi,
   );
   const stepsCount = 4;
 
@@ -36,10 +39,7 @@ export function SurveyWizardFooter({
               className="wfp--form-controls__next wfp--btn wfp--btn--secondary"
               disabled={step === 1 && isValidating}
               onClick={() => {
-                if (step === 1) {
-                  dispatch(surveyWizardUiActions.setIsValidating(true));
-                }
-                dispatch(surveyWizardUiActions.setGoToStep(step + 1));
+                dispatch(surveyWizardUiActions.goNext());
               }}
             >
               {t("actions.next")}

@@ -1,5 +1,7 @@
 import { PayloadAction, createSlice } from "@reduxjs/toolkit";
 import { CheckboxState } from "../../types";
+import { SavedSurvey } from "../../types/api";
+import { RootState } from "../store";
 
 type SurveyWizardUiState = {
   step: number;
@@ -17,6 +19,7 @@ type SurveyWizardUiState = {
     submoduleCount?: number;
   };
   numberOfQuestionsToBeGenerated: number;
+  selectedSurveyToEdit: SavedSurvey | null;
 };
 
 const uncheckedState: CheckboxState = {
@@ -40,6 +43,7 @@ const initialState: SurveyWizardUiState = {
     submoduleCount: 0,
   },
   numberOfQuestionsToBeGenerated: 0,
+  selectedSurveyToEdit: null,
 };
 
 const surveyWizardUiSlice = createSlice({
@@ -57,6 +61,25 @@ const surveyWizardUiSlice = createSlice({
     setGoToStep: (state, action: PayloadAction<number>) => ({
       ...state,
       goToStep: action.payload,
+    }),
+    goToStepSafe: (state, action: PayloadAction<number>) => ({
+      ...state,
+      goToStep: action.payload === state.step ? state.goToStep : action.payload,
+      isValidating:
+        action.payload > state.step && state.step === 1
+          ? true
+          : action.payload === state.step
+            ? state.isValidating
+            : false,
+    }),
+    goNext: (state) => ({
+      ...state,
+      goToStep: state.step + 1,
+      isValidating: state.step === 1 ? true : state.isValidating,
+    }),
+    goPrevious: (state) => ({
+      ...state,
+      goToStep: state.step > 0 ? state.step - 1 : 0,
     }),
     setIsValidating: (state, action: PayloadAction<boolean>) => ({
       ...state,
@@ -103,10 +126,25 @@ const surveyWizardUiSlice = createSlice({
       ...state,
       numberOfQuestionsToBeGenerated: action.payload,
     }),
+    setSelectedSurveyToEdit: (
+      state,
+      action: PayloadAction<SavedSurvey | null>,
+    ) => ({
+      ...state,
+      selectedSurveyToEdit: action.payload,
+    }),
     resetSurveyWizardUi: () => initialState,
+    resetWizardSession: (state) => ({
+      ...initialState,
+      isCreatingSurvey: state.isCreatingSurvey,
+    }),
   },
 });
 
 export const surveyWizardUiActions = surveyWizardUiSlice.actions;
 export default surveyWizardUiSlice.reducer;
+export const selectSurveyWizardUi = (state: RootState) => state.surveyWizardUi;
+export const selectWizardStep = (state: RootState) => state.surveyWizardUi.step;
+export const selectWizardCanGoNext = (state: RootState) =>
+  state.surveyWizardUi.isCreatingSurvey && state.surveyWizardUi.step < 3;
 

@@ -32,15 +32,7 @@ export function StepNavigationWrapper({
             label={label}
             page={index}
             onClick={(_e) => {
-              if (index === step) {
-                return {};
-              }
-              if (index > step && step === 1) {
-                dispatch(surveyWizardUiActions.setIsValidating(true));
-              } else {
-                dispatch(surveyWizardUiActions.setIsValidating(false));
-              }
-              dispatch(surveyWizardUiActions.setGoToStep(index));
+              dispatch(surveyWizardUiActions.goToStepSafe(index));
               return {};
             }}
           />

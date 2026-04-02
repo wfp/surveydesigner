@@ -4,6 +4,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircleQuestion } from "@fortawesome/free-solid-svg-icons";
 import { useTranslation } from "react-i18next";
 import { useAppSelector } from "../../../redux/store";
+import { selectSurveyWizardUi } from "../../../redux/reducers/surveyWizardUiReducer";
 
 type StepTitleWithTooltipProps = {
   tooltipContent: React.ReactNode | null;
@@ -12,7 +13,7 @@ type StepTitleWithTooltipProps = {
 export function StepTitleWithTooltip({ tooltipContent }: StepTitleWithTooltipProps) {
   const { t } = useTranslation();
   const { step, selectedModuleCounts, numberOfQuestionsToBeGenerated } =
-    useAppSelector((state) => state.surveyWizardUi);
+    useAppSelector(selectSurveyWizardUi);
   const steps = [
     t("surveyWizard.steps.defineSurvey"),
     t("surveyWizard.steps.selectModules"),

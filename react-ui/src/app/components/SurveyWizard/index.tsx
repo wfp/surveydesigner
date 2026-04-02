@@ -31,7 +31,6 @@ import { savedSurveysActions } from "../../redux/reducers/savedSurveysReducer";
 
 import SurveyTable from "../SurveyTable";
 import {
-  SavedSurvey,
   SurveyCategory,
   SurveyMode,
   SurveyTypes,
@@ -69,18 +68,15 @@ function SurveyWizard() {
     step,
     prvsStep,
     goToStep,
-    isValidating,
     isCreatingSurvey,
     selectAllModules,
     selectAllReview,
     collapseAllModules,
     collapseAllIndicatorAreas,
     collapseAllReview,
-    selectedModuleCounts,
     numberOfQuestionsToBeGenerated,
+    selectedSurveyToEdit,
   } = useAppSelector((state) => state.surveyWizardUi);
-  const [selectedSurveyToEdit, setSelectedSurveyToEdit] =
-    useState<SavedSurvey | null>(null);
 
   const savedSurveys = useAppSelector((state) => state.savedSurveys);
   const initialRequest = useAppSelector(
@@ -94,19 +90,12 @@ function SurveyWizard() {
     copiedSurvey?: any;
   };
 
-  const stepsCount = 4;
-  const steps = [
-    t("surveyWizard.steps.defineSurvey"),
-    t("surveyWizard.steps.selectModules"),
-    t("surveyWizard.steps.selectAdditionQuestions"),
-    t("surveyWizard.steps.generatePublishSurvey"),
-  ];
   const paths = ["survey", "modules", "review", "generate"];
 
   useEffect(() => {
     // If a copiedSurvey is present in navigation state, use it directly
     if (state && state.copiedSurvey) {
-      setSelectedSurveyToEdit(state.copiedSurvey);
+      dispatch(surveyWizardUiActions.setSelectedSurveyToEdit(state.copiedSurvey));
       dispatch(surveyWizardUiActions.setIsCreatingSurvey(true));
       return;
     }
@@ -116,10 +105,14 @@ function SurveyWizard() {
           const data = res?.payload?.data;
           if (Array.isArray(data)) {
             const selectedSurveyFromCopy = data.find(
-              (survey: SavedSurvey) => survey.uuid === state.surveyId,
+              (survey) => survey.uuid === state.surveyId,
             );
             if (selectedSurveyFromCopy) {
-              setSelectedSurveyToEdit(selectedSurveyFromCopy);
+              dispatch(
+                surveyWizardUiActions.setSelectedSurveyToEdit(
+                  selectedSurveyFromCopy,
+                ),
+              );
               dispatch(surveyWizardUiActions.setIsCreatingSurvey(true));
             }
           }
@@ -169,9 +162,9 @@ function SurveyWizard() {
 
   function resetSurveyData() {
     dispatch(fetchSavedSurveys({}));
-    dispatch(surveyWizardUiActions.setGoToStep(0));
+    dispatch(surveyWizardUiActions.setSelectedSurveyToEdit(null));
+    dispatch(surveyWizardUiActions.resetWizardSession());
     dispatch(surveyWizardUiActions.setIsCreatingSurvey(false));
-    setSelectedSurveyToEdit(null);
     dispatch(surveyFormActions.resetSurveyData({}));
   }
 
@@ -230,12 +223,11 @@ function SurveyWizard() {
     const nextValue = typeof value === "function" ? value(goToStep) : value;
     dispatch(surveyWizardUiActions.setGoToStep(nextValue));
   };
-  const setSelectedModuleCountsAction: React.Dispatch<
-    React.SetStateAction<{ moduleCount?: number; submoduleCount?: number }>
-  > = (value) => {
-    const nextValue =
-      typeof value === "function" ? value(selectedModuleCounts) : value;
-    dispatch(surveyWizardUiActions.setSelectedModuleCounts(nextValue));
+  const setSelectedModuleCountsAction = (value: {
+    moduleCount?: number;
+    submoduleCount?: number;
+  }) => {
+    dispatch(surveyWizardUiActions.setSelectedModuleCounts(value));
   };
 
   const surveyTableRef = useRef<{ clearFilters: () => void }>(null);
@@ -287,11 +279,11 @@ function SurveyWizard() {
             const survey =
               savedSurveys.data !== null
                 ? savedSurveys.data.find(
-                    (savedSurvey: SavedSurvey) => savedSurvey.uuid === surveyID,
+                    (savedSurvey) => savedSurvey.uuid === surveyID,
                   )
                 : null;
             dispatch(surveyWizardUiActions.setIsCreatingSurvey(true));
-            setSelectedSurveyToEdit(survey || null);
+            dispatch(surveyWizardUiActions.setSelectedSurveyToEdit(survey || null));
           },
           delete: (surveyID: number) => {
             setDeleteSavedSurveyModalOptions({ uuid: surveyID, isOpen: true });
@@ -404,7 +396,7 @@ function SurveyWizard() {
             <SurveyWizardFooter
               onPreviousClick={() => {
                 if (step > 0) {
-                  dispatch(surveyWizardUiActions.setGoToStep(step - 1));
+                  dispatch(surveyWizardUiActions.goPrevious());
                 } else {
                   dispatch(surveyWizardUiActions.setIsCreatingSurvey(false));
                   resetSurveyData();
