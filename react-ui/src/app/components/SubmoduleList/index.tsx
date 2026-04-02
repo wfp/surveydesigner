@@ -363,7 +363,10 @@ function SubmoduleList({
       ? getSubQuestionsCountFromSelectedOptions(selectedOptions, submodulesMap)
       : 0;
     const initialQuestionCount = rootQuestionsCount + selectedQuestionsCount;
-    if (!isChecked) {
+    if (
+      !isChecked &&
+      initialQuestionCount !== numberOfQuestionsToBeGenerated
+    ) {
       setNumberOfQuestionsToBeGenerated(initialQuestionCount);
     }
   }
