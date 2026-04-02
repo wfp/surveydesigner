@@ -3,6 +3,7 @@ import csv
 from accounts.const import PermissionGroups
 from accounts.models import User, UserAPIKey, UserAPISite
 from admin_auto_filters.filters import AutocompleteFilter
+from core.admin import CollationSafeSearchAdminMixin
 from core.permissions import AdminPermissions, ReadOnlyPermissions
 from django.contrib import admin, messages
 from django.contrib.admin.models import LogEntry
@@ -16,7 +17,7 @@ from django.utils.translation import gettext_lazy as _
 
 
 @admin.register(User)
-class UserAdmin(BaseUserAdmin):
+class UserAdmin(CollationSafeSearchAdminMixin, BaseUserAdmin):
     readonly_fields = (
         "last_login",
         "date_updated",

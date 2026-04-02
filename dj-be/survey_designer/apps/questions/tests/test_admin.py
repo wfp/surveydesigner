@@ -1,14 +1,26 @@
 from core.utils import get_model_admin_base_url
+from django.core.files.uploadedfile import SimpleUploadedFile
 from lxml import html
 from questions.models import (
     BaseQuestion,
+    Calculation,
     ChoiceGroup,
+    ChoiceGroupFile,
     RecallPeriod,
     RepeatSection,
     RootQuestion,
     SubQuestion,
     Suffix,
 )
+
+
+def _assert_admin_search_works(logged_admin_client, model, expected_text):
+    response = logged_admin_client.get(
+        get_model_admin_base_url(model, "_changelist"),
+        {"q": expected_text[:5].lower()},
+    )
+    assert response.status_code == 200
+    assert expected_text in response.content.decode()
 
 
 def test_choice_group_admin_list_view(
@@ -31,10 +43,36 @@ def test_choice_group_admin_edit_view(logged_admin_client, choices_1, root_quest
     assert response.status_code == 200
 
 
+def test_choice_group_search_view(logged_admin_client, choices_1):
+    _assert_admin_search_works(logged_admin_client, ChoiceGroup, choices_1.name)
+
+
+def test_choice_group_file_search_view(logged_admin_client):
+    choice_group_file = ChoiceGroupFile.objects.create(
+        name="ChoiceGroupFileSearch",
+        csv_file=SimpleUploadedFile(
+            "choice_group_file_search.csv",
+            b"name,label\none,One\n",
+            content_type="text/csv",
+        ),
+    )
+    _assert_admin_search_works(
+        logged_admin_client, ChoiceGroupFile, choice_group_file.name
+    )
+
+
 def test_base_questions_list_view(logged_admin_client, xls_form_data):
     url = get_model_admin_base_url(BaseQuestion, "_changelist")
     response = logged_admin_client.get(url)
     assert response.status_code == 200
+
+
+def test_base_questions_search_view(logged_admin_client, root_question_1):
+    search_term = root_question_1.name[:5].lower()
+    url = get_model_admin_base_url(BaseQuestion, "_changelist") + f"?q={search_term}"
+    response = logged_admin_client.get(url)
+    assert response.status_code == 200
+    assert root_question_1.name in response.content.decode()
 
 
 def test_root_question_admin_edit_view(
@@ -56,6 +94,10 @@ def test_recall_period_list_view(logged_admin_client, sub_question_2):
     assert response.status_code == 200
 
 
+def test_recall_period_search_view(logged_admin_client, recall_period_1):
+    _assert_admin_search_works(logged_admin_client, RecallPeriod, recall_period_1.name)
+
+
 def test_suffix_list_view(
     logged_admin_client, sub_question_1, sub_question_3, sub_question_4
 ):
@@ -64,10 +106,20 @@ def test_suffix_list_view(
     assert response.status_code == 200
 
 
+def test_suffix_search_view(logged_admin_client, suffix_1):
+    _assert_admin_search_works(logged_admin_client, Suffix, suffix_1.name)
+
+
 def test_repeat_section_list_view(logged_admin_client, repeat_section_1):
     url = get_model_admin_base_url(RepeatSection, "_changelist")
     response = logged_admin_client.get(url)
     assert response.status_code == 200
+
+
+def test_repeat_section_search_view(logged_admin_client, repeat_section_1):
+    _assert_admin_search_works(
+        logged_admin_client, RepeatSection, repeat_section_1.name
+    )
 
 
 def test_sub_question_list_view(
@@ -102,6 +154,10 @@ def test_sub_question_list_view(
     assert "SubQuestion 4" in "\n".join(rows_text_content)
 
 
+def test_sub_question_search_view(logged_admin_client, sub_question_1):
+    _assert_admin_search_works(logged_admin_client, SubQuestion, sub_question_1.name)
+
+
 def test_root_question_list_view(
     logged_admin_client,
     root_question_1,
@@ -113,6 +169,18 @@ def test_root_question_list_view(
     url = get_model_admin_base_url(RootQuestion, "_changelist") + "?test="
     response = logged_admin_client.get(url, follow=True)
     assert response.status_code == 200
+
+
+def test_root_question_search_view(logged_admin_client, root_question_1):
+    search_term = root_question_1.name[:5].lower()
+    url = get_model_admin_base_url(RootQuestion, "_changelist") + f"?q={search_term}"
+    response = logged_admin_client.get(url)
+    assert response.status_code == 200
+    assert root_question_1.name in response.content.decode()
+
+
+def test_calculation_search_view(logged_admin_client, calculation_1):
+    _assert_admin_search_works(logged_admin_client, Calculation, calculation_1.name)
 
 
 def test_root_question_admin_edit_form_errors_in_equations(

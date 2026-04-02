@@ -4,19 +4,18 @@ from accounts.factories import AdminFactory
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from modules.factories import ModuleFactory, SubmoduleFactory
-from openpyxl import Workbook
 from modules.models import Module, Submodule
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.writer.excel import save_virtual_workbook
 from organization.models import Organization
 from organization.tests.factories import OrganizationFactory
 from questions.const import QuestionType
 from questions.models import RecallPeriod, RepeatSection, RootQuestion, Suffix
+from questions.services import DataImport
 from questions.services.questions_import.recall_period import RecallPeriodImport
 from questions.services.questions_import.submodule_required_group import (
     SubmoduleRequiredGroupImport,
 )
-from questions.services import DataImport
 
 
 def test_sunny_scenario(admin):
@@ -88,10 +87,11 @@ def test_sunny_scenario_reuses_existing_module_and_submodule_for_case_variant_na
     data_import.create()
 
     imported_question = RootQuestion.objects.get(name=question_name)
-    assert Module.objects.filter(name__iexact="unicef_module").count() == module_count_before
     assert (
-        Submodule.objects.filter(module__name__iexact="unicef_module").count() == 2
+        Module.objects.filter(name__iexact="unicef_module").count()
+        == module_count_before
     )
+    assert Submodule.objects.filter(module__name__iexact="unicef_module").count() == 2
     assert imported_question.submodule.get().id == existing_submodule.id
 
 
@@ -136,7 +136,9 @@ class TestBulkUploadCaseInsensitiveLookups(TestCase):
         indicators_ws.cell(row=2, column=2, value="Test Indicator")
         indicators_ws.cell(row=2, column=3, value=question_name)
 
-        module_count_before = Module.objects.filter(name__iexact="unicef_module").count()
+        module_count_before = Module.objects.filter(
+            name__iexact="unicef_module"
+        ).count()
 
         data_import = DataImport(
             BytesIO(save_virtual_workbook(workbook)),

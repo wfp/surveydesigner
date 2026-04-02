@@ -8,6 +8,7 @@ from django.contrib.messages.storage.fallback import FallbackStorage
 from django.urls import reverse
 
 from survey_designer.apps.core.tests.utils import MockRequest
+from survey_designer.apps.core.utils import get_model_admin_base_url
 
 
 @pytest.fixture
@@ -27,6 +28,14 @@ def user_admin(admin_site):
 
 @pytest.mark.django_db
 class TestUserAdmin:
+    def test_user_search_view(self, logged_admin_client, admin):
+        response = logged_admin_client.get(
+            get_model_admin_base_url(User, "_changelist"),
+            {"q": admin.email[:5].lower()},
+        )
+        assert response.status_code == 200
+        assert admin.email in response.content.decode()
+
     def test_admin_queryset(self, user_admin):
         user = UserFactory(is_staff=True)
         qs = user_admin.get_queryset(

@@ -4,8 +4,7 @@ from django.test import TestCase
 from modules.models import Module, Submodule
 from organization.models import Organization
 from questions.const import QuestionType
-from questions.models import RootQuestionTranslation
-from questions.models import RootQuestion, SubQuestion, Suffix
+from questions.models import RootQuestion, RootQuestionTranslation, SubQuestion, Suffix
 
 
 def _admin_post_change_or_fail(
@@ -316,7 +315,9 @@ class TestCaseInsensitiveRootQuestionRenameSignals(TestCase):
 
         self.root_question_2.relevant = f"${{{old}}} > 10"
         self.root_question_2.save()
-        self.root_question_2.relevant_dependencies.set([self.root_question_1.base_question])
+        self.root_question_2.relevant_dependencies.set(
+            [self.root_question_1.base_question]
+        )
 
         self.root_question_1.name = new
         self.root_question_1.save()

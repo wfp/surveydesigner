@@ -1,6 +1,6 @@
 import nested_admin
 from adminsortable2.admin import SortableAdminMixin
-from core.admin import AdminUserTrackingMixin
+from core.admin import AdminUserTrackingMixin, CollationSafeSearchAdminMixin
 from core.forms import TranslationForm
 from core.utils import get_model_admin_base_url
 from django.contrib import admin, messages
@@ -142,6 +142,7 @@ class SubmoduleInline(
 
 @admin.register(Module)
 class ModuleAdmin(
+    CollationSafeSearchAdminMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     SortableAdminMixin,
@@ -234,6 +235,7 @@ class SubmoduleRequiredGroupInline(
 
 @admin.register(Submodule)
 class SubmoduleAdmin(
+    CollationSafeSearchAdminMixin,
     RestrictedVisibilityFieldMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
@@ -594,7 +596,10 @@ class SubmoduleMappingAdmin(AdminUserTrackingMixin, nested_admin.NestedModelAdmi
 
 @admin.register(IndicatorArea)
 class IndicatorAreaAdmin(
-    AdminUserTrackingMixin, FormFieldOverridesMixin, admin.ModelAdmin
+    CollationSafeSearchAdminMixin,
+    AdminUserTrackingMixin,
+    FormFieldOverridesMixin,
+    admin.ModelAdmin,
 ):
     list_display = (
         "name",
@@ -609,6 +614,7 @@ class IndicatorAreaAdmin(
 
 @admin.register(Indicator)
 class IndicatorAdmin(
+    CollationSafeSearchAdminMixin,
     ObjectPermissionMixin,
     SortableAdminMixin,
     AdminUserTrackingMixin,

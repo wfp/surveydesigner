@@ -3,7 +3,11 @@ from functools import update_wrapper
 
 import nested_admin
 from adminsortable2.admin import SortableAdminMixin
-from core.admin import AdminUserTrackingMixin, FormFieldOverridesMixin
+from core.admin import (
+    AdminUserTrackingMixin,
+    CollationSafeSearchAdminMixin,
+    FormFieldOverridesMixin,
+)
 from core.forms import TranslationForm
 from core.utils import get_model_admin_base_url
 from django.contrib import admin, messages
@@ -236,6 +240,7 @@ class SubQuestionInline(
 
 @admin.register(ChoiceGroup)
 class ChoiceGroupAdmin(
+    CollationSafeSearchAdminMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,
@@ -321,6 +326,7 @@ class ChoiceGroupAdmin(
 
 @admin.register(ChoiceGroupFile)
 class ChoiceGroupFileAdmin(
+    CollationSafeSearchAdminMixin,
     ObjectPermissionMixin,
     AdminUserTrackingMixin,
     FormFieldOverridesMixin,
@@ -381,6 +387,7 @@ class ChoiceGroupFileAdmin(
 
 @admin.register(RootQuestion)
 class RootQuestionAdmin(
+    CollationSafeSearchAdminMixin,
     RestrictedVisibilityFieldMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
@@ -597,7 +604,10 @@ class RootQuestionAdmin(
 
 @admin.register(RecallPeriod)
 class RecallPeriodAdmin(
-    AdminUserTrackingMixin, FormFieldOverridesMixin, admin.ModelAdmin
+    CollationSafeSearchAdminMixin,
+    AdminUserTrackingMixin,
+    FormFieldOverridesMixin,
+    admin.ModelAdmin,
 ):
     exclude = ("created_by", "updated_by")
     list_display = (
@@ -643,6 +653,7 @@ class RecallPeriodAdmin(
 
 @admin.register(Suffix)
 class SuffixAdmin(
+    CollationSafeSearchAdminMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,
@@ -736,6 +747,7 @@ class SuffixAdmin(
 
 @admin.register(SubQuestion)
 class SubQuestionAdmin(
+    CollationSafeSearchAdminMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,
@@ -906,7 +918,9 @@ class SubQuestionAdmin(
 
 
 @admin.register(BaseQuestion)
-class BaseQuestionAdmin(SortableAdminMixin, admin.ModelAdmin):
+class BaseQuestionAdmin(
+    CollationSafeSearchAdminMixin, SortableAdminMixin, admin.ModelAdmin
+):
     list_display = (
         "name",
         "description_display",
@@ -1326,6 +1340,7 @@ class BaseQuestionAdmin(SortableAdminMixin, admin.ModelAdmin):
 
 @admin.register(Calculation)
 class CalculationAdmin(
+    CollationSafeSearchAdminMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,
@@ -1513,6 +1528,7 @@ class SubQuestionProxyAdmin(admin.ModelAdmin, RequestUserFormMixin):
 
 @admin.register(RepeatSection)
 class RepeatSectionAdmin(
+    CollationSafeSearchAdminMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,

@@ -3,8 +3,8 @@
 from io import BytesIO
 
 import pytest
-from django.contrib.auth import get_user_model
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from openpyxl import Workbook, load_workbook
 from openpyxl.writer.excel import save_virtual_workbook
@@ -247,5 +247,7 @@ class TestCaseInsensitiveChoicesImport(TestCase):
 
         created = ci.create()
 
-        self.assertEqual(ChoiceGroup.objects.filter(name__iexact="yesnodkref").count(), 1)
+        self.assertEqual(
+            ChoiceGroup.objects.filter(name__iexact="yesnodkref").count(), 1
+        )
         self.assertEqual(created["yesnodkref"].id, self.choice_group.id)
