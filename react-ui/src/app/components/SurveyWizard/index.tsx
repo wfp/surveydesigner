@@ -1,24 +1,14 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 
 import {
-  Button,
   Module,
   ModuleBody,
-  ModuleFooter,
   ModuleHeader,
   Wrapper,
-  Tooltip,
-  InlineLoading,
 } from "@wfp/react";
 
 import { useNavigate, useLocation } from "react-router-dom";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faArrowLeft,
-  faArrowRight,
-  faCircleQuestion,
-  faFloppyDisk,
-} from "@fortawesome/free-solid-svg-icons";
+import { SurveyWizardFooter } from "./UI/SurveyWizardFooter";
 
 import { PayloadAction } from "@reduxjs/toolkit";
 import { useTranslation } from "react-i18next";
@@ -351,57 +341,6 @@ function SurveyWizard() {
       />
     </div>
   );
-
-  const renderPreviousButton = () => {
-    const shouldShowButton =
-      step > 0 || (isCreatingSurvey && savedSurveys.data);
-    const hasSavedSurveys = savedSurveys.data && savedSurveys.data.length > 0;
-    // If still loading savedSurveys.data
-    if (isCreatingSurvey && !savedSurveys.data) {
-      return <InlineLoading description="Loading saved surveys..." />;
-    }
-
-    // If the button shouldn't be shown
-    if (!shouldShowButton) {
-      return null;
-    }
-    const isDisabled = step === 0 && !hasSavedSurveys;
-
-    const buttonContent = (
-      <Button
-        kind="secondary"
-        className="wfp--form-controls__prev wfp--btn wfp--btn--secondary"
-        disabled={isDisabled}
-        onClick={() => {
-          if (step > 0) {
-            setGoToStep(step - 1);
-          } else {
-            setIsCreatingSurvey(false);
-            resetSurveyData();
-          }
-        }}
-      >
-        {step > 0 ? t("actions.previous") : t("surveyWizard.savedSurveys")}
-        <FontAwesomeIcon icon={faArrowLeft} className="wfp--btn__icon" />
-      </Button>
-    );
-    if (isDisabled) {
-      return (
-        <Tooltip
-          className="custom-tooltip"
-          createRefWrapper
-          content={"There are no saved surveys"}
-          dark
-          placement="top-end"
-          trigger="hover"
-        >
-          {buttonContent}
-        </Tooltip>
-      );
-    }
-
-    return buttonContent;
-  };
   const step0Content =
     initialRequest || isCreatingSurvey ? (
       <Surveys
@@ -497,61 +436,37 @@ function SurveyWizard() {
                 {step === 3 && <Generate next={next()} />}
               </ModuleBody>
             </ModulesProvider>
-            <ModuleFooter>
-              <div className="wfp--form-controls">
-                <div>{renderPreviousButton()}</div>
-                <div>
-                  {isCreatingSurvey && step < stepsCount - 1 ? (
-                    <Button
-                      kind="secondary"
-                      className="wfp--form-controls__next wfp--btn wfp--btn--secondary"
-                      disabled={step === 1 && isValidating}
-                      onClick={() => {
-                        if (step === 1) {
-                          setIsValidating(true);
-                        }
-                        setGoToStep(step + 1);
-                        setNextClickCount(nextClickCount + 1);
-                      }}
-                    >
-                      {t("actions.next")}
-                      <FontAwesomeIcon icon={faArrowRight} className="wfp--btn__icon" />
-                    </Button>
-                  ) : (
-                    step === 0 && (
-                      <Button
-                        kind="secondary"
-                        onClick={() => {
-                          setIsCreatingSurvey(true);
-                          if (
-                            surveyTableRef &&
-                            surveyTableRef.current &&
-                            surveyTableRef.current !== null
-                          )
-                            surveyTableRef.current.clearFilters();
-                        }}
-                      >
-                        {t("surveyWizard.createSurvey")}
-                      </Button>
-                    )
-                  )}
-                </div>
-                {step === stepsCount - 1 && (
-                  <div>
-                    <Button
-                      kind="secondary"
-                      className="wfp--form-controls__next"
-                      onClick={() => {
-                        saveSurvey();
-                      }}
-                    >
-                      {t("actions.save")}
-                      <FontAwesomeIcon icon={faFloppyDisk} className="wfp--btn__icon" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </ModuleFooter>
+            <SurveyWizardFooter
+              step={step}
+              stepsCount={stepsCount}
+              isCreatingSurvey={isCreatingSurvey}
+              isValidating={isValidating}
+              savedSurveysData={savedSurveys.data}
+              onPreviousClick={() => {
+                if (step > 0) {
+                  setGoToStep(step - 1);
+                } else {
+                  setIsCreatingSurvey(false);
+                  resetSurveyData();
+                }
+              }}
+              onNextClick={() => {
+                if (step === 1) {
+                  setIsValidating(true);
+                }
+                setGoToStep(step + 1);
+                setNextClickCount(nextClickCount + 1);
+              }}
+              onCreateSurveyClick={() => {
+                setIsCreatingSurvey(true);
+                if (surveyTableRef.current) {
+                  surveyTableRef.current.clearFilters();
+                }
+              }}
+              onSaveClick={() => {
+                void saveSurvey();
+              }}
+            />
           </Module>
         </div>
       </Wrapper>
