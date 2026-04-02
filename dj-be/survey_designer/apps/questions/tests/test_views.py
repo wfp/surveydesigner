@@ -28,6 +28,40 @@ def test_upload_questions_view_post(logged_admin_client):
         assert response.status_code == 200
 
 
+def test_base_question_autocomplete_term_search(logged_admin_client, root_question_1):
+    search_term = root_question_1.name[:5].lower()
+    response = logged_admin_client.get(
+        f"/admin/questions/basequestion/autocomplete/?term={search_term}"
+    )
+    assert response.status_code == 200
+    assert root_question_1.name in response.content.decode()
+
+
+def test_base_question_autocomplete_q_search(logged_admin_client, root_question_1):
+    search_term = root_question_1.name[:5].lower()
+    response = logged_admin_client.get(
+        f"/admin/questions/basequestion/autocomplete/?q={search_term}"
+    )
+    assert response.status_code == 200
+    assert root_question_1.name in response.content.decode()
+
+
+def test_repeat_section_autocomplete_search(logged_admin_client, repeat_section_1):
+    search_term = repeat_section_1.name[:5].lower()
+    response = logged_admin_client.get(
+        f"/api/repeat-section-autocomplete/?q={search_term}"
+    )
+    assert response.status_code == 200
+    assert repeat_section_1.name in response.content.decode()
+
+
+def test_indicator_autocomplete_search(logged_admin_client, indicator_1):
+    search_term = indicator_1.name[:5].lower()
+    response = logged_admin_client.get(f"/api/indicator-autocomplete/?q={search_term}")
+    assert response.status_code == 200
+    assert indicator_1.name in response.content.decode()
+
+
 class TestConstraintCreateView:
     @pytest.mark.django_db
     def test_initial_form_data(self, logged_admin_client, root_question_1):

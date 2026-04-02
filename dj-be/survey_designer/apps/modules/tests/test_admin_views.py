@@ -5,7 +5,16 @@ from django.contrib.messages.storage.fallback import FallbackStorage
 from django.urls import reverse
 from modules.admin import ModuleAdmin, SubmoduleAdmin
 from modules.factories import ModuleFactory, SubmoduleFactory
-from modules.models import Module, Submodule
+from modules.models import Indicator, IndicatorArea, Module, Submodule
+
+
+def _assert_admin_search_works(logged_admin_client, model, expected_text):
+    response = logged_admin_client.get(
+        get_model_admin_base_url(model, "_changelist"),
+        {"q": expected_text[:5].lower()},
+    )
+    assert response.status_code == 200
+    assert expected_text in response.content.decode()
 
 
 @pytest.fixture
@@ -31,6 +40,9 @@ class TestModuleAdmin:
         assert response.status_code == 200
         assert response.context["cl"].result_count == len(modules)
 
+    def test_module_admin_search_view(self, logged_admin_client, module_1):
+        _assert_admin_search_works(logged_admin_client, Module, module_1.name)
+
     def test_export_action(self, logged_admin_client, module_admin):
         ModuleFactory.create_batch(5)
         request = logged_admin_client.get(reverse("admin:modules_module_changelist"))
@@ -47,7 +59,8 @@ class TestModuleAdmin:
         assert response.status_code == 302
         assert (
             response.url
-            == f"/admin/modules/submodulemapping/add/?module_ids={','.join(str(module.id) for module in Module.objects.all())}"
+            == "/admin/modules/submodulemapping/add/?module_ids="
+            + ",".join(str(module.id) for module in Module.objects.all())
         )
 
 
@@ -58,6 +71,9 @@ class TestSubmoduleAdmin:
         response = logged_admin_client.get(url)
         assert response.status_code == 200
         assert response.context["cl"].result_count == len(submodules)
+
+    def test_submodule_admin_search_view(self, logged_admin_client, submodule_1):
+        _assert_admin_search_works(logged_admin_client, Submodule, submodule_1.name)
 
     def test_export_action(self, logged_admin_client, submodule_admin):
         SubmoduleFactory.create_batch(5)
@@ -71,3 +87,19 @@ class TestSubmoduleAdmin:
         submodule.question_count = 12345
         response = submodule_admin.question_list_button(submodule)
         assert "12345" in response
+
+
+class TestIndicatorAreaAdmin:
+    def test_indicator_area_admin_search_view(self, logged_admin_client):
+        indicator_area = IndicatorArea.objects.create(
+            name="IndicatorAreaSearch",
+            label="Indicator Area Search",
+        )
+        _assert_admin_search_works(
+            logged_admin_client, IndicatorArea, indicator_area.name
+        )
+
+
+class TestIndicatorAdmin:
+    def test_indicator_admin_search_view(self, logged_admin_client, indicator_1):
+        _assert_admin_search_works(logged_admin_client, Indicator, indicator_1.name)

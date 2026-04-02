@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db import transaction
 from django.db.models import Q
+from django.db.models.functions import Collate
 from django.forms import formset_factory
 from django.http import HttpResponse
 from django.shortcuts import render, reverse
@@ -26,6 +27,19 @@ from .forms import (
     UploadQuestionsForm,
 )
 from .services import DataImport, QuestionsExport
+
+
+def _collation_safe_icontains(queryset, search_term, field_names):
+    aliases = {
+        f"_search_{index}": Collate(field_name, "C")
+        for index, field_name in enumerate(field_names)
+    }
+    queryset = queryset.alias(**aliases)
+    predicate = Q.create(
+        [(f"{alias}__icontains", search_term) for alias in aliases],
+        connector=Q.OR,
+    )
+    return queryset.filter(predicate)
 
 
 class ConstraintCreateView(FormView):
@@ -316,7 +330,7 @@ class IndicatorAutocomplete(autocomplete.Select2QuerySetView):
         qs = Indicator.objects.all()
 
         if self.q:
-            qs = qs.filter(name__icontains=self.q)
+            qs = _collation_safe_icontains(qs, self.q, ("name",))
 
         return qs
 
@@ -332,7 +346,7 @@ class RepeatSectionAutocomplete(autocomplete.Select2QuerySetView):
         qs = RepeatSection.objects.all()
 
         if self.q:
-            qs = qs.filter(name__icontains=self.q)
+            qs = _collation_safe_icontains(qs, self.q, ("name",))
 
         return qs
 
@@ -342,10 +356,9 @@ class BaseQuestionAutocomplete(autocomplete.Select2QuerySetView):
 
     def get_queryset(self):
         qs = BaseQuestion.objects.all()
-        if "term" in self.request.GET:
-            term = self.request.GET.get("term")
-            qs = qs.filter(
-                Q(root_question__name__icontains=term)
-                | Q(sub_question__name__icontains=term)
+        search_term = self.request.GET.get("term") or self.q
+        if search_term:
+            qs = _collation_safe_icontains(
+                qs, search_term, ("root_question__name", "sub_question__name")
             )
         return qs
