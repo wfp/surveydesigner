@@ -1,9 +1,8 @@
 /* eslint-disable camelcase */
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Cookies } from "react-cookie";
 import { Controller, useForm } from "react-hook-form";
 import Select from "react-select";
-import { EvaluationPositive } from "@wfp/humanitarian-icons-react";
 import { Button, InlineLoading, ToastNotification, Callout } from "@wfp/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faFileAlt, faSearch } from "@fortawesome/free-solid-svg-icons";
@@ -16,6 +15,7 @@ import { useAppDispatch, useAppSelector } from "../../redux/store";
 import SubmoduleList from "../SubmoduleList";
 
 import { surveyFormActions } from "../../redux/reducers/surveyFormReducer";
+import { surveyWizardUiActions } from "../../redux/reducers/surveyWizardUiReducer";
 import { fetchSubmodules } from "../../redux/actions/submodulesActions";
 import { submodulesActions } from "../../redux/reducers/submodulesReducer";
 import { API } from "../../utils";
@@ -33,20 +33,17 @@ import { ApiError } from "../../types";
 import { ReviewProps } from "./Review.interface";
 import { getOrderedSubmodules } from "../../utils/generate";
 
-function Review({
-  next,
-  numberOfQuestionsToBeGenerated,
-  selectAll,
-  setSelectAll,
-  collapseAll,
-  setCollapseAll,
-  setNumberOfQuestionsToBeGenerated,
-  selectedSurveyToEdit,
-}: ReviewProps) {
+function Review({ next }: ReviewProps) {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const surveyForm = useAppSelector((state) => state.surveyForm);
   const submodulesData = useAppSelector((state) => state.submodules);
+  const {
+    selectAllReview: selectAll,
+    collapseAllReview: collapseAll,
+    numberOfQuestionsToBeGenerated,
+    selectedSurveyToEdit,
+  } = useAppSelector((state) => state.surveyWizardUi);
   const submodules = submodulesData.data;
   const selectedOptions = new Set(submodulesData.selectedOptions);
   const [submodulesMap, setSubmoduleMap] = useState<
@@ -179,7 +176,11 @@ function Review({
         ...translations,
       ]);
 
-      setNumberOfQuestionsToBeGenerated(getRootQuestionsCount(submodules));
+      dispatch(
+        surveyWizardUiActions.setNumberOfQuestionsToBeGenerated(
+          getRootQuestionsCount(submodules),
+        ),
+      );
       if (!selectedSurveyToEdit) return;
       // This is for preselecting the subquestion check boxes.
       // We need to match the subquestion submodule ID that has been saved to the ones available.
@@ -235,8 +236,10 @@ function Review({
           ...selectedIds,
         ]),
       );
-      setNumberOfQuestionsToBeGenerated(
-        numberOfQuestionsToBeGenerated + selectedIds.length,
+      dispatch(
+        surveyWizardUiActions.setNumberOfQuestionsToBeGenerated(
+          numberOfQuestionsToBeGenerated + selectedIds.length,
+        ),
       );
     }
   }, [submodules]);
@@ -501,9 +504,16 @@ function Review({
                 numberOfQuestionsToBeGenerated,
                 selectAll,
                 selectedOptions,
-                setCollapseAll,
-                setNumberOfQuestionsToBeGenerated,
-                setSelectAll,
+                setCollapseAll: (val) =>
+                  dispatch(surveyWizardUiActions.setCollapseAllReview(val)),
+                setNumberOfQuestionsToBeGenerated: (val: number) =>
+                  dispatch(
+                    surveyWizardUiActions.setNumberOfQuestionsToBeGenerated(
+                      val,
+                    ),
+                  ),
+                setSelectAll: (val) =>
+                  dispatch(surveyWizardUiActions.setSelectAllReview(val)),
                 setSubQuestions,
                 submodulesData,
                 submodulesMap,
