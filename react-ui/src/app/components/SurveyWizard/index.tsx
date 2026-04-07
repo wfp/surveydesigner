@@ -81,16 +81,6 @@ function SurveyWizard() {
 
   const paths = ["survey", "modules", "review", "generate"];
 
-  // Refs for stale closure prevention in `next` callback
-  const stepRef = useRef(step);
-  const goToStepRef = useRef(goToStep);
-  useEffect(() => {
-    stepRef.current = step;
-  }, [step]);
-  useEffect(() => {
-    goToStepRef.current = goToStep;
-  }, [goToStep]);
-
   useEffect(() => {
     // If a copiedSurvey is present in navigation state, use it directly
     if (state && state.copiedSurvey) {
@@ -128,18 +118,15 @@ function SurveyWizard() {
 
   const next: PrevNextStepCallback = useCallback(
     (nextCallback, prevCallback) => {
-      const currentStep = stepRef.current;
-      const currentGoToStep = goToStepRef.current;
-
-      if (currentStep !== currentGoToStep) {
+      if (step !== goToStep) {
         const proceed = () => {
-          dispatch(surveyWizardUiActions.setStep(currentGoToStep));
-          navigate(`/design/${paths[currentGoToStep]}`);
+          dispatch(surveyWizardUiActions.setStep(goToStep));
+          navigate(`/design/${paths[goToStep]}`);
         };
 
-        if (currentGoToStep > currentStep) {
+        if (goToStep > step) {
           if (nextCallback) {
-            nextCallback(proceed, currentStep);
+            nextCallback(proceed, step);
           } else {
             proceed();
           }
@@ -150,10 +137,10 @@ function SurveyWizard() {
           dispatch(surveyWizardUiActions.setIsValidating(false));
         }
 
-        dispatch(surveyWizardUiActions.setPrvsStep(currentStep));
+        dispatch(surveyWizardUiActions.setPrvsStep(step));
       }
     },
-    [dispatch, navigate],
+    [dispatch, goToStep, navigate, step],
   );
 
   useEffect(() => {
