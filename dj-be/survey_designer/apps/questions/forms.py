@@ -365,9 +365,10 @@ class SubQuestionProxyForm(ModelForm):
         suffix_2 = self.cleaned_data["suffix_2"]
         recall_period = self.cleaned_data["recall_period"]
         label = self.cleaned_data["label"]
+        user = getattr(self, "user", None)
 
         for root_question in root_questions:
-            root_question.updated_by = self.user
+            root_question.updated_by = user
             root_question.save()
             sub_question = SubQuestion.objects.create(
                 root_question=root_question,
@@ -375,6 +376,8 @@ class SubQuestionProxyForm(ModelForm):
                 suffix_2=suffix_2,
                 recall_period=recall_period,
                 label=label,
+                created_by=user,
+                updated_by=user,
             )
 
             sub_questions_created.append(sub_question)

@@ -10,6 +10,7 @@ from questions.models import (
     RepeatSection,
     RootQuestion,
     SubQuestion,
+    SubQuestionProxy,
     Suffix,
 )
 
@@ -156,6 +157,40 @@ def test_sub_question_list_view(
 
 def test_sub_question_search_view(logged_admin_client, sub_question_1):
     _assert_admin_search_works(logged_admin_client, SubQuestion, sub_question_1.name)
+
+
+def test_sub_question_proxy_add_view_sets_request_user_and_creates_subquestion(
+    logged_admin_client, admin, root_question_1, suffix_1
+):
+    url = (
+        get_model_admin_base_url(SubQuestionProxy, "_add")
+        + f"?ids={root_question_1.id}&names={root_question_1.name}"
+    )
+    response = logged_admin_client.post(
+        url,
+        {
+            "label": "6 months",
+            "suffix": str(suffix_1.id),
+            "root_question_ids": str(root_question_1.id),
+            "translations-TOTAL_FORMS": 0,
+            "translations-INITIAL_FORMS": 0,
+        },
+    )
+
+    assert response.status_code == 302
+
+    root_question_1.refresh_from_db()
+    assert root_question_1.updated_by == admin
+
+    sub_question = SubQuestion.objects.get(
+        root_question=root_question_1,
+        suffix=suffix_1,
+        suffix_2__isnull=True,
+        recall_period__isnull=True,
+    )
+    assert sub_question.label == "6 months"
+    assert sub_question.created_by == admin
+    assert sub_question.updated_by == admin
 
 
 def test_root_question_list_view(
