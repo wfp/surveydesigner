@@ -41,6 +41,11 @@ class SubQuestionAdminModelForm(ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        for field_name in ("suffix", "suffix_2"):
+            suffix_field = self.fields.get(field_name)
+            if suffix_field:
+                suffix_field.queryset = suffix_field.queryset.order_by("name")
+
         try:
             self.fields["constraint"].widget.attrs["class"] = "sub_question_constraint"
             self.fields["constraint_message"].widget.attrs[

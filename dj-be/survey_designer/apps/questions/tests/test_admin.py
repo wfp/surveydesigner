@@ -1,6 +1,7 @@
 from core.utils import get_model_admin_base_url
 from django.core.files.uploadedfile import SimpleUploadedFile
 from lxml import html
+from questions.const import QuestionType
 from questions.models import (
     BaseQuestion,
     Calculation,
@@ -108,6 +109,56 @@ def test_suffix_list_view(
 
 def test_suffix_search_view(logged_admin_client, suffix_1):
     _assert_admin_search_works(logged_admin_client, Suffix, suffix_1.name)
+
+
+def test_root_question_admin_edit_view_orders_sub_question_suffixes_alphabetically(
+    logged_admin_client,
+    root_question_1,
+    sub_question_1,
+    sub_question_2,
+    sub_question_4,
+):
+    expected_names = ["_alpha", "_middle", "_zeta"]
+    for suffix_name in ("_zeta", "_alpha", "_middle"):
+        Suffix.objects.create(
+            name=suffix_name,
+            description=f"{suffix_name} description",
+            type=QuestionType.TEXT,
+        )
+
+    response = logged_admin_client.get(
+        get_model_admin_base_url(RootQuestion, "_change", [root_question_1.id])
+    )
+
+    assert response.status_code == 200
+
+    tree = html.fromstring(response.content)
+    suffix_select = next(
+        select
+        for select in tree.xpath("//select")
+        if (select.get("id") or "").startswith("id_sub_questions-")
+        and (select.get("id") or "").endswith("-suffix")
+        and "__prefix__" not in (select.get("id") or "")
+    )
+    suffix_2_select = next(
+        select
+        for select in tree.xpath("//select")
+        if (select.get("id") or "").startswith("id_sub_questions-")
+        and (select.get("id") or "").endswith("-suffix_2")
+        and "__prefix__" not in (select.get("id") or "")
+    )
+
+    suffix_names = [
+        option.text_content().strip()
+        for option in suffix_select.xpath("./option[@value!='']")
+    ]
+    suffix_2_names = [
+        option.text_content().strip()
+        for option in suffix_2_select.xpath("./option[@value!='']")
+    ]
+
+    assert [name for name in suffix_names if name in expected_names] == expected_names
+    assert [name for name in suffix_2_names if name in expected_names] == expected_names
 
 
 def test_repeat_section_list_view(logged_admin_client, repeat_section_1):
