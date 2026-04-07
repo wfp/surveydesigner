@@ -1,6 +1,7 @@
 from core.utils import get_model_admin_base_url
 from django.core.files.uploadedfile import SimpleUploadedFile
 from lxml import html
+from questions.admin import RootQuestionTranslationInline
 from questions.const import QuestionType
 from questions.models import (
     BaseQuestion,
@@ -22,6 +23,14 @@ def _assert_admin_search_works(logged_admin_client, model, expected_text):
     )
     assert response.status_code == 200
     assert expected_text in response.content.decode()
+
+
+def _build_root_question_translation_form(*, data=None, instance=None):
+    class TestRootQuestionTranslationForm(RootQuestionTranslationInline.form):
+        class Meta(RootQuestionTranslationInline.form.Meta):
+            model = RootQuestionTranslationInline.model
+
+    return TestRootQuestionTranslationForm(data=data, instance=instance)
 
 
 def test_choice_group_admin_list_view(
@@ -87,6 +96,59 @@ def test_root_question_admin_edit_view(
     url = get_model_admin_base_url(RootQuestion, "_change", [root_question_1.id])
     response = logged_admin_client.get(url)
     assert response.status_code == 200
+
+
+def test_root_question_admin_add_view_uses_single_jquery_for_dal_widgets(
+    logged_admin_client,
+):
+    url = get_model_admin_base_url(RootQuestion, "_add")
+    response = logged_admin_client.get(url)
+    assert response.status_code == 200
+
+    content = response.content.decode()
+
+    assert "/static/admin/js/vendor/jquery/jquery.js" in content
+    assert "/static/admin/js/vendor/jquery/jquery.min.js" not in content
+    assert "/static/js/admin/jquery-bridge.js" in content
+    assert "/static/autocomplete_light/autocomplete_light.js" in content
+    assert "data-autocomplete-light-function=select2" in content
+    assert "id=id_repeat_sections" in content
+    assert "id=id_indicators" in content
+
+
+def test_translation_form_rejects_new_english_translation(root_question_1):
+    form = _build_root_question_translation_form(
+        data={
+            "root_question": root_question_1.id,
+            "language": "en",
+            "label": "Duplicate English",
+            "hint": "",
+        }
+    )
+
+    assert not form.is_valid()
+    assert "language" in form.errors
+
+
+def test_translation_form_allows_existing_english_translation_row(root_question_1):
+    translation = RootQuestionTranslationInline.model.objects.create(
+        root_question=root_question_1,
+        language="en",
+        label="Existing English",
+        hint="",
+    )
+
+    form = _build_root_question_translation_form(
+        instance=translation,
+        data={
+            "root_question": root_question_1.id,
+            "language": "en",
+            "label": "Existing English Updated",
+            "hint": "",
+        },
+    )
+
+    assert form.is_valid(), form.errors
 
 
 def test_recall_period_list_view(logged_admin_client, sub_question_2):

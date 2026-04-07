@@ -62,6 +62,15 @@ def test_indicator_autocomplete_search(logged_admin_client, indicator_1):
     assert indicator_1.name in response.content.decode()
 
 
+def test_language_autocomplete_excludes_english(logged_admin_client):
+    response = logged_admin_client.get("/api/language-autocomplete/?q=en")
+    assert response.status_code == 200
+
+    content = response.content.decode()
+    assert "English" not in content
+    assert "French" in content
+
+
 class TestConstraintCreateView:
     @pytest.mark.django_db
     def test_initial_form_data(self, logged_admin_client, root_question_1):

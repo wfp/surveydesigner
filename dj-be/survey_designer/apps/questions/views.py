@@ -338,7 +338,7 @@ class IndicatorAutocomplete(autocomplete.Select2QuerySetView):
 # language autocomplete for list of languages
 class LanguageAutocomplete(autocomplete.Select2ListView):
     def get_list(self):
-        return settings.LANGUAGES
+        return [language for language in settings.LANGUAGES if language[0] != "en"]
 
 
 class RepeatSectionAutocomplete(autocomplete.Select2QuerySetView):

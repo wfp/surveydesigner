@@ -1,3 +1,6 @@
+from dynamic_raw_id.admin import DynamicRawIDMixin as BaseDynamicRawIDMixin
+from dynamic_raw_id.widgets import DynamicRawIDMultiIdWidget, DynamicRawIDWidget
+from django import forms
 from django.contrib.admin.options import LOOKUP_SEP
 from django.contrib.admin.utils import lookup_spawns_duplicates
 from django.core.exceptions import FieldDoesNotExist
@@ -11,6 +14,50 @@ class FormFieldOverridesMixin:
     formfield_overrides = {
         models.TextField: {"widget": Textarea(attrs={"rows": 2, "cols": 70})},
     }
+
+
+class AdminSafeDynamicRawIDWidget(DynamicRawIDWidget):
+    @property
+    def media(self):
+        return forms.Media(
+            js=[
+                "js/admin/jquery-bridge.js",
+                "dynamic_raw_id/js/dynamic_raw_id.js",
+            ]
+        )
+
+
+class AdminSafeDynamicRawIDMultiIdWidget(DynamicRawIDMultiIdWidget):
+    @property
+    def media(self):
+        return forms.Media(
+            js=[
+                "js/admin/jquery-bridge.js",
+                "dynamic_raw_id/js/dynamic_raw_id.js",
+            ]
+        )
+
+
+class SafeDynamicRawIDMixin(BaseDynamicRawIDMixin):
+    def formfield_for_foreignkey(self, db_field, request=None, **kwargs):
+        if db_field.name in self.dynamic_raw_id_fields:
+            kwargs["widget"] = AdminSafeDynamicRawIDWidget(
+                db_field.remote_field,
+                self.admin_site,
+            )
+            kwargs["help_text"] = ""
+            return db_field.formfield(**kwargs)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def formfield_for_manytomany(self, db_field, request=None, **kwargs):
+        if db_field.name in self.dynamic_raw_id_fields:
+            kwargs["widget"] = AdminSafeDynamicRawIDMultiIdWidget(
+                db_field.remote_field,
+                self.admin_site,
+            )
+            kwargs["help_text"] = ""
+            return db_field.formfield(**kwargs)
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
 
 
 class AdminUserTrackingMixin:

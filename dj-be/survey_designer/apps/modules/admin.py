@@ -1,6 +1,6 @@
 import nested_admin
 from adminsortable2.admin import SortableAdminMixin
-from core.admin import AdminUserTrackingMixin, CollationSafeSearchAdminMixin
+from core.admin import AdminUserTrackingMixin, CollationSafeSearchAdminMixin, SafeDynamicRawIDMixin
 from core.forms import TranslationForm
 from core.utils import get_model_admin_base_url
 from django.contrib import admin, messages
@@ -12,7 +12,6 @@ from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.templatetags.static import static
 from django.utils.html import format_html
-from dynamic_raw_id.admin import DynamicRawIDMixin
 from modules.admin_filters import (
     IndicatorSurveyModeFilter,
     IndicatorSurveyTypeFilter,
@@ -129,7 +128,7 @@ class SubmoduleTranslationInline(
 
 class SubmoduleInline(
     ObjectPermissionMixin,
-    DynamicRawIDMixin,
+    SafeDynamicRawIDMixin,
     FormFieldOverridesMixin,
     nested_admin.NestedStackedInline,
 ):
@@ -148,7 +147,7 @@ class ModuleAdmin(
     SortableAdminMixin,
     AdminUserTrackingMixin,
     FormFieldOverridesMixin,
-    DynamicRawIDMixin,
+    SafeDynamicRawIDMixin,
     RestrictedVisibilityFieldMixin,
     nested_admin.NestedModelAdmin,
 ):
@@ -242,7 +241,7 @@ class SubmoduleAdmin(
     SortableAdminMixin,
     AdminUserTrackingMixin,
     FormFieldOverridesMixin,
-    DynamicRawIDMixin,
+    SafeDynamicRawIDMixin,
     nested_admin.NestedModelAdmin,
 ):
     exclude = ("created_by", "updated_by", "relevant_dependencies")
@@ -619,7 +618,7 @@ class IndicatorAdmin(
     SortableAdminMixin,
     AdminUserTrackingMixin,
     FormFieldOverridesMixin,
-    DynamicRawIDMixin,
+    SafeDynamicRawIDMixin,
     nested_admin.NestedModelAdmin,
 ):
     exclude = ("created_by", "updated_by")
