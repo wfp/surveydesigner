@@ -1,9 +1,6 @@
 import { InlineLoading, Modal, Callout } from "@wfp/react";
 import React, {
   ChangeEvent,
-  Dispatch,
-  SetStateAction,
-  SyntheticEvent,
   useCallback,
   useEffect,
   useState,
@@ -22,6 +19,7 @@ import {
   surveyFormActions,
   SurveyFormState,
 } from "../../redux/reducers/surveyFormReducer";
+import { surveyWizardUiActions } from "../../redux/reducers/surveyWizardUiReducer";
 import ModuleListItem from "../ModuleListItem";
 import IndicatorAreaListItem from "../IndicatorAreaListItem";
 import { useModules } from "../../contexts/ModulesContext";
@@ -32,26 +30,22 @@ import { Indicator, Module, Submodule } from "../../types/api";
 import { ModulesProps } from "./Modules.interface";
 import { IndicatorAreaWithIndicators } from "../../types";
 
-function Modules({
-  next,
-  selectAll,
-  setSelectAll,
-  collapseAllModules,
-  setCollapseAllModules,
-  collapseAllIndicatorAreas,
-  setCollapseAllIndicatorAreas,
-  prvsStep,
-  step,
-  setSelectedModuleCounts,
-  selectedSurveyToEdit,
-  setIsValidating,
-}: ModulesProps) {
+function Modules({ next }: ModulesProps) {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const surveyForm = useAppSelector((state) => state.surveyForm);
   const { data, isLoading } = useAppSelector((state) => state.modules);
   const { data: indicatorAreasData, isLoading: indicatorAreasIsLoading } =
     useAppSelector((state) => state.indicatorAreas);
+  const {
+    selectAllModules: selectAll,
+    collapseAllModules,
+    collapseAllIndicatorAreas,
+    step,
+    prvsStep,
+    selectedSurveyToEdit,
+  } = useAppSelector((state) => state.surveyWizardUi);
+
   const [submoduleModal, setSubmoduleModal] = useState<{
     clickedSubmodule: Submodule;
     event?: ChangeEvent<HTMLInputElement>;
@@ -114,14 +108,14 @@ function Modules({
   }
 
   const debouncedValidation = useCallback(
-    debounce((proceed, step, setGoToStep) => {
+    debounce((proceed, step) => {
       handleSubmit((data) => {
         if (!data.submodules) {
           data.submodules = [];
         } else if (!data.submodules.length) {
           setSubmitError(t("modules.errors.selectOneSubModule"));
-          setGoToStep?.(step ?? 0);
-          setIsValidating(false);
+          dispatch(surveyWizardUiActions.setGoToStep(step ?? 0));
+          dispatch(surveyWizardUiActions.setIsValidating(false));
           return;
         }
 
@@ -149,13 +143,13 @@ function Modules({
             proceed?.();
           } else {
             setSubmitError(result.data);
-            setGoToStep?.(step ?? 0);
+            dispatch(surveyWizardUiActions.setGoToStep(step ?? 0));
           }
-          setIsValidating(false);
+          dispatch(surveyWizardUiActions.setIsValidating(false));
         });
       })();
     }, 100),
-    [handleSubmit, setIsValidating],
+    [handleSubmit, dispatch],
   );
 
   function handleSubmoduleChange(
@@ -175,7 +169,12 @@ function Modules({
         !selectAll.isChecked &&
         newSubmodules.length === modulesData.current.submodules_count
       ) {
-        setSelectAll({ isChecked: true, run: false });
+        dispatch(
+          surveyWizardUiActions.setSelectAllModules({
+            isChecked: true,
+            run: false,
+          }),
+        );
       }
     } else {
       if (isMandatory) {
@@ -186,7 +185,12 @@ function Modules({
       setModuleCountsFromSubmodules(newSubmodules);
 
       if (selectAll.isChecked) {
-        setSelectAll({ isChecked: false, run: false });
+        dispatch(
+          surveyWizardUiActions.setSelectAllModules({
+            isChecked: false,
+            run: false,
+          }),
+        );
       }
     }
   }
@@ -206,10 +210,12 @@ function Modules({
         : [];
     setValue("submodules", ids);
 
-    setSelectedModuleCounts({
-      moduleCount: checked ? modulesData.current.modules_count : 0,
-      submoduleCount: checked ? modulesData.current.submodules_count : 0,
-    });
+    dispatch(
+      surveyWizardUiActions.setSelectedModuleCounts({
+        moduleCount: checked ? modulesData.current.modules_count : 0,
+        submoduleCount: checked ? modulesData.current.submodules_count : 0,
+      }),
+    );
   }
 
   function setNewModuleOrder(newOrder: number[]) {
@@ -328,24 +334,28 @@ function Modules({
         ),
       ) ?? [];
 
-    setSelectedModuleCounts({
-      moduleCount: visibleModules.length,
-      submoduleCount: visibleSubmodules.length,
-    });
+    dispatch(
+      surveyWizardUiActions.setSelectedModuleCounts({
+        moduleCount: visibleModules.length,
+        submoduleCount: visibleSubmodules.length,
+      }),
+    );
   }
 
   useEffect(() => {
     register("submodules");
     dispatch(submodulesActions.clearSubmodules());
     dispatch(fetchModules());
-    setSelectAll({ isChecked: false, run: true });
+    dispatch(
+      surveyWizardUiActions.setSelectAllModules({ isChecked: false, run: true }),
+    );
     register("indicators");
     dispatch(fetchIndicatorAreas());
   }, []);
 
   useEffect(() => {
-    next((proceed, step, setGoToStep) => {
-      debouncedValidation(proceed, step, setGoToStep);
+    next((proceed, step) => {
+      debouncedValidation(proceed, step);
     });
   }, [next, debouncedValidation]);
 
@@ -531,7 +541,9 @@ function Modules({
     const { isChecked, run } = selectAll;
     if (run) {
       selectAllFunc(isChecked);
-      setSelectAll({ isChecked, run: false });
+      dispatch(
+        surveyWizardUiActions.setSelectAllModules({ isChecked, run: false }),
+      );
     }
   }, [selectAll]);
 
@@ -647,7 +659,11 @@ function Modules({
                             submodules={values.submodules}
                             control={control}
                             collapseAll={collapseAllModules}
-                            setCollapseAll={setCollapseAllModules}
+                            setCollapseAll={(val) =>
+                              dispatch(
+                                surveyWizardUiActions.setCollapseAllModules(val),
+                              )
+                            }
                             watchAllFields={watchAllFields}
                           />
                         );
@@ -682,7 +698,13 @@ function Modules({
                               handleIndicatorOnChange={handleIndicatorOnChange}
                               control={control}
                               collapseAll={collapseAllIndicatorAreas}
-                              setCollapseAll={setCollapseAllIndicatorAreas}
+                              setCollapseAll={(val) =>
+                                dispatch(
+                                  surveyWizardUiActions.setCollapseAllIndicatorAreas(
+                                    val,
+                                  ),
+                                )
+                              }
                               watchAllFields={watchAllFields}
                             />
                           ))}
