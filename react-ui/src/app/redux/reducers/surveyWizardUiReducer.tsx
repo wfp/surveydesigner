@@ -50,93 +50,81 @@ const surveyWizardUiSlice = createSlice({
   name: "surveyWizardUi",
   initialState,
   reducers: {
-    setStep: (state, action: PayloadAction<number>) => ({
-      ...state,
-      step: action.payload,
-    }),
-    setPrvsStep: (state, action: PayloadAction<number>) => ({
-      ...state,
-      prvsStep: action.payload,
-    }),
-    setGoToStep: (state, action: PayloadAction<number>) => ({
-      ...state,
-      goToStep: action.payload,
-    }),
-    goToStepSafe: (state, action: PayloadAction<number>) => ({
-      ...state,
-      goToStep: action.payload === state.step ? state.goToStep : action.payload,
-      isValidating:
-        action.payload > state.step && state.step === 1
-          ? true
-          : action.payload === state.step
-            ? state.isValidating
-            : false,
-    }),
-    goNext: (state) => ({
-      ...state,
-      goToStep: state.step + 1,
-      isValidating: state.step === 1 ? true : state.isValidating,
-    }),
-    goPrevious: (state) => ({
-      ...state,
-      goToStep: state.step > 0 ? state.step - 1 : 0,
-    }),
-    setIsValidating: (state, action: PayloadAction<boolean>) => ({
-      ...state,
-      isValidating: action.payload,
-    }),
-    setIsCreatingSurvey: (state, action: PayloadAction<boolean>) => ({
-      ...state,
-      isCreatingSurvey: action.payload,
-    }),
-    setSelectAllModules: (state, action: PayloadAction<CheckboxState>) => ({
-      ...state,
-      selectAllModules: action.payload,
-    }),
-    setSelectAllReview: (state, action: PayloadAction<CheckboxState>) => ({
-      ...state,
-      selectAllReview: action.payload,
-    }),
-    setCollapseAllModules: (state, action: PayloadAction<CheckboxState>) => ({
-      ...state,
-      collapseAllModules: action.payload,
-    }),
+    setStep: (state, action: PayloadAction<number>) => {
+      state.step = action.payload;
+    },
+    setPrvsStep: (state, action: PayloadAction<number>) => {
+      state.prvsStep = action.payload;
+    },
+    setGoToStep: (state, action: PayloadAction<number>) => {
+      state.goToStep = action.payload;
+    },
+    goToStepSafe: (state, action: PayloadAction<number>) => {
+      if (action.payload !== state.step) {
+        state.goToStep = action.payload;
+        state.isValidating =
+          action.payload > state.step && state.step === 1;
+      }
+    },
+    goNext: (state) => {
+      state.goToStep = state.step + 1;
+      if (state.step === 1) {
+        state.isValidating = true;
+      }
+    },
+    goPrevious: (state) => {
+      state.goToStep = state.step > 0 ? state.step - 1 : 0;
+    },
+    setIsValidating: (state, action: PayloadAction<boolean>) => {
+      state.isValidating = action.payload;
+    },
+    setIsCreatingSurvey: (state, action: PayloadAction<boolean>) => {
+      state.isCreatingSurvey = action.payload;
+    },
+    setSelectAllModules: (state, action: PayloadAction<CheckboxState>) => {
+      state.selectAllModules = action.payload;
+    },
+    setSelectAllReview: (state, action: PayloadAction<CheckboxState>) => {
+      state.selectAllReview = action.payload;
+    },
+    setCollapseAllModules: (state, action: PayloadAction<CheckboxState>) => {
+      state.collapseAllModules = action.payload;
+    },
     setCollapseAllIndicatorAreas: (
       state,
       action: PayloadAction<CheckboxState>,
-    ) => ({
-      ...state,
-      collapseAllIndicatorAreas: action.payload,
-    }),
-    setCollapseAllReview: (state, action: PayloadAction<CheckboxState>) => ({
-      ...state,
-      collapseAllReview: action.payload,
-    }),
+    ) => {
+      state.collapseAllIndicatorAreas = action.payload;
+    },
+    setCollapseAllReview: (state, action: PayloadAction<CheckboxState>) => {
+      state.collapseAllReview = action.payload;
+    },
     setSelectedModuleCounts: (
       state,
       action: PayloadAction<{ moduleCount?: number; submoduleCount?: number }>,
-    ) => ({
-      ...state,
-      selectedModuleCounts: action.payload,
-    }),
+    ) => {
+      state.selectedModuleCounts = action.payload;
+    },
     setNumberOfQuestionsToBeGenerated: (
       state,
       action: PayloadAction<number>,
-    ) => ({
-      ...state,
-      numberOfQuestionsToBeGenerated: action.payload,
-    }),
+    ) => {
+      state.numberOfQuestionsToBeGenerated = action.payload;
+    },
     setSelectedSurveyToEdit: (
       state,
       action: PayloadAction<SavedSurvey | null>,
-    ) => ({
-      ...state,
-      selectedSurveyToEdit: action.payload,
-    }),
+    ) => {
+      state.selectedSurveyToEdit = action.payload;
+    },
     resetSurveyWizardUi: () => initialState,
     resetWizardSession: (state) => ({
       ...initialState,
       isCreatingSurvey: state.isCreatingSurvey,
+    }),
+    resetToSurveyList: () => ({
+      ...initialState,
+      isCreatingSurvey: false,
     }),
   },
 });
@@ -147,4 +135,3 @@ export const selectSurveyWizardUi = (state: RootState) => state.surveyWizardUi;
 export const selectWizardStep = (state: RootState) => state.surveyWizardUi.step;
 export const selectWizardCanGoNext = (state: RootState) =>
   state.surveyWizardUi.isCreatingSurvey && state.surveyWizardUi.step < 3;
-
