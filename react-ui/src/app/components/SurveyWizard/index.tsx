@@ -64,19 +64,8 @@ function SurveyWizard() {
       isOpen: false,
     });
   const surveyForm = useAppSelector((state) => state.surveyForm);
-  const {
-    step,
-    prvsStep,
-    goToStep,
-    isCreatingSurvey,
-    selectAllModules,
-    selectAllReview,
-    collapseAllModules,
-    collapseAllIndicatorAreas,
-    collapseAllReview,
-    numberOfQuestionsToBeGenerated,
-    selectedSurveyToEdit,
-  } = useAppSelector((state) => state.surveyWizardUi);
+  const { step, goToStep, isCreatingSurvey, selectedSurveyToEdit } =
+    useAppSelector((state) => state.surveyWizardUi);
 
   const savedSurveys = useAppSelector((state) => state.savedSurveys);
   const initialRequest = useAppSelector(
@@ -91,6 +80,16 @@ function SurveyWizard() {
   };
 
   const paths = ["survey", "modules", "review", "generate"];
+
+  // Refs for stale closure prevention in `next` callback
+  const stepRef = useRef(step);
+  const goToStepRef = useRef(goToStep);
+  useEffect(() => {
+    stepRef.current = step;
+  }, [step]);
+  useEffect(() => {
+    goToStepRef.current = goToStep;
+  }, [goToStep]);
 
   useEffect(() => {
     // If a copiedSurvey is present in navigation state, use it directly
@@ -116,22 +115,31 @@ function SurveyWizard() {
               dispatch(surveyWizardUiActions.setIsCreatingSurvey(true));
             }
           }
+        } else {
+          const data = res?.payload;
+          if (Array.isArray(data) && data.length > 0) {
+            dispatch(surveyWizardUiActions.setIsCreatingSurvey(false));
+          }
         }
       });
       dispatch(savedSurveysActions.completeInitialRequest());
     }
   }, []);
+
   const next: PrevNextStepCallback = useCallback(
     (nextCallback, prevCallback) => {
-      if (step !== goToStep) {
+      const currentStep = stepRef.current;
+      const currentGoToStep = goToStepRef.current;
+
+      if (currentStep !== currentGoToStep) {
         const proceed = () => {
-          dispatch(surveyWizardUiActions.setStep(goToStep));
-          navigate(`/design/${paths[goToStep]}`);
+          dispatch(surveyWizardUiActions.setStep(currentGoToStep));
+          navigate(`/design/${paths[currentGoToStep]}`);
         };
 
-        if (goToStep > step) {
+        if (currentGoToStep > currentStep) {
           if (nextCallback) {
-            nextCallback(proceed, step, setGoToStepAction);
+            nextCallback(proceed, currentStep);
           } else {
             proceed();
           }
@@ -142,10 +150,10 @@ function SurveyWizard() {
           dispatch(surveyWizardUiActions.setIsValidating(false));
         }
 
-        dispatch(surveyWizardUiActions.setPrvsStep(step));
+        dispatch(surveyWizardUiActions.setPrvsStep(currentStep));
       }
     },
-    [dispatch, goToStep, navigate, step],
+    [dispatch, navigate],
   );
 
   useEffect(() => {
@@ -161,11 +169,9 @@ function SurveyWizard() {
   const sidebar = <StepNavigationWrapper />;
 
   function resetSurveyData() {
-    dispatch(fetchSavedSurveys({}));
-    dispatch(surveyWizardUiActions.setSelectedSurveyToEdit(null));
-    dispatch(surveyWizardUiActions.resetWizardSession());
-    dispatch(surveyWizardUiActions.setIsCreatingSurvey(false));
+    dispatch(surveyWizardUiActions.resetToSurveyList());
     dispatch(surveyFormActions.resetSurveyData({}));
+    dispatch(fetchSavedSurveys({}));
   }
 
   function isSavedSurveyActionSuccess(
@@ -217,62 +223,6 @@ function SurveyWizard() {
     mode: surveyForm.mode,
     attributes: surveyForm.attributes,
   };
-  const setGoToStepAction: React.Dispatch<React.SetStateAction<number>> =
-    useCallback(
-      (value) => {
-        const nextValue = typeof value === "function" ? value(goToStep) : value;
-        dispatch(surveyWizardUiActions.setGoToStep(nextValue));
-      },
-      [dispatch, goToStep],
-    );
-  const setSelectedModuleCountsAction = useCallback(
-    (value: { moduleCount?: number; submoduleCount?: number }) => {
-      dispatch(surveyWizardUiActions.setSelectedModuleCounts(value));
-    },
-    [dispatch],
-  );
-  const setSelectAllModulesAction = useCallback(
-    (value) => {
-      dispatch(surveyWizardUiActions.setSelectAllModules(value));
-    },
-    [dispatch],
-  );
-  const setCollapseAllModulesAction = useCallback(
-    (value) => {
-      dispatch(surveyWizardUiActions.setCollapseAllModules(value));
-    },
-    [dispatch],
-  );
-  const setCollapseAllIndicatorAreasAction = useCallback(
-    (value) => {
-      dispatch(surveyWizardUiActions.setCollapseAllIndicatorAreas(value));
-    },
-    [dispatch],
-  );
-  const setIsValidatingAction = useCallback(
-    (value: boolean) => {
-      dispatch(surveyWizardUiActions.setIsValidating(value));
-    },
-    [dispatch],
-  );
-  const setSelectAllReviewAction = useCallback(
-    (value) => {
-      dispatch(surveyWizardUiActions.setSelectAllReview(value));
-    },
-    [dispatch],
-  );
-  const setCollapseAllReviewAction = useCallback(
-    (value) => {
-      dispatch(surveyWizardUiActions.setCollapseAllReview(value));
-    },
-    [dispatch],
-  );
-  const setNumberOfQuestionsToBeGeneratedAction = useCallback(
-    (value: number) => {
-      dispatch(surveyWizardUiActions.setNumberOfQuestionsToBeGenerated(value));
-    },
-    [dispatch],
-  );
 
   const surveyTableRef = useRef<{ clearFilters: () => void }>(null);
   useEffect(() => {
@@ -380,39 +330,8 @@ function SurveyWizard() {
             <ModulesProvider>
               <ModuleBody className="survey-content">
                 {step === 0 && step0Content}
-                {step === 1 && (
-                  <Modules
-                    next={next}
-                    selectAll={selectAllModules}
-                    setSelectAll={setSelectAllModulesAction}
-                    collapseAllModules={collapseAllModules}
-                    setCollapseAllModules={setCollapseAllModulesAction}
-                    collapseAllIndicatorAreas={collapseAllIndicatorAreas}
-                    setCollapseAllIndicatorAreas={setCollapseAllIndicatorAreasAction}
-                    selectedSurveyToEdit={selectedSurveyToEdit}
-                    {...{
-                      prvsStep,
-                      step,
-                      setSelectedModuleCounts: setSelectedModuleCountsAction,
-                    }}
-                    setIsValidating={setIsValidatingAction}
-                  />
-                )}
-                {step === 2 && (
-                  <Review
-                    next={next}
-                    selectAll={selectAllReview}
-                    setSelectAll={setSelectAllReviewAction}
-                    collapseAll={collapseAllReview}
-                    setCollapseAll={setCollapseAllReviewAction}
-                    selectedSurveyToEdit={selectedSurveyToEdit}
-                    {...{
-                      numberOfQuestionsToBeGenerated,
-                      setNumberOfQuestionsToBeGenerated:
-                        setNumberOfQuestionsToBeGeneratedAction,
-                    }}
-                  />
-                )}
+                {step === 1 && <Modules next={next} />}
+                {step === 2 && <Review next={next} />}
                 {step === 3 && <Generate next={next} />}
               </ModuleBody>
             </ModulesProvider>
