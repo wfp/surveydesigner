@@ -1,13 +1,8 @@
 import { AxiosError } from "axios";
-import { Dispatch, SetStateAction } from "react";
 import { Indicator, IndicatorArea } from "./api";
 
 interface StepCallback {
-  (
-    proceed?: () => void,
-    step?: number,
-    setStep?: Dispatch<SetStateAction<number>>
-  ): void;
+  (proceed?: () => void, step?: number): void;
 }
 
 export interface PrevNextStepCallback {
