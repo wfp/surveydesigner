@@ -1435,7 +1435,7 @@ class SubQuestionProxyTranslationInline(FormFieldOverridesMixin, admin.TabularIn
 
 
 @admin.register(SubQuestionProxy)
-class SubQuestionProxyAdmin(admin.ModelAdmin, RequestUserFormMixin):
+class SubQuestionProxyAdmin(RequestUserFormMixin, admin.ModelAdmin):
     form = SubQuestionProxyForm
     exclude = (
         "created_by",
@@ -1461,8 +1461,17 @@ class SubQuestionProxyAdmin(admin.ModelAdmin, RequestUserFormMixin):
     def save_model(self, request, obj, form, change):
         pass
 
+    def save_form(self, request, form, change):
+        form.user = request.user
+        saved_object = form.save(commit=False)
+        form.sub_questions_created, form.root_questions = saved_object
+        return saved_object
+
     def _create_translations(self, sub_questions, translation_data):
         translations = {}
+        if not sub_questions:
+            return translations
+
         for sub_question in sub_questions:
             translations[sub_question] = []
             for data in translation_data:
@@ -1480,7 +1489,8 @@ class SubQuestionProxyAdmin(admin.ModelAdmin, RequestUserFormMixin):
         for formset in formsets:
             if isinstance(formset, SubQuestionProxyTranslationFormset):
                 translation_map = self._create_translations(
-                    formset._sub_questions, formset.cleaned_data
+                    getattr(form, "sub_questions_created", formset._sub_questions),
+                    formset.cleaned_data,
                 )
                 formset._created_translations = translation_map
 
