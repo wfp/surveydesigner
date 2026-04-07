@@ -9,6 +9,7 @@ import {
 } from "../../../redux/reducers/surveyWizardUiReducer";
 import { useAppDispatch, useAppSelector } from "../../../redux/store";
 import { SurveyWizardPreviousButton } from "./SurveyWizardPreviousButton";
+import { WIZARD_STEPS_COUNT } from "../hooks/useWizardSteps";
 
 export function SurveyWizardFooter({
   onPreviousClick,
@@ -24,7 +25,7 @@ export function SurveyWizardFooter({
   const { step, isCreatingSurvey, isValidating } = useAppSelector(
     selectSurveyWizardUi,
   );
-  const stepsCount = 4;
+  const stepsCount = WIZARD_STEPS_COUNT;
 
   return (
     <ModuleFooter>
