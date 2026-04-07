@@ -7,6 +7,7 @@ from core.admin import (
     AdminUserTrackingMixin,
     CollationSafeSearchAdminMixin,
     FormFieldOverridesMixin,
+    SafeDynamicRawIDMixin,
 )
 from core.forms import TranslationForm
 from core.utils import get_model_admin_base_url
@@ -24,7 +25,6 @@ from django.templatetags.static import static
 from django.utils.html import format_html, format_html_join
 from django.utils.translation import ngettext
 from django.views.generic import RedirectView
-from dynamic_raw_id.admin import DynamicRawIDMixin
 from modules.models import Indicator, Module, Submodule
 from organization.mixins import (
     ChangeFormOrganizationsDisplayMixin,
@@ -393,7 +393,7 @@ class RootQuestionAdmin(
     ChangeFormOrganizationsDisplayMixin,
     RequestUserFormMixin,
     AdminUserTrackingMixin,
-    DynamicRawIDMixin,
+    SafeDynamicRawIDMixin,
     FormFieldOverridesMixin,
     nested_admin.NestedModelAdmin,
 ):
@@ -751,7 +751,7 @@ class SubQuestionAdmin(
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,
-    DynamicRawIDMixin,
+    SafeDynamicRawIDMixin,
     FormFieldOverridesMixin,
     nested_admin.NestedModelAdmin,
 ):
@@ -1532,7 +1532,7 @@ class RepeatSectionAdmin(
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,
-    DynamicRawIDMixin,
+    SafeDynamicRawIDMixin,
     FormFieldOverridesMixin,
     nested_admin.NestedModelAdmin,
 ):
