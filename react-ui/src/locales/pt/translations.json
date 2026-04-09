@@ -33,7 +33,19 @@
         "link": "www.wfp.org",
         "version": "ver.",
         "wfp": "Programa Alimentar Mundial",
-        "description": "O Programa Alimentar Mundial das Nações Unidas - salvando vidas em emergências\ne mudar vidas de milhões de pessoas através do desenvolvimento sustentável. PMA\ntrabalha em mais de 80 países ao redor do mundo, alimentando pessoas\napanhados em conflitos e catástrofes, e lançando as bases para uma\nfuturo melhor."
+        "description": "O Programa Alimentar Mundial das Nações Unidas - salvando vidas em emergências\ne mudar vidas de milhões de pessoas através do desenvolvimento sustentável. PMA\ntrabalha em mais de 80 países ao redor do mundo, alimentando pessoas\napanhados em conflitos e catástrofes, e lançando as bases para uma\nfuturo melhor.",
+        "productHeading": "Produto",
+        "overview": "Visão geral",
+        "documentation": "Documentação",
+        "releaseNotes": "Notas de versão",
+        "supportHeading": "Suporte",
+        "contactTeam": "Contatar equipe",
+        "faq": "Perguntas frequentes",
+        "serviceStatus": "Status do serviço",
+        "wfpHeading": "Programa Alimentar Mundial",
+        "wfpOrg": "wfp.org",
+        "emergencies": "Emergências",
+        "aboutWfp": "Sobre o PMA"
     },
     "generate": {
         "title": "GERAR UMA PESQUISA",

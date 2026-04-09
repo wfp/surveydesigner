@@ -33,7 +33,19 @@
         "link": "Wfp.org",
         "version": "ver.",
         "wfp": "Programme Alimentaire Mondial",
-        "description": "Le Programme alimentaire mondial des Nations Unies – sauver des vies en cas d'urgence\net changer la vie de millions de personnes grâce au développement durable. PAM\ntravaille dans plus de 80 pays à travers le monde, nourrissant les gens\npris dans des conflits et des catastrophes, et jeter les bases d'un\nMeilleur futur."
+        "description": "Le Programme alimentaire mondial des Nations Unies – sauver des vies en cas d'urgence\net changer la vie de millions de personnes grâce au développement durable. PAM\ntravaille dans plus de 80 pays à travers le monde, nourrissant les gens\npris dans des conflits et des catastrophes, et jeter les bases d'un\nMeilleur futur.",
+        "productHeading": "Produit",
+        "overview": "Aperçu",
+        "documentation": "Documentation",
+        "releaseNotes": "Notes de version",
+        "supportHeading": "Support",
+        "contactTeam": "Contacter l'équipe",
+        "faq": "Questions fréquemment posées",
+        "serviceStatus": "État du service",
+        "wfpHeading": "Programme Alimentaire Mondial",
+        "wfpOrg": "wfp.org",
+        "emergencies": "Urgences",
+        "aboutWfp": "À propos du PAM"
     },
     "generate": {
         "title": "GÉNÉRER UNE ENQUÊTE",

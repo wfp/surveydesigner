@@ -16,63 +16,61 @@ function Footer() {
       <WFPFooter pageWidth="full">
         <div className={styles.footerInner}>
           <div>
-            <h3 className={styles.footerHeading}>Survey Designer</h3>
+            <h3 className={styles.footerHeading}>{t("landingPage.title")}</h3>
             <p className={styles.footerText}>
-              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla
-              facilisi. Vestibulum non orci risus, sit amet tincidunt dui.
+              {t("footer.description")}
             </p>
           </div>
           <div>
-            <h3 className={styles.footerHeading}>Product</h3>
+            <h3 className={styles.footerHeading}>{t("footer.productHeading")}</h3>
             <ul className={styles.footerList}>
               <li className={styles.footerListItem}>
                 <Link href="#about">
-                  <FontAwesomeIcon icon={faBook} /> Overview
+                  <FontAwesomeIcon icon={faBook} /> {t("footer.overview")}
                 </Link>
               </li>
               <li className={styles.footerListItem}>
-                <Link href="#">Documentation</Link>
+                <Link href="#">{t("footer.documentation")}</Link>
               </li>
               <li className={styles.footerListItem}>
-                <Link href="#">Release notes</Link>
+                <Link href="#">{t("footer.releaseNotes")}</Link>
               </li>
             </ul>
           </div>
           <div>
-            <h3 className={styles.footerHeading}>Support</h3>
+            <h3 className={styles.footerHeading}>{t("footer.supportHeading")}</h3>
             <ul className={styles.footerList}>
               <li className={styles.footerListItem}>
                 <Link href="#">
-                  <FontAwesomeIcon icon={faEnvelope} /> Contact team
+                  <FontAwesomeIcon icon={faEnvelope} /> {t("footer.contactTeam")}
                 </Link>
               </li>
               <li className={styles.footerListItem}>
                 <Link href="#">
-                  <FontAwesomeIcon icon={faCircleQuestion} /> Frequently asked
-                  questions
+                  <FontAwesomeIcon icon={faCircleQuestion} /> {t("footer.faq")}
                 </Link>
               </li>
               <li className={styles.footerListItem}>
-                <Link href="#">Service status</Link>
+                <Link href="#">{t("footer.serviceStatus")}</Link>
               </li>
             </ul>
           </div>
           <div>
-            <h3 className={styles.footerHeading}>World Food Programme</h3>
+            <h3 className={styles.footerHeading}>{t("footer.wfpHeading")}</h3>
             <ul className={styles.footerList}>
               <li className={styles.footerListItem}>
                 <Link href="https://www.wfp.org" target="_blank">
-                  wfp.org
+                  {t("footer.wfpOrg")}
                 </Link>
               </li>
               <li className={styles.footerListItem}>
                 <Link href="https://www.wfp.org/emergencies" target="_blank">
-                  Emergencies
+                  {t("footer.emergencies")}
                 </Link>
               </li>
               <li className={styles.footerListItem}>
                 <Link href="https://www.wfp.org/about" target="_blank">
-                  About WFP
+                  {t("footer.aboutWfp")}
                 </Link>
               </li>
             </ul>

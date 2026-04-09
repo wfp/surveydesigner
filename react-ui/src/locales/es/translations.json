@@ -33,7 +33,19 @@
         "link": "Wfp.org",
         "version": "ver.",
         "wfp": "Programa Mundial de Alimentos",
-        "description": "El Programa Mundial de Alimentos de las Naciones Unidas: salvar vidas en situaciones de emergencia\ny cambiar la vida de millones de personas mediante el desarrollo sostenible. PMA\nTrabaja en más de 80 países alrededor del mundo, alimentando a las personas.\natrapados en conflictos y desastres, y sentando las bases para una\nUn futuro mejor."
+        "description": "El Programa Mundial de Alimentos de las Naciones Unidas: salvar vidas en situaciones de emergencia\ny cambiar la vida de millones de personas mediante el desarrollo sostenible. PMA\nTrabaja en más de 80 países alrededor del mundo, alimentando a las personas.\natrapados en conflictos y desastres, y sentando las bases para una\nUn futuro mejor.",
+        "productHeading": "Producto",
+        "overview": "Resumen",
+        "documentation": "Documentación",
+        "releaseNotes": "Notas de la versión",
+        "supportHeading": "Soporte",
+        "contactTeam": "Contactar al equipo",
+        "faq": "Preguntas frecuentes",
+        "serviceStatus": "Estado del servicio",
+        "wfpHeading": "Programa Mundial de Alimentos",
+        "wfpOrg": "wfp.org",
+        "emergencies": "Emergencias",
+        "aboutWfp": "Acerca del PMA"
     },
     "generate": {
         "title": "GENERAR UNA ENCUESTA",
