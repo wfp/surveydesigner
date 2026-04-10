@@ -42,6 +42,9 @@ class SavedSurvey(TimestampMixin):
     attributes = models.ManyToManyField(
         "surveys.SurveyAttribute", related_name="saved_surveys", blank=True
     )
+    modules_order = models.JSONField(default=list, blank=True)
+    indicator_areas_order = models.JSONField(default=list, blank=True)
+    indicators_order = models.JSONField(default=dict, blank=True)
     languages = models.JSONField(
         null=True, blank=True, help_text="Select multiple languages"
     )

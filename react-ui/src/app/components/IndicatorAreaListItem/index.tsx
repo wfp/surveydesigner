@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Draggable, Droppable } from "react-beautiful-dnd";
 
 import { Link, List, ListItem, Tooltip } from "@wfp/react";
@@ -30,21 +30,9 @@ function IndicatorAreaListItem({
   const [expanded, setExpanded] = useState(
     !modulesData.current.collapsed.has(indicatorArea.id),
   );
-  const indicatorsData = useRef(
-    [...indicatorArea.indicators].sort(
-      getCompareFunction(
-        modulesData.current.indicators_order[indicatorArea.id],
-      ),
-    ),
+  const sortedIndicators = [...indicatorArea.indicators].sort(
+    getCompareFunction(modulesData.current.indicators_order[indicatorArea.id] || []),
   );
-
-  useEffect(() => {
-    indicatorsData.current = [...indicatorArea.indicators].sort(
-      getCompareFunction(
-        modulesData.current.indicators_order[indicatorArea.id],
-      ),
-    );
-  }, [modulesData]);
   function saveAndSetExpanded(newExpanded: boolean) {
     if (newExpanded) {
       modulesData.current.collapsed.delete(indicatorArea.id);
@@ -173,7 +161,7 @@ function IndicatorAreaListItem({
                     ref={indicatorProvided.innerRef}
                     {...indicatorProvided.droppableProps}
                   >
-                    {indicatorsData.current.map((indicator, indicatorIndex) => (
+                    {sortedIndicators.map((indicator, indicatorIndex) => (
                       <IndicatorList
                         key={indicator.id}
                         {...{

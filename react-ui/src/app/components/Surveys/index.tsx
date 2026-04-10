@@ -83,9 +83,15 @@ function Surveys({
       survey_mode: mode,
       attributes,
       organizations,
+      indicators,
+      modules_order,
+      submodules,
+      submodules_order,
+      indicator_areas_order,
+      indicators_order,
+      languages,
     } = selectedSurveyToEdit;
 
-    // Do not need to add Submodules / Subquestions / Indicators / Languages as they are not present in this form.
     return {
       name,
       category: category && {
@@ -101,6 +107,14 @@ function Surveys({
         organizations.map((organization) =>
           convertSavedObjectToSurveyFormObject(organization, "name"),
         ),
+      indicators: indicators || [],
+      modules_order: modules_order || [],
+      submodules: submodules || [],
+      submodules_order: submodules_order || [],
+      indicator_areas_order: indicator_areas_order || [],
+      indicators_order: indicators_order || {},
+      languages: languages || [],
+      sub_questions: [],
     } as unknown as SurveyFormState;
   }
 

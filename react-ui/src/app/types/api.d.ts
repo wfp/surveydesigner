@@ -1260,6 +1260,12 @@ export interface SavedSurvey {
    * @type {Array<number>}
    * @memberof SavedSurvey
    */
+  modules_order: Array<number>;
+  /**
+   *
+   * @type {Array<number>}
+   * @memberof SavedSurvey
+   */
   submodules: Array<number>;
   /**
    *
@@ -1273,6 +1279,18 @@ export interface SavedSurvey {
    * @memberof SurveyTypes
    */
   attributes: Array<SurveyAttribute>;
+  /**
+   *
+   * @type {Array<number>}
+   * @memberof SavedSurvey
+   */
+  indicator_areas_order: Array<number>;
+  /**
+   *
+   * @type {{ [key: string]: Array<number>; }}
+   * @memberof SavedSurvey
+   */
+  indicators_order: { [key: string]: Array<number> };
   /**
    *
    * @type {Array<number>}

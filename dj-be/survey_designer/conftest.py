@@ -7,6 +7,7 @@ from django.core.files import File
 from django.test import Client, RequestFactory
 from modules.models import (
     Indicator,
+    IndicatorArea,
     IndicatorMapping,
     IndicatorMappingSurveyMode,
     IndicatorMappingSurveyType,
@@ -703,12 +704,22 @@ def xls_form_data(root_question_1, root_question_2, calculation_1, repeat_sectio
 def saved_survey_1(
     organization_1, admin, indicator_1, submodule_1, submodule_2, survey_type_1
 ):
+    indicator_area = IndicatorArea.objects.create(
+        name="SavedSurveyArea1",
+        label="Saved Survey Area 1",
+    )
+    indicator_1.indicator_area = indicator_area
+    indicator_1.save()
+
     saved_survey = SavedSurvey.objects.create(
         owner=admin,
         name="SavedSurvey1",
         survey_type=None,
         survey_mode=None,
         survey_category=None,
+        modules_order=[submodule_2.module_id, submodule_1.module_id],
+        indicator_areas_order=[indicator_area.id],
+        indicators_order={str(indicator_area.id): [indicator_1.id]},
     )
     saved_survey.organizations.set([organization_1])
     saved_survey.indicators.set([indicator_1])

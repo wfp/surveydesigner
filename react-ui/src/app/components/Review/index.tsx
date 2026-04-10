@@ -245,9 +245,12 @@ function Review({
     next((proceed) => {
       handleSubmit((data) => {
         data.submodules = getOrderedSubmodules(surveyForm, modulesData);
+        data.modules_order = [...modulesData.current.modules_order];
         data.submodules_order = modulesData.current.modules_order.flatMap(
           (moduleId) => modulesData.current.submodules_order[moduleId],
         );
+        data.indicator_areas_order = [...modulesData.current.indicator_areas_order];
+        data.indicators_order = { ...modulesData.current.indicators_order };
         data.sub_questions = subQuestions;
         dispatch(surveyFormActions.setSurveyData(data));
         proceed?.();

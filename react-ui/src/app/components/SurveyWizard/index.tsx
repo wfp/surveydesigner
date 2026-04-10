@@ -119,6 +119,7 @@ function SurveyWizard() {
 
   const [numberOfQuestionsToBeGenerated, setNumberOfQuestionsToBeGenerated] =
     useState(0);
+  const [modulesContextKey, setModulesContextKey] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
   const state = (location.state || {}) as {
@@ -189,6 +190,7 @@ function SurveyWizard() {
     // If a copiedSurvey is present in navigation state, use it directly
     if (state && state.copiedSurvey) {
       setSelectedSurveyToEdit(state.copiedSurvey);
+      setModulesContextKey((value) => value + 1);
       setIsCreatingSurvey(true);
       return;
     }
@@ -202,6 +204,7 @@ function SurveyWizard() {
             );
             if (selectedSurveyFromCopy) {
               setSelectedSurveyToEdit(selectedSurveyFromCopy);
+              setModulesContextKey((value) => value + 1);
               setIsCreatingSurvey(true);
             }
           }
@@ -270,6 +273,7 @@ function SurveyWizard() {
     setGoToStep(0);
     setIsCreatingSurvey(false);
     setSelectedSurveyToEdit(null);
+    setModulesContextKey((value) => value + 1);
     dispatch(surveyFormActions.resetSurveyData({}));
   }
 
@@ -376,6 +380,7 @@ function SurveyWizard() {
                   )
                 : null;
             setIsCreatingSurvey(true);
+            setModulesContextKey((value) => value + 1);
             setSelectedSurveyToEdit(survey || null);
           },
           delete: (surveyID: number) => {
@@ -635,7 +640,7 @@ function SurveyWizard() {
                 )}
               </div>
             </ModuleHeader>
-            <ModulesProvider>
+            <ModulesProvider key={modulesContextKey}>
               <ModuleBody className="survey-content">
                 {step === 0 && step0Content}
                 {step === 1 && (
@@ -703,6 +708,9 @@ function SurveyWizard() {
                         kind="secondary"
                         onClick={() => {
                           setIsCreatingSurvey(true);
+                          setSelectedSurveyToEdit(null);
+                          dispatch(surveyFormActions.resetSurveyData({}));
+                          setModulesContextKey((value) => value + 1);
                           if (
                             surveyTableRef &&
                             surveyTableRef.current &&
