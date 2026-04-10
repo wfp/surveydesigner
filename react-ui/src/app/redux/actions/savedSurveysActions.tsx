@@ -71,9 +71,12 @@ const getDataForSave = (timestamp: string, surveyForm: SurveyFormState) => ({
   survey_category: surveyForm.category ? surveyForm.category.id : null,
   survey_mode: surveyForm.mode ? surveyForm.mode.id : null,
   indicators: surveyForm.indicators,
+  modules_order: surveyForm.modules_order,
   submodules: surveyForm.submodules,
   attributes: surveyForm.attributes,
   languages: surveyForm.languages,
+  indicator_areas_order: surveyForm.indicator_areas_order,
+  indicators_order: surveyForm.indicators_order,
   subquestions: formatSubQuestions(surveyForm.sub_questions),
   submodules_order: surveyForm.submodules_order,
 });

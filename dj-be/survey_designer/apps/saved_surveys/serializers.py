@@ -66,9 +66,12 @@ class SavedSurveysReadSerializer(serializers.ModelSerializer):
             "survey_mode",
             "indicators",
             "submodules",
+            "modules_order",
             "submodules_order",
             "subquestion_submodule_mapping",
             "attributes",
+            "indicator_areas_order",
+            "indicators_order",
             "languages",
             "created_at",
             "updated_at",
@@ -81,6 +84,16 @@ class SavedSurveysWriteSerializer(serializers.ModelSerializer):
     subquestions = serializers.JSONField(required=False)
     submodules_order = serializers.PrimaryKeyRelatedField(
         many=True, queryset=Submodule.objects.all(), required=False
+    )
+    modules_order = serializers.ListField(
+        child=serializers.IntegerField(), required=False
+    )
+    indicator_areas_order = serializers.ListField(
+        child=serializers.IntegerField(), required=False
+    )
+    indicators_order = serializers.DictField(
+        child=serializers.ListField(child=serializers.IntegerField()),
+        required=False,
     )
 
     class Meta:
@@ -97,8 +110,11 @@ class SavedSurveysWriteSerializer(serializers.ModelSerializer):
             "subquestions",
             "indicators",
             "submodules",
+            "modules_order",
             "submodules_order",
             "attributes",
+            "indicator_areas_order",
+            "indicators_order",
             "languages",
             "created_at",
             "updated_at",
@@ -129,28 +145,35 @@ class SavedSurveysWriteSerializer(serializers.ModelSerializer):
         return saved_survey
 
     def update(self, instance, validated_data):
-        subquestion_mappings_data = validated_data.pop("subquestions", {})
-        submodules_order = validated_data.get("submodules_order", [])
+        missing = serializers.empty
+        subquestion_mappings_data = validated_data.pop("subquestions", missing)
+        submodules_order = validated_data.pop("submodules_order", missing)
         instance = super().update(instance, validated_data)
-        subquestion_mappings = SubQuestionSubmodule.objects.filter(
-            saved_survey=instance
-        )
-        subquestion_mappings.delete()
-        for submodule_id, subquestion_ids in subquestion_mappings_data.items():
-            submodule = Submodule.objects.get(id=submodule_id)
-            for subquestion_id in subquestion_ids:
-                subquestion = SubQuestion.objects.get(id=subquestion_id)
-                SubQuestionSubmodule.objects.create(
-                    saved_survey=instance, submodule=submodule, subquestion=subquestion
-                )
 
-        # set the order of the submodules
-        submodules_order_mapping = SubModuleOrder.objects.filter(saved_survey=instance)
-        submodules_order_mapping.delete()
-        for order, submodule in enumerate(submodules_order):
-            SubModuleOrder.objects.create(
-                saved_survey=instance, submodule=submodule, order=order
+        if subquestion_mappings_data is not missing:
+            subquestion_mappings = SubQuestionSubmodule.objects.filter(
+                saved_survey=instance
             )
+            subquestion_mappings.delete()
+            for submodule_id, subquestion_ids in subquestion_mappings_data.items():
+                submodule = Submodule.objects.get(id=submodule_id)
+                for subquestion_id in subquestion_ids:
+                    subquestion = SubQuestion.objects.get(id=subquestion_id)
+                    SubQuestionSubmodule.objects.create(
+                        saved_survey=instance,
+                        submodule=submodule,
+                        subquestion=subquestion,
+                    )
+
+        if submodules_order is not missing:
+            submodules_order_mapping = SubModuleOrder.objects.filter(
+                saved_survey=instance
+            )
+            submodules_order_mapping.delete()
+            for order, submodule in enumerate(submodules_order):
+                SubModuleOrder.objects.create(
+                    saved_survey=instance, submodule=submodule, order=order
+                )
 
         return instance
 

@@ -1,4 +1,4 @@
-import React, { ChangeEvent, useEffect, useRef, useState } from "react";
+import React, { ChangeEvent, useEffect, useState } from "react";
 import { Draggable, Droppable } from "react-beautiful-dnd";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -34,10 +34,8 @@ function ModuleListItem({
   const [expanded, setExpanded] = useState(
     !modulesData.current.collapsed.has(module.id),
   );
-  const submodulesData = useRef(
-    [...module.submodules].sort(
-      getCompareFunction(modulesData.current.submodules_order[module.id]),
-    ),
+  const sortedSubmodules = [...module.submodules].sort(
+    getCompareFunction(modulesData.current.submodules_order[module.id] || []),
   );
   const indicators = useAppSelector((state) => state.indicators.data || []);
   const selectedIndicatorIDs =
@@ -55,7 +53,7 @@ function ModuleListItem({
       indicator?.submodules.map((submodule) => submodule.id),
     ) || [],
   );
-  const selectedIndicatorSubmoduleIdMap = submodulesData.current
+  const selectedIndicatorSubmoduleIdMap = sortedSubmodules
     .map((submodule) => submodule.id)
     .reduce(
       (acc, cur) => ({
@@ -69,7 +67,7 @@ function ModuleListItem({
       {} as Record<number, string[]>,
     );
 
-  const selectedIndicatorMatchingSubmoduleIdMap = submodulesData.current.reduce(
+  const selectedIndicatorMatchingSubmoduleIdMap = sortedSubmodules.reduce(
     (acc, submodule) => {
       acc[submodule.id] = selectedIndicators
         .filter((indicator) =>
@@ -214,7 +212,7 @@ function ModuleListItem({
                     ref={submoduleProvided.innerRef}
                     {...submoduleProvided.droppableProps}
                   >
-                    {submodulesData.current.map((submodule, submoduleIndex) => (
+                    {sortedSubmodules.map((submodule, submoduleIndex) => (
                       <SubmoduleListItem
                         key={submodule.id}
                         isSelectedByIndicator={submoduleSelectedByIndicator(

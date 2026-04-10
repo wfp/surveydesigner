@@ -27,6 +27,12 @@ import IndicatorAreaListItem from "../IndicatorAreaListItem";
 import { useModules } from "../../contexts/ModulesContext";
 import { getCompareFunction } from "../../utils";
 import { apiValidation, getErrorDisplay } from "./utils";
+import {
+  deriveModuleOrderFromSubmodulesOrder,
+  getFirstDefinedNestedOrder,
+  getFirstDefinedOrder,
+  mergeOrderedIds,
+} from "./ordering";
 import { fetchIndicatorAreas } from "../../redux/actions/indicatorAreasActions";
 import { Indicator, Module, Submodule } from "../../types/api";
 import { ModulesProps } from "./Modules.interface";
@@ -75,12 +81,21 @@ function Modules({
   const [sortedIndicatorAreas, setSortedIndicatorAreas] = useState<
     IndicatorAreaWithIndicators[]
   >([]);
-  const [refreshKey, setRefreshKey] = useState(new Date().valueOf());
   const watchAllFields = watch();
   const values = {
     submodules: watchAllFields.submodules || [],
     indicators: watchAllFields.indicators || [],
   };
+  const hasSavedOrSessionState =
+    !!selectedSurveyToEdit ||
+    surveyForm.modules_order.length > 0 ||
+    surveyForm.submodules_order.length > 0 ||
+    surveyForm.indicator_areas_order.length > 0 ||
+    Object.keys(surveyForm.indicators_order || {}).length > 0;
+
+  function isVisibleSubmodule(submodule: Submodule) {
+    return submodule.is_active || surveyForm.submodules.includes(submodule.id);
+  }
   function handleIndicatorOnChange(
     checked: boolean,
     clickedIndicator: Indicator,
@@ -139,11 +154,19 @@ function Modules({
           if (result.ok) {
             const orderedData = {
               ...data,
+              modules_order: [...modules_order],
               // eslint-disable-next-line camelcase
               submodules: modules_order
                 // eslint-disable-next-line camelcase
                 .flatMap((modId) => submodules_order[modId])
                 .filter((subId) => data.submodules.includes(subId)),
+              indicator_areas_order: [
+                ...modulesData.current.indicator_areas_order,
+              ],
+              indicators_order: { ...modulesData.current.indicators_order },
+              submodules_order: modules_order.flatMap(
+                (modId) => submodules_order[modId],
+              ),
             };
             dispatch(surveyFormActions.setSurveyData(orderedData));
             proceed?.();
@@ -196,11 +219,7 @@ function Modules({
       checked && data
         ? data
             .flatMap((module) =>
-              module.submodules.filter(
-                (submodule) =>
-                  submodule.is_active ||
-                  selectedSurveyToEdit?.submodules?.includes(submodule.id),
-              ),
+              module.submodules.filter((submodule) => isVisibleSubmodule(submodule)),
             )
             .map((submodule) => submodule.id)
         : [];
@@ -279,6 +298,7 @@ function Modules({
 
       newOrder[moduleID] = newIndicatorOrder;
       modulesData.current.indicators_order = newOrder;
+      setSortedIndicatorAreas([...sortedIndicatorAreas]);
     } else {
       const newSubmodulesOrder = [
         ...modulesData.current.submodules_order[moduleID],
@@ -292,7 +312,7 @@ function Modules({
 
       newOrder[moduleID] = newSubmodulesOrder;
       modulesData.current.submodules_order = newOrder;
-      setRefreshKey(new Date().valueOf());
+      setSortedModules([...sortedModules]);
     }
   };
 
@@ -309,10 +329,7 @@ function Modules({
       data?.some((module) =>
         module.submodules.some(
           (sub) =>
-            sub.id === id &&
-            ((sub.is_active ||
-              selectedSurveyToEdit?.submodules?.includes(sub.id)) ??
-              false),
+            sub.id === id && isVisibleSubmodule(sub),
         ),
       ),
     );
@@ -320,11 +337,7 @@ function Modules({
     const visibleModules =
       data?.filter((module) =>
         module.submodules.some(
-          (sub) =>
-            ((sub.is_active ||
-              selectedSurveyToEdit?.submodules?.includes(sub.id)) ??
-              false) &&
-            visibleSubmodules.includes(sub.id),
+          (sub) => isVisibleSubmodule(sub) && visibleSubmodules.includes(sub.id),
         ),
       ) ?? [];
 
@@ -351,37 +364,62 @@ function Modules({
 
   useEffect(() => {
     if (data) {
+      const savedSubmodulesOrder = getFirstDefinedOrder(
+        surveyForm.submodules_order,
+        selectedSurveyToEdit?.submodules_order,
+      );
       const submodulesIDs: number[] = [];
-      const moduleIDs: number[] = [];
-      let submodulesCounter = 0;
+      const visibleModules = data
+        .map((module) => ({
+          ...module,
+          submodules: module.submodules.filter((submodule) =>
+            isVisibleSubmodule(submodule),
+          ),
+        }))
+        .filter((module) => module.submodules.length > 0);
+      const visibleModuleIds = visibleModules.map((module) => module.id);
+      const derivedModulesOrder = deriveModuleOrderFromSubmodulesOrder(
+        savedSubmodulesOrder,
+        visibleModules,
+      );
 
-      // Create mapping for submodule order
-      const submoduleOrderMapping = new Map<number, number>();
-      if (selectedSurveyToEdit?.submodules_order) {
-        selectedSurveyToEdit.submodules_order.forEach((id, index) => {
-          submoduleOrderMapping.set(id, index);
-        });
-      }
+      modulesData.current.modules_order = mergeOrderedIds(
+        getFirstDefinedOrder(
+          modulesData.current.modules_order,
+          surveyForm.modules_order,
+          selectedSurveyToEdit?.modules_order,
+          derivedModulesOrder,
+        ),
+        visibleModuleIds,
+      );
 
-      const tempSortedModules = [...data].sort(
+      Object.keys(modulesData.current.submodules_order).forEach((moduleId) => {
+        if (!visibleModuleIds.includes(Number(moduleId))) {
+          delete modulesData.current.submodules_order[moduleId];
+        }
+      });
+
+      const tempSortedModules = [...visibleModules].sort(
         getCompareFunction(modulesData.current.modules_order),
       );
 
       tempSortedModules.forEach((module) => {
-        moduleIDs.push(module.id);
-        const tempSubmoduleIDs: number[] = module.submodules.map(
+        const visibleSubmoduleIds = module.submodules.map(
           (submodule) => submodule.id,
+        );
+        const savedOrderForModule = savedSubmodulesOrder.filter((submoduleId) =>
+          visibleSubmoduleIds.includes(submoduleId),
+        );
+
+        modulesData.current.submodules_order[module.id] = mergeOrderedIds(
+          getFirstDefinedOrder(
+            modulesData.current.submodules_order[module.id],
+            savedOrderForModule,
+          ),
+          visibleSubmoduleIds,
         );
 
         module.submodules.forEach((submodule) => {
-          const shouldInclude = selectedSurveyToEdit
-            ? true
-            : submodule.is_active;
-
-          if (shouldInclude) {
-            submodulesCounter += 1;
-          }
-
           if (
             surveyForm.submodules.includes(submodule.id) ||
             (prvsStep <= step && submodule.is_mandatory)
@@ -389,71 +427,28 @@ function Modules({
             submodulesIDs.push(submodule.id);
           }
         });
-
-        if (!modulesData.current.modules_order.includes(module.id)) {
-          modulesData.current.modules_order.push(module.id);
-        }
-
-        if (selectedSurveyToEdit?.submodules_order) {
-          modulesData.current.submodules_order[module.id] =
-            selectedSurveyToEdit.submodules_order.filter((submoduleID) =>
-              tempSubmoduleIDs.includes(submoduleID),
-            );
-        } else {
-          modulesData.current.submodules_order[module.id] =
-            tempSubmoduleIDs.filter((submoduleID) =>
-              module.submodules.some(
-                (sub) => sub.id === submoduleID && sub.is_active,
-              ),
-            );
-        }
       });
 
-      modulesData.current.modules_order =
-        modulesData.current.modules_order.filter((moduleID) =>
-          moduleIDs.includes(moduleID),
-        );
+      modulesData.current.modules_count = tempSortedModules.length;
+      modulesData.current.submodules_count = tempSortedModules.reduce(
+        (count, module) => count + module.submodules.length,
+        0,
+      );
 
-      modulesData.current.modules_count = data.length;
-      modulesData.current.submodules_count = submodulesCounter;
-
-      // Sort submodules within each module based on modulesData.current.submodules_order
-      const tempSortedModulesWithSortedSubmodules = tempSortedModules
-        .map((module) => {
-          const sortedSubmodules = [...module.submodules].sort(
+      const tempSortedModulesWithSortedSubmodules = tempSortedModules.map(
+        (module) => ({
+          ...module,
+          submodules: [...module.submodules].sort(
             getCompareFunction(modulesData.current.submodules_order[module.id]),
-          );
-
-          // Filter submodules to match visibility rules
-          const filteredSubmodules = sortedSubmodules.filter(
-            (submodule) =>
-              submodule.is_active ||
-              (selectedSurveyToEdit?.submodules?.includes(submodule.id) ??
-                false),
-          );
-
-          return {
-            ...module,
-            submodules: filteredSubmodules,
-          };
-        })
-        // Filter out modules that have no visible submodules
-        .filter((module) => module.submodules.length > 0);
+          ),
+        }),
+      );
 
       setSortedModules(tempSortedModulesWithSortedSubmodules);
-      modulesData.current.modules_count =
-        tempSortedModulesWithSortedSubmodules.length;
 
-      // This set submodules will override the default values.
-      // This is where we need to set default values for the submodules.
-      const defaultSubModuleIds =
-        selectedSurveyToEdit &&
-        selectedSurveyToEdit.submodules &&
-        prvsStep <= step
-          ? selectedSurveyToEdit.submodules
-          : null;
-
-      const submodulesToUse = defaultSubModuleIds || submodulesIDs;
+      const submodulesToUse = hasSavedOrSessionState
+        ? surveyForm.submodules
+        : submodulesIDs;
 
       setValue("submodules", submodulesToUse);
       setModuleCountsFromSubmodules(submodulesToUse); // setSelectedModuleCounts on loading data
@@ -462,8 +457,28 @@ function Modules({
 
   useEffect(() => {
     if (indicatorAreasData) {
+      const savedIndicatorAreaOrder = getFirstDefinedOrder(
+        surveyForm.indicator_areas_order,
+        selectedSurveyToEdit?.indicator_areas_order,
+      );
       const indicatorsIDs: number[] = [];
-      let indicatorsCounter = 0;
+      const indicatorAreaIds = indicatorAreasData.map((indicatorArea) => indicatorArea.id);
+
+      modulesData.current.indicator_areas_order = mergeOrderedIds(
+        getFirstDefinedOrder(
+          modulesData.current.indicator_areas_order,
+          savedIndicatorAreaOrder,
+        ),
+        indicatorAreaIds,
+      );
+
+      Object.keys(modulesData.current.indicators_order).forEach(
+        (indicatorAreaId) => {
+          if (!indicatorAreaIds.includes(Number(indicatorAreaId))) {
+            delete modulesData.current.indicators_order[indicatorAreaId];
+          }
+        },
+      );
 
       const tempSortedIndicatorAreas = [...indicatorAreasData].sort(
         getCompareFunction(modulesData.current.indicator_areas_order),
@@ -474,7 +489,6 @@ function Modules({
 
         indicatorArea.indicators.forEach((indicator) => {
           tempIndicatorIDs.push(indicator.id);
-          indicatorsCounter += 1;
           if (
             surveyForm.indicators?.includes(indicator.id) ||
             (prvsStep <= step && indicator.is_mandatory)
@@ -483,45 +497,19 @@ function Modules({
           }
         });
 
-        if (
-          modulesData.current.indicator_areas_order.indexOf(
+        modulesData.current.indicators_order[indicatorArea.id] = mergeOrderedIds(
+          getFirstDefinedNestedOrder(
             indicatorArea.id,
-          ) === -1
-        ) {
-          modulesData.current.indicator_areas_order.push(indicatorArea.id);
-        }
-
-        const hasIndicatorsOrder =
-          modulesData.current.indicators_order[indicatorArea.id];
-        if (!hasIndicatorsOrder) {
-          modulesData.current.indicators_order[indicatorArea.id] =
-            tempIndicatorIDs;
-        } else {
-          modulesData.current.indicators_order[indicatorArea.id] =
-            modulesData.current.indicators_order[indicatorArea.id].filter(
-              (indicatorID) => tempIndicatorIDs.includes(indicatorID),
-            );
-
-          tempIndicatorIDs.forEach((indicatorID) => {
-            if (
-              !modulesData.current.indicators_order[indicatorArea.id].includes(
-                indicatorID,
-              )
-            ) {
-              modulesData.current.indicators_order[indicatorArea.id].push(
-                indicatorID,
-              );
-            }
-          });
-        }
+            modulesData.current.indicators_order,
+            surveyForm.indicators_order,
+            selectedSurveyToEdit?.indicators_order,
+          ),
+          tempIndicatorIDs,
+        );
       });
-      const defaultIndicatorIds =
-        selectedSurveyToEdit &&
-        selectedSurveyToEdit.indicators &&
-        prvsStep <= step
-          ? selectedSurveyToEdit.indicators
-          : null;
-      const indicatorsToUse = defaultIndicatorIds || indicatorsIDs;
+      const indicatorsToUse = hasSavedOrSessionState
+        ? surveyForm.indicators || []
+        : indicatorsIDs;
       setValue("indicators", indicatorsToUse);
       setSortedIndicatorAreas([...tempSortedIndicatorAreas]);
     }
@@ -622,26 +610,10 @@ function Modules({
                   {(provided) => (
                     <div ref={provided.innerRef} {...provided.droppableProps}>
                       {sortedModules.map((module, index) => {
-                        // Only include active submodules, OR those that are already selected in the edited survey
-                        const filteredSubmodules = module.submodules.filter(
-                          (submodule) =>
-                            submodule.is_active ||
-                            (selectedSurveyToEdit?.submodules?.includes(
-                              submodule.id,
-                            ) ??
-                              false),
-                        );
-
-                        // Clone the module, replacing submodules with the filtered ones
-                        const moduleWithFilteredSubmodules = {
-                          ...module,
-                          submodules: filteredSubmodules,
-                        };
-
                         return (
                           <ModuleListItem
-                            key={`${module.id}-${refreshKey}`}
-                            module={moduleWithFilteredSubmodules}
+                            key={module.id}
+                            module={module}
                             index={index}
                             handleSubmoduleChange={handleSubmoduleChange}
                             submodules={values.submodules}
