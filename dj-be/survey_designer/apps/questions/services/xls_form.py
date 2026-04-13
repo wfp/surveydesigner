@@ -480,6 +480,7 @@ class XLSForm:
     def fill_module_start(self, module):
         self.fill_cell("type", "begin_group", bold=True)
         self.fill_cell("name", f"{module.name}_module")
+        self.fill_cell("relevant", module.relevant)
         if self.languages:
             if "en" in self.language_values:
                 language = ("en", "English")

@@ -126,6 +126,7 @@ def _update_references_after_rename(instance, created: bool):
         (base_question.root_question_relevant_dependencies.all(), "relevant"),
         (base_question.sub_question_relevant_dependencies.all(), "relevant"),
         (base_question.repeat_section_relevant_dependencies.all(), "relevant"),
+        (base_question.module_relevant_dependencies.all(), "relevant"),
         (base_question.submodule_relevant_dependencies.all(), "relevant"),
         (base_question.root_question_constraint_dependencies.all(), "constraint"),
         (base_question.sub_question_constraint_dependencies.all(), "constraint"),

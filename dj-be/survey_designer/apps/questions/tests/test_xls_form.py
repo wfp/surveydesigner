@@ -176,6 +176,26 @@ def test_xls_form_collects_external_files_from_suffix_choice_group_file(
     assert csv_name in xls_form.external_files
 
 
+def test_xls_form_includes_module_relevant(submodule_1, root_question_1):
+    module = submodule_1.module
+    module.relevant = f"${{{root_question_1.name}}} > 0"
+    module.save()
+
+    xls_form = XLSForm(
+        name="test_name",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    xlsx_b = io.BytesIO(xls_form.generate())
+    xls = pd.read_excel(xlsx_b, sheet_name="survey")
+
+    module_row = xls.loc[xls["name"] == f"{module.name}_module"].iloc[0]
+
+    assert module_row["relevant"] == module.relevant
+
+
 def test_xls_form_choice_filtering(
     submodule_1,
     sub_question_1,

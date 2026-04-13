@@ -103,7 +103,15 @@ class ModuleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Module
-        fields = ("id", "label", "description", "submodules", "url", "organizations")
+        fields = (
+            "id",
+            "label",
+            "description",
+            "submodules",
+            "url",
+            "relevant",
+            "organizations",
+        )
 
 
 class IndicatorAreaSerializer(serializers.ModelSerializer):

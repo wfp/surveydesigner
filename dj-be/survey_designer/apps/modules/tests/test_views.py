@@ -76,11 +76,15 @@ def moda_api_key(admin):
 def test_module_view_set_list(
     logged_admin_client, submodule_1, root_question_1, root_question_2, root_question_3
 ):
+    submodule_1.module.relevant = f"${{{root_question_1.name}}} > 0"
+    submodule_1.module.save()
+
     url = "/api/modules/"
     response = logged_admin_client.get(url)
     assert response.status_code == 200
     assert len(response.json()) == 2
     assert response.json()[0]["id"] == submodule_1.module.id
+    assert response.json()[0]["relevant"] == submodule_1.module.relevant
     assert response.json()[0]["submodules"][0]["id"] == submodule_1.id
 
 

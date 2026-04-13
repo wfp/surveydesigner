@@ -1,5 +1,3 @@
-from dynamic_raw_id.admin import DynamicRawIDMixin as BaseDynamicRawIDMixin
-from dynamic_raw_id.widgets import DynamicRawIDMultiIdWidget, DynamicRawIDWidget
 from django import forms
 from django.contrib.admin.options import LOOKUP_SEP
 from django.contrib.admin.utils import lookup_spawns_duplicates
@@ -8,6 +6,8 @@ from django.db import models
 from django.db.models.functions import Cast, Collate
 from django.forms import Textarea
 from django.utils.text import smart_split, unescape_string_literal
+from dynamic_raw_id.admin import DynamicRawIDMixin as BaseDynamicRawIDMixin
+from dynamic_raw_id.widgets import DynamicRawIDMultiIdWidget, DynamicRawIDWidget
 
 
 class FormFieldOverridesMixin:
