@@ -31,6 +31,10 @@ class ModuleQueryset(models.QuerySet):
 
 class Module(BaseWFPModelMixin, OrganizationsModelMixin, OrderFieldMixin):
     url = models.URLField(blank=True)
+    relevant = models.TextField(blank=True)
+    relevant_dependencies = models.ManyToManyField(
+        BaseQuestion, related_name="module_relevant_dependencies", blank=True
+    )
     default_submodule_mapping = models.OneToOneField(
         "modules.SubmoduleMapping",
         help_text="This mapping will be used for newly created submodules.",

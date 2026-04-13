@@ -2,6 +2,7 @@ import pytest
 from core.utils import get_model_admin_base_url
 from django.contrib.admin import AdminSite
 from django.contrib.messages.storage.fallback import FallbackStorage
+from django.templatetags.static import static
 from django.urls import reverse
 from modules.admin import ModuleAdmin, SubmoduleAdmin
 from modules.factories import ModuleFactory, SubmoduleFactory
@@ -43,6 +44,18 @@ class TestModuleAdmin:
     def test_module_admin_search_view(self, logged_admin_client, module_1):
         _assert_admin_search_works(logged_admin_client, Module, module_1.name)
 
+    def test_module_change_page_includes_tribute_assets(
+        self, logged_admin_client, module_1
+    ):
+        response = logged_admin_client.get(
+            get_model_admin_base_url(Module, "_change", [module_1.id])
+        )
+
+        assert response.status_code == 200
+        html = response.content.decode()
+        assert static("js/tribute/tribute.js") in html
+        assert static("admin/relevant_autocomplete.js") in html
+
     def test_export_action(self, logged_admin_client, module_admin):
         ModuleFactory.create_batch(5)
         request = logged_admin_client.get(reverse("admin:modules_module_changelist"))
@@ -63,6 +76,31 @@ class TestModuleAdmin:
             + ",".join(str(module.id) for module in Module.objects.all())
         )
 
+    def test_save_model_sets_and_clears_relevant_dependencies(
+        self,
+        request_factory,
+        module_admin,
+        admin,
+        module_1,
+        root_question_1,
+    ):
+        request = request_factory.post(
+            reverse("admin:modules_module_change", args=[module_1.id])
+        )
+        request.user = admin
+
+        module_1.relevant = f"${{{root_question_1.name}}} > 0"
+        module_admin.save_model(request, module_1, form=None, change=True)
+
+        assert module_1.relevant_dependencies.filter(
+            pk=root_question_1.base_question.id
+        ).exists()
+
+        module_1.relevant = ""
+        module_admin.save_model(request, module_1, form=None, change=True)
+
+        assert not module_1.relevant_dependencies.exists()
+
 
 class TestSubmoduleAdmin:
     def test_submodule_admin_list_view(self, logged_admin_client):
@@ -74,6 +112,18 @@ class TestSubmoduleAdmin:
 
     def test_submodule_admin_search_view(self, logged_admin_client, submodule_1):
         _assert_admin_search_works(logged_admin_client, Submodule, submodule_1.name)
+
+    def test_submodule_change_page_includes_tribute_assets(
+        self, logged_admin_client, submodule_1
+    ):
+        response = logged_admin_client.get(
+            get_model_admin_base_url(Submodule, "_change", [submodule_1.id])
+        )
+
+        assert response.status_code == 200
+        html = response.content.decode()
+        assert static("js/tribute/tribute.js") in html
+        assert static("admin/relevant_autocomplete.js") in html
 
     def test_export_action(self, logged_admin_client, submodule_admin):
         SubmoduleFactory.create_batch(5)

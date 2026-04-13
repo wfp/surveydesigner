@@ -273,6 +273,26 @@ def test_case_only_root_question_rename_updates_tokens_and_subquestion_names(
     assert sub_question_1.name == f"{new}{suffix_1.name}"
 
 
+@pytest.mark.django_db
+def test_root_question_rename_updates_module_relevant_tokens(module_1, root_question_1):
+    old = root_question_1.name
+    new = f"{old}_NEW"
+
+    module_1.relevant = f"${{{old}}} > 10"
+    module_1.save()
+    module_1.relevant_dependencies.set([root_question_1.base_question])
+
+    root_question_1.name = new
+    root_question_1.save()
+
+    module_1.refresh_from_db()
+
+    assert module_1.relevant == f"${{{new}}} > 10"
+    assert module_1.relevant_dependencies.filter(
+        pk=root_question_1.base_question.id
+    ).exists()
+
+
 class TestCaseInsensitiveRootQuestionRenameSignals(TestCase):
     def setUp(self):
         organization = Organization.objects.create(name="Signals Org")

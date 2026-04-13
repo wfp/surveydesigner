@@ -1,6 +1,10 @@
 import nested_admin
 from adminsortable2.admin import SortableAdminMixin
-from core.admin import AdminUserTrackingMixin, CollationSafeSearchAdminMixin, SafeDynamicRawIDMixin
+from core.admin import (
+    AdminUserTrackingMixin,
+    CollationSafeSearchAdminMixin,
+    SafeDynamicRawIDMixin,
+)
 from core.forms import TranslationForm
 from core.utils import get_model_admin_base_url
 from django.contrib import admin, messages
@@ -64,6 +68,15 @@ from organization.models import Organization
 from questions.models import BaseQuestion, RootQuestion
 from questions.services import QuestionsExport
 from surveys.models import SurveyAttribute, SurveyCategory, SurveyMode, SurveyType
+
+
+def sync_relevant_dependencies(obj):
+    if obj.relevant:
+        names = BaseQuestion.get_question_names(obj.relevant)
+        base_questions = BaseQuestion.get_base_questions(names)
+        obj.relevant_dependencies.set(question.id for question in base_questions)
+        return
+    obj.relevant_dependencies.clear()
 
 
 class ModuleListFilter(admin.SimpleListFilter):
@@ -152,7 +165,7 @@ class ModuleAdmin(
     nested_admin.NestedModelAdmin,
 ):
     restricted_visibility_fields = ["organizations"]
-    exclude = ("created_by", "updated_by")
+    exclude = ("created_by", "updated_by", "relevant_dependencies")
     list_display = (
         "name",
         "label",
@@ -176,6 +189,13 @@ class ModuleAdmin(
         ModuleSurveyModeFilter,
     )
 
+    class Media:
+        css = {"all": (static("js/tribute/tribute.css"),)}
+        js = [
+            static("js/tribute/tribute.js"),
+            static("admin/relevant_autocomplete.js"),
+        ]
+
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
         return queryset.annotate(
@@ -191,6 +211,10 @@ class ModuleAdmin(
         if not obj.module_organizations or not any(obj.module_organizations):
             return ""
         return ", ".join(obj.module_organizations)
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        sync_relevant_dependencies(obj)
 
     @admin.action(
         description="Export Questions as XLS",
@@ -300,7 +324,10 @@ class SubmoduleAdmin(
 
     class Media:
         css = {"all": (static("js/tribute/tribute.css"),)}
-        js = [static("js/tribute/tribute.js"), static("js/admin/submodule.js")]
+        js = [
+            static("js/tribute/tribute.js"),
+            static("admin/relevant_autocomplete.js"),
+        ]
 
     @admin.display(description="Organizations")
     def organizations_display(self, obj):
@@ -310,10 +337,7 @@ class SubmoduleAdmin(
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
-        if obj.relevant:
-            names = BaseQuestion.get_question_names(obj.relevant)
-            base_questions = BaseQuestion.get_base_questions(names)
-            obj.relevant_dependencies.set(question.id for question in base_questions)
+        sync_relevant_dependencies(obj)
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)

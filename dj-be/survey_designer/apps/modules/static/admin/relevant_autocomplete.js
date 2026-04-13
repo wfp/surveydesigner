@@ -1,5 +1,8 @@
 document.addEventListener('DOMContentLoaded', function () {
   const $ = django.jQuery;
+  const relevantFields = [document.getElementById("id_relevant")]
+    .concat(Array.from(document.querySelectorAll('[id$="-relevant"]')))
+    .filter(Boolean);
 
   var tribute = new Tribute({
     values: function (text, cb) {
@@ -17,5 +20,7 @@ document.addEventListener('DOMContentLoaded', function () {
     },
   });
 
-  tribute.attach(document.getElementById("id_relevant"));
+  if (relevantFields.length) {
+    tribute.attach(relevantFields);
+  }
 });
