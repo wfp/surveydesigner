@@ -93,50 +93,61 @@ export function TableComponent({
     <>
       <Table {...getTableProps()}>
         <thead>
-          {headerGroups.map((headerGroup: any) => (
-            <tr {...headerGroup.getHeaderGroupProps()}>
-              {headerGroup.headers.map((column) => (
-                <th
-                  {...column.getHeaderProps(column.getSortByToggleProps())}
-                  className="survey-table-header"
-                  style={{ width: column.width }}
-                >
-                  {showSort && column.canSort ? (
-                    <div
-                      {...column.getSortByToggleProps()}
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        justifyContent: "space-between",
-                      }}
+          {headerGroups.map((headerGroup: any) => {
+            const { key: rowKey, ...rowProps } = headerGroup.getHeaderGroupProps();
+            return (
+              <tr key={rowKey} {...rowProps}>
+                {headerGroup.headers.map((column) => {
+                  const { key: colKey, ...colProps } = column.getHeaderProps(column.getSortByToggleProps());
+                  return (
+                    <th
+                      key={colKey}
+                      {...colProps}
+                      className="survey-table-header"
+                      style={{ width: column.width }}
                     >
-                      <div>{column.render("Header")}</div>
-                      <div>
-                        {column.isSorted
-                          ? column.isSortedDesc
-                            ? " ↓"
-                            : " ↑"
-                          : "↑↓"}
-                      </div>
-                    </div>
-                  ) : (
-                    column.render("Header")
-                  )}
-                </th>
-              ))}
-            </tr>
-          ))}
+                      {showSort && column.canSort ? (
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            justifyContent: "space-between",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <div>{column.render("Header")}</div>
+                          <div>
+                            {column.isSorted
+                              ? column.isSortedDesc
+                                ? " ↓"
+                                : " ↑"
+                              : "↑↓"}
+                          </div>
+                        </div>
+                      ) : (
+                        column.render("Header")
+                      )}
+                    </th>
+                  );
+                })}
+              </tr>
+            );
+          })}
         </thead>
         <tbody {...getTableBodyProps()}>
           {page.map((row) => {
             prepareRow(row);
+            const { key: rowKey, ...rowProps } = row.getRowProps();
             return (
-              <tr {...row.getRowProps()}>
-                {row.cells.map((cell) => (
-                  <td {...cell.getCellProps()} className="survey-table-cell">
-                    {cell.render("Cell")}
-                  </td>
-                ))}
+              <tr key={rowKey} {...rowProps}>
+                {row.cells.map((cell) => {
+                  const { key: cellKey, ...cellProps } = cell.getCellProps();
+                  return (
+                    <td key={cellKey} {...cellProps} className="survey-table-cell">
+                      {cell.render("Cell")}
+                    </td>
+                  );
+                })}
               </tr>
             );
           })}

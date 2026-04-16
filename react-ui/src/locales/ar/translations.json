@@ -76,7 +76,8 @@
         "codebook": "كتاب الرموز",
         "cms": "نظام إدارة المحتوى",
         "manageApiKeys": "إدارة مفاتيح API",
-        "profile": "حساب تعريفي"
+        "profile": "حساب تعريفي",
+        "cookieSettings": "إعدادات ملفات تعريف الارتباط"
     },
     "review": {
         "languages": "اللغات",

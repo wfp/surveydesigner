@@ -11,8 +11,6 @@ import { FrontendContent, SavedSurvey } from "../types/api";
  * return the latest software version retrieved from the pipeline or inside package.json
  */
 const getVersion = () => {
-  // eslint-disable-next-line no-console
-  console.log("Build ID: ", import.meta.env.VITE_BUILD_ID);
   const version = `${import.meta.env.VITE_BUILD_ID || "dev"}`;
   return version;
 };
