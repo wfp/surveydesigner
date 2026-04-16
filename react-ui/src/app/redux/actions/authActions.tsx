@@ -18,16 +18,13 @@ export const loadUserData = createAppAsyncThunk(
     dispatch(appActions.isLoading(true));
     try {
       const response = await API.get("/accounts/user/", { withCredentials: true });
-      console.log("response", response)
       if (response.status !== 200) {
         dispatch(authActions.clearData());
       } else {
         const user = response.data;
-        console.log(user)
         dispatch(authActions.loadUser({ is_logged: true, user }));
       }
-    } catch (error) {
-      console.log(error)
+    } catch {
       dispatch(authActions.clearData());
     } finally {
       dispatch(appActions.isLoading(false));

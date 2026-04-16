@@ -113,7 +113,8 @@
         "codebook": "Libro de códigos",
         "cms": "CMS",
         "manageApiKeys": "Administrar claves API",
-        "profile": "Perfil"
+        "profile": "Perfil",
+        "cookieSettings": "Configuración de cookies"
     },
     "review": {
         "languages": "Idiomas",

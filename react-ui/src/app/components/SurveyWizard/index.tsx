@@ -195,7 +195,7 @@ function SurveyWizard() {
     if (!savedSurveys.data) {
       dispatch(fetchSavedSurveys({})).then((res: any) => {
         if (state && state.surveyId) {
-          const data = res?.payload?.data;
+          const data = res?.payload;
           if (Array.isArray(data)) {
             const selectedSurveyFromCopy = data.find(
               (survey: SavedSurvey) => survey.uuid === state.surveyId,
