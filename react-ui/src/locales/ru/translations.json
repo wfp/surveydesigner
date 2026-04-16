@@ -76,7 +76,8 @@
         "codebook": "Кодовая книга",
         "cms": "система управления контентом",
         "manageApiKeys": "Управление ключами API",
-        "profile": "Профиль"
+        "profile": "Профиль",
+        "cookieSettings": "Настройки файлов cookie"
     },
     "review": {
         "languages": "Языки",

@@ -77,7 +77,8 @@
         "codebook": "Codebook",
         "cms": "CMS",
         "manageApiKeys": "Manage API Keys",
-        "profile": "Profile"
+        "profile": "Profile",
+        "cookieSettings": "Cookie settings"
     },
     "review": {
         "languages": "Languages",

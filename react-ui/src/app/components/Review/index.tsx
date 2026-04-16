@@ -295,10 +295,6 @@ function Review({ next }: ReviewProps) {
     })
       .then((res) => {
         setPreviewData(res.data);
-        // eslint-disable-next-line no-console
-        console.log("warnings", res.data.warnings);
-        // eslint-disable-next-line no-console
-        console.log("errors", res.data.errors);
         if (res.data.url) {
           window.open(res.data.enketo_url, "_blank");
         }
