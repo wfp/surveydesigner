@@ -10,6 +10,7 @@ from questions.const import QuestionType
 from questions.models import (
     BaseQuestion,
     ChoiceGroup,
+    ChoiceGroupFile,
     RecallPeriod,
     SubQuestion,
     Suffix,
@@ -327,6 +328,24 @@ class QuestionChoiceFilter(SimpleListFilter):
                 | Q(sub_question__suffix__choices=self.value())
                 | Q(sub_question__suffix_2__choices=self.value())
             )
+        return queryset
+
+
+class QuestionChoiceFileFilter(SimpleListFilter):
+    title = "Choice List with External File"
+    parameter_name = "choice_file_filter"
+    template = "admin/dropdown_filter.html"
+
+    def lookups(self, request, model_admin):
+        return ((q.id, q.name) for q in ChoiceGroupFile.objects.order_by("name"))
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(
+                Q(root_question__choices_file=self.value())
+                | Q(sub_question__suffix__choices_file=self.value())
+                | Q(sub_question__suffix_2__choices_file=self.value())
+            ).distinct()
         return queryset
 
 
