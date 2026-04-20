@@ -34,6 +34,99 @@ def _build_root_question_translation_form(*, data=None, instance=None):
     return TestRootQuestionTranslationForm(data=data, instance=instance)
 
 
+def _create_choice_group_file_question_set(submodule):
+    target_file = ChoiceGroupFile.objects.create(
+        name="ChoiceFileTarget",
+        csv_file=SimpleUploadedFile(
+            "choice_file_target.csv",
+            b"name,label\none,One\n",
+            content_type="text/csv",
+        ),
+    )
+    other_file = ChoiceGroupFile.objects.create(
+        name="ChoiceFileOther",
+        csv_file=SimpleUploadedFile(
+            "choice_file_other.csv",
+            b"name,label\ntwo,Two\n",
+            content_type="text/csv",
+        ),
+    )
+
+    root_match = RootQuestion.objects.create(
+        name="ChoiceFileRootMatch",
+        label="Choice File Root Match",
+        type=QuestionType.SELECT_ONE_FROM_FILE,
+        choices_file=target_file,
+    )
+    root_match.submodule.add(submodule)
+
+    root_other = RootQuestion.objects.create(
+        name="ChoiceFileRootOther",
+        label="Choice File Root Other",
+        type=QuestionType.SELECT_ONE_FROM_FILE,
+        choices_file=other_file,
+    )
+    root_other.submodule.add(submodule)
+
+    neutral_root = RootQuestion.objects.create(
+        name="ChoiceFileNeutralRoot",
+        label="Choice File Neutral Root",
+        type=QuestionType.INTEGER,
+    )
+    neutral_root.submodule.add(submodule)
+
+    match_suffix = Suffix.objects.create(
+        name="ChoiceFileMatchSuffix",
+        description="Choice file match suffix",
+        type=QuestionType.SELECT_ONE_FROM_FILE,
+        choices_file=target_file,
+    )
+    dual_suffix_1 = Suffix.objects.create(
+        name="ChoiceFileDualSuffix1",
+        description="Choice file dual suffix 1",
+        type=QuestionType.SELECT_ONE_FROM_FILE,
+        choices_file=target_file,
+    )
+    dual_suffix_2 = Suffix.objects.create(
+        name="ChoiceFileDualSuffix2",
+        description="Choice file dual suffix 2",
+        type=QuestionType.SELECT_ONE_FROM_FILE,
+        choices_file=target_file,
+    )
+    other_suffix = Suffix.objects.create(
+        name="ChoiceFileOtherSuffix",
+        description="Choice file other suffix",
+        type=QuestionType.SELECT_ONE_FROM_FILE,
+        choices_file=other_file,
+    )
+
+    sub_match = SubQuestion.objects.create(
+        root_question=neutral_root,
+        suffix=match_suffix,
+        label="Choice File Match Question",
+    )
+    dual_match = SubQuestion.objects.create(
+        root_question=neutral_root,
+        suffix=dual_suffix_1,
+        suffix_2=dual_suffix_2,
+        label="Choice File Dual Match Question",
+    )
+    sub_other = SubQuestion.objects.create(
+        root_question=neutral_root,
+        suffix=other_suffix,
+        label="Choice File Other Question",
+    )
+
+    return {
+        "target_file": target_file,
+        "root_match": root_match,
+        "root_other": root_other,
+        "sub_match": sub_match,
+        "dual_match": dual_match,
+        "sub_other": sub_other,
+    }
+
+
 def test_choice_group_admin_list_view(
     logged_admin_client,
     root_question_2,
@@ -72,10 +165,58 @@ def test_choice_group_file_search_view(logged_admin_client):
     )
 
 
+def test_choice_group_file_list_view_links_question_count_to_filtered_questions(
+    logged_admin_client, submodule_1
+):
+    question_set = _create_choice_group_file_question_set(submodule_1)
+
+    response = logged_admin_client.get(
+        get_model_admin_base_url(ChoiceGroupFile, "_changelist")
+    )
+
+    assert response.status_code == 200
+
+    tree = html.fromstring(response.content)
+    row = next(
+        row
+        for row in tree.xpath("//tr")
+        if question_set["target_file"].name in row.text_content()
+    )
+    button = row.xpath(".//button")[0]
+    onclick = button.get("onclick") or button.get("onClick") or ""
+
+    assert button.text_content().strip() == "3"
+    assert get_model_admin_base_url(BaseQuestion, "_changelist") in onclick
+    assert f"choice_file_filter={question_set['target_file'].id}" in onclick
+
+
 def test_base_questions_list_view(logged_admin_client, xls_form_data):
     url = get_model_admin_base_url(BaseQuestion, "_changelist")
     response = logged_admin_client.get(url)
     assert response.status_code == 200
+
+
+def test_base_questions_list_view_filters_by_choice_group_file(
+    logged_admin_client, submodule_1
+):
+    question_set = _create_choice_group_file_question_set(submodule_1)
+
+    url = (
+        get_model_admin_base_url(BaseQuestion, "_changelist")
+        + f"?choice_file_filter={question_set['target_file'].id}"
+    )
+    response = logged_admin_client.get(url)
+
+    assert response.status_code == 200
+
+    tree = html.fromstring(response.content)
+    rows_text = "\n".join(row.text_content().strip() for row in tree.xpath("//tr"))
+
+    assert question_set["root_match"].name in rows_text
+    assert question_set["sub_match"].name in rows_text
+    assert question_set["dual_match"].name in rows_text
+    assert question_set["root_other"].name not in rows_text
+    assert question_set["sub_other"].name not in rows_text
 
 
 def test_base_questions_search_view(logged_admin_client, root_question_1):

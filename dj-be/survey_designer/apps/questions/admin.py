@@ -16,7 +16,7 @@ from django.contrib.admin.options import IS_POPUP_VAR
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Count, OuterRef, Subquery
+from django.db.models import Count, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.forms.models import BaseInlineFormSet
 from django.http import HttpResponse, HttpResponseRedirect
@@ -36,6 +36,7 @@ from questions.admin_filters import (
     ChoiceListFilter,
     ParentSuffixListFilter,
     QuestionChoiceFilter,
+    QuestionChoiceFileFilter,
     QuestionIndicatorFilter,
     QuestionLevelFilter,
     QuestionModuleFilter,
@@ -350,18 +351,25 @@ class ChoiceGroupFileAdmin(
         queryset = super().get_queryset(request)
 
         question_count = (
-            self.model.objects.filter(id=OuterRef("id"))
-            .annotate(
-                question_count=(
-                    Count("root_questions", distinct=True)
-                    + Count("suffixes__sub_questions", distinct=True)
-                    + Count("suffixes__sub_questions_as_second", distinct=True)
-                )
+            BaseQuestion.objects.filter(
+                Q(root_question__choices_file=OuterRef("pk"))
+                | Q(sub_question__suffix__choices_file=OuterRef("pk"))
+                | Q(sub_question__suffix_2__choices_file=OuterRef("pk"))
             )
-            .values("question_count")[:1]
+            .order_by()
+            .annotate(group_marker=Value(1))
+            .values("group_marker")
+            .annotate(count=Count("pk", distinct=True))
+            .values("count")[:1]
         )
 
-        return queryset.annotate(question_count=Subquery(question_count))
+        return queryset.annotate(
+            question_count=Coalesce(
+                Subquery(question_count),
+                0,
+                output_field=models.IntegerField(),
+            )
+        )
 
     @admin.display(
         description="Number of Questions",
@@ -371,7 +379,7 @@ class ChoiceGroupFileAdmin(
         if not obj.id:
             return "-"
         question_count = getattr(obj, "question_count", "-")
-        query_params = f"?choice_file_filter={obj.id}"
+        query_params = f"?{QuestionChoiceFileFilter.parameter_name}={obj.id}"
         url = get_model_admin_base_url(BaseQuestion, "_changelist") + query_params
         on_click = f"window.open('{url}', 'popup', 'width=1200,height=600')"
         return format_html(
@@ -952,6 +960,7 @@ class BaseQuestionAdmin(
         QuestionSubmoduleFilter,
         QuestionModuleFilter,
         QuestionChoiceFilter,
+        QuestionChoiceFileFilter,
         QuestionSuffixFilter,
         QuestionSuffix2Filter,
         QuestionRecallPeriodFilter,
