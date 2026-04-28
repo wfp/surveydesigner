@@ -24,10 +24,12 @@ import {
 import { GenerateProps } from "./Generate.interface";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faFileAlt, faSearch } from "@fortawesome/free-solid-svg-icons";
+import { useSurveyWizard } from "../SurveyWizard/Context/SurveyWizardContext";
 
-function Generate({ next }: GenerateProps) {
+function Generate() {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
+  const { next } = useSurveyWizard();
   const auth = useAppSelector((state) => state.auth);
   const [user, setUser] = useState(auth.user);
   const { jobId, status, position } = useAppSelector(
@@ -58,7 +60,7 @@ function Generate({ next }: GenerateProps) {
   }, [selectedSite]);
 
   useEffect(() => {
-    next();
+    next()();
   }, [next]);
 
   useEffect(() => {
@@ -107,7 +109,7 @@ function Generate({ next }: GenerateProps) {
   }
   useEffect(() => {
     if (projects && projects.error) {
-      const err = projects.error;
+      const err: any = projects.error;
       dispatch(
         notificationsActions.setErrorNotification({
           msg: `${err.response?.data.message ? err.response.data.message : err.message

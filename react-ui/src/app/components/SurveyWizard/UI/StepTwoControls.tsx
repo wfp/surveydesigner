@@ -1,22 +1,16 @@
 import React from "react";
 import { Checkbox } from "@wfp/react";
 import { useTranslation } from "react-i18next";
-import { CheckboxState } from "../../../types";
+import { useSurveyWizard } from "../Context/SurveyWizardContext";
 
-type StepTwoControlsProps = {
-  selectAllReview: CheckboxState;
-  setSelectAllReview: (value: CheckboxState) => void;
-  collapseAllReview: CheckboxState;
-  setCollapseAllReview: (value: CheckboxState) => void;
-};
-
-export function StepTwoControls({
-  selectAllReview,
-  setSelectAllReview,
-  collapseAllReview,
-  setCollapseAllReview,
-}: StepTwoControlsProps) {
+export function StepTwoControls() {
   const { t } = useTranslation();
+  const {
+    selectAllReview,
+    setSelectAllReview,
+    collapseAllReview,
+    setCollapseAllReview,
+  } = useSurveyWizard();
 
   return (
     <>

@@ -5,40 +5,48 @@ import { faArrowRight, faFloppyDisk } from "@fortawesome/free-solid-svg-icons";
 import { useTranslation } from "react-i18next";
 import { SavedSurvey } from "../../../types/api";
 import { SurveyWizardPreviousButton } from "./SurveyWizardPreviousButton";
+import { useSurveyWizard } from "../Context/SurveyWizardContext";
 
-type SurveyWizardFooterProps = {
-  step: number;
-  stepsCount: number;
-  isCreatingSurvey: boolean;
-  isValidating: boolean;
-  savedSurveysData: SavedSurvey[] | null | undefined;
-  onPreviousClick: () => void;
-  onNextClick: () => void;
-  onCreateSurveyClick: () => void;
-  onSaveClick: () => void;
-};
-
-export function SurveyWizardFooter({
-  step,
-  stepsCount,
-  isCreatingSurvey,
-  isValidating,
-  savedSurveysData,
-  onPreviousClick,
-  onNextClick,
-  onCreateSurveyClick,
-  onSaveClick,
-}: SurveyWizardFooterProps) {
+export function SurveyWizardFooter() {
   const { t } = useTranslation();
+  const {
+    step,
+    stepsCount,
+    isCreatingSurvey,
+    isValidating,
+    saveSurvey,
+    goToStep,
+    setGoToStep,
+    setIsCreatingSurvey,
+    resetSurveyData,
+    savedSurveys,
+  } = useSurveyWizard();
+
+  const onPreviousClick = () => {
+    if (step > 0) {
+      setGoToStep(step - 1);
+    } else {
+      setIsCreatingSurvey(false);
+      resetSurveyData();
+    }
+  };
+
+  const onNextClick = () => {
+    if (step === 1) {
+      // Validation logic is handled within Modules component using the next hook
+    }
+    setGoToStep(step + 1);
+  };
+
+  const onCreateSurveyClick = () => {
+    setIsCreatingSurvey(true);
+  };
 
   return (
     <ModuleFooter>
       <div className="wfp--form-controls">
         <div>
           <SurveyWizardPreviousButton
-            step={step}
-            isCreatingSurvey={isCreatingSurvey}
-            savedSurveysData={savedSurveysData}
             onPreviousClick={onPreviousClick}
           />
         </div>
@@ -66,7 +74,9 @@ export function SurveyWizardFooter({
             <Button
               kind="secondary"
               className="wfp--form-controls__next"
-              onClick={onSaveClick}
+              onClick={() => {
+                void saveSurvey();
+              }}
             >
               {t("actions.save")}
               <FontAwesomeIcon icon={faFloppyDisk} className="wfp--btn__icon" />

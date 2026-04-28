@@ -3,32 +3,30 @@ import { Tooltip } from "@wfp/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircleQuestion } from "@fortawesome/free-solid-svg-icons";
 import { useTranslation } from "react-i18next";
+import { useSurveyWizard } from "../Context/SurveyWizardContext";
 
 type StepTitleWithTooltipProps = {
-  step: number;
   stepsCount: number;
   steps: string[];
   tooltipContent: React.ReactNode | null;
   showModulesCount: boolean;
   showQuestionsCount: boolean;
-  selectedModuleCounts: {
-    moduleCount?: number;
-    submoduleCount?: number;
-  };
-  numberOfQuestionsToBeGenerated: number;
 };
 
-export function StepTitleWithTooltip({
-  step,
-  stepsCount,
-  steps,
-  tooltipContent,
-  showModulesCount,
-  showQuestionsCount,
-  selectedModuleCounts,
-  numberOfQuestionsToBeGenerated,
-}: StepTitleWithTooltipProps) {
+export function StepTitleWithTooltip() {
   const { t } = useTranslation();
+  const {
+    step,
+    stepsCount,
+    steps,
+    stepTooltips,
+    selectedModuleCounts,
+    numberOfQuestionsToBeGenerated,
+  } = useSurveyWizard();
+
+  const tooltipContent = stepTooltips[step];
+  const showModulesCount = step === 1;
+  const showQuestionsCount = step === 2;
 
   return (
     <div className="d-flex align-items-center">

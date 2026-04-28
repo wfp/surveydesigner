@@ -3,7 +3,6 @@ import React, { useEffect, useState } from "react";
 import { Cookies } from "react-cookie";
 import { Controller, useForm } from "react-hook-form";
 import Select from "react-select";
-import { EvaluationPositive } from "@wfp/humanitarian-icons-react";
 import { Button, InlineLoading, ToastNotification, Callout } from "@wfp/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faFileAlt, faSearch } from "@fortawesome/free-solid-svg-icons";
@@ -30,21 +29,23 @@ import {
   SuffixSerializer,
 } from "../../types/api";
 import { ApiError } from "../../types";
-import { ReviewProps } from "./Review.interface";
 import { getOrderedSubmodules } from "../../utils/generate";
+import { useSurveyWizard } from "../SurveyWizard/Context/SurveyWizardContext";
 
-function Review({
-  next,
-  numberOfQuestionsToBeGenerated,
-  selectAll,
-  setSelectAll,
-  collapseAll,
-  setCollapseAll,
-  setNumberOfQuestionsToBeGenerated,
-  selectedSurveyToEdit,
-}: ReviewProps) {
+function Review() {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
+  const {
+    next,
+    numberOfQuestionsToBeGenerated,
+    selectAllReview: selectAll,
+    setSelectAllReview: setSelectAll,
+    collapseAllReview: collapseAll,
+    setCollapseAllReview: setCollapseAll,
+    setNumberOfQuestionsToBeGenerated,
+    selectedSurveyToEdit,
+  } = useSurveyWizard();
+
   const surveyForm = useAppSelector((state) => state.surveyForm);
   const submodulesData = useAppSelector((state) => state.submodules);
   const submodules = submodulesData.data;
@@ -57,6 +58,8 @@ function Review({
   const [previewData, setPreviewData] = useState<{
     errors: string[];
     warnings: string[];
+    enketo_url?: string;
+    url?: string;
   } | null>(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [APIError, setAPIError] = useState<ApiError | null>(null);
@@ -67,7 +70,7 @@ function Review({
     useAppSelector((state) =>
       state.surveyForm?.type?.indicators?.filter((indicatorId) =>
         indicators?.find((ind) => ind.id === indicatorId),
-      ),
+      ) || [],
     ) || [];
 
   const indicatorSubmodules = selectedIndicators.flatMap(
@@ -103,21 +106,21 @@ function Review({
   }
 
   function findSubQuestions(
-    submodule: Submodule | SubQuestion,
-    suffixList: SuffixSerializer,
+    submodule: any,
+    suffixList: any,
     depth: number,
     result: { [key: number]: any },
     parentSuffix?: any,
   ) {
     if (depth === 0 || !submodule) return [];
-    const keys = Object.keys(submodule.next);
+    const keys = Object.keys(submodule.next || {});
     let selectedSuffix;
     // check matching recall period
     if (
       parentSuffix &&
-      !submodule.real_item.suffix_1_id &&
-      !submodule.real_item.suffix_2_id &&
-      submodule.real_item.recall_period_id
+      !submodule.real_item?.suffix_1_id &&
+      !submodule.real_item?.suffix_2_id &&
+      submodule.real_item?.recall_period_id
     ) {
       selectedSuffix = suffixList.find(
         (obj: any) =>
@@ -126,14 +129,14 @@ function Review({
           obj.recall_period_id === submodule.real_item.recall_period_id,
       );
       // Check matching suffix 2 first
-    } else if (parentSuffix && submodule.real_item.suffix_2_id) {
+    } else if (parentSuffix && submodule.real_item?.suffix_2_id) {
       selectedSuffix = suffixList.find(
         (obj: any) =>
           obj.suffix === parentSuffix.suffix_1_id &&
           obj.suffix_2 === submodule.real_item.suffix_2_id,
       );
       // Check matching suffix 1
-    } else if (submodule.real_item.suffix_1_id) {
+    } else if (submodule.real_item?.suffix_1_id) {
       selectedSuffix = suffixList.find(
         (obj: any) => obj.suffix === submodule.real_item.suffix_1_id,
       );
@@ -142,7 +145,7 @@ function Review({
     if (!selectedSuffix) return [];
     // If no "next" values, then we can stop here. There are no more subquestions.
     if (keys.length === 0) {
-      return submodule.sub_questions;
+      return submodule.sub_questions || [];
     }
     result = addToResult(result, [submodule]);
     keys.forEach((key) => {
@@ -175,7 +178,7 @@ function Review({
 
       setSubmoduleMap(submodulesMapValue);
       setLanguages([
-        { language: "en", language_display: "English" },
+        { language: LanguageEnum.En, language_display: "English" },
         ...translations,
       ]);
 
@@ -184,7 +187,7 @@ function Review({
       // This is for preselecting the subquestion check boxes.
       // We need to match the subquestion submodule ID that has been saved to the ones available.
       if (selectedSurveyToEdit.languages) {
-        const selectedLanguages = selectedSurveyToEdit.languages;
+        const selectedLanguages = selectedSurveyToEdit.languages as any;
         setValue("languages", selectedLanguages);
       }
 
@@ -242,7 +245,7 @@ function Review({
   }, [submodules]);
 
   useEffect(() => {
-    next((proceed) => {
+    next()((proceed) => {
       handleSubmit((data) => {
         data.submodules = getOrderedSubmodules(surveyForm, modulesData);
         data.submodules_order = modulesData.current.modules_order.flatMap(
@@ -275,12 +278,12 @@ function Review({
       name: surveyForm.name || `survey_${timestamp}`,
       submodules: surveyForm.submodules,
       sub_questions: aggregateSubquestionsFromSubmodule(subQuestions).map(
-        (item) => item.id,
+        (item: any) => item.id,
       ),
       submodules_order: modulesData.current.modules_order.flatMap(
         (moduleId) => modulesData.current.submodules_order[moduleId],
       ),
-      languages: getValues("languages").map((item) => item.language),
+      languages: getValues("languages").map((item: any) => item.language),
       indicators: surveyForm.indicators,
     };
     const cookies = new Cookies();
@@ -292,10 +295,6 @@ function Review({
     })
       .then((res) => {
         setPreviewData(res.data);
-        // eslint-disable-next-line no-console
-        console.log("warnings", res.data.warnings);
-        // eslint-disable-next-line no-console
-        console.log("errors", res.data.errors);
         if (res.data.url) {
           window.open(res.data.enketo_url, "_blank");
         }
@@ -310,9 +309,8 @@ function Review({
   function wrapMessages(messages: string[]) {
     return (
       <div style={{ marginBottom: "1rem", marginTop: "1rem" }}>
-        {messages.map((msg) => (
-          // eslint-disable-next-line react/jsx-key
-          <div>{msg}</div>
+        {messages.map((msg, index) => (
+          <div key={index}>{msg}</div>
         ))}
       </div>
     );
@@ -323,7 +321,7 @@ function Review({
   ): [Record<number, Record<string, Submodule>>, ChoiceTranslation[]] {
     const submodulesMap: Record<number, Record<number, Submodule>> = {};
     const translations: ChoiceTranslation[] = [];
-    const translationLanguageSet = new Set<LanguageEnum>(["en"]);
+    const translationLanguageSet = new Set<LanguageEnum>([LanguageEnum.En]);
     const addTranslations = (translations2: ChoiceTranslation[]) =>
       translations2.forEach((translation) => {
         if (!translationLanguageSet.has(translation.language)) {
@@ -402,7 +400,7 @@ function Review({
             if (index + 1 === subQuestion.group.length) {
               currentPath.push("sub_questions");
               const subQuestionList = [
-                ..._.get(submodulesMap[submodule.id], currentPath),
+                ...(_.get(submodulesMap[submodule.id], currentPath) || []),
                 {
                   ...subQuestion,
                   submodule: submodule.id,
@@ -415,17 +413,17 @@ function Review({
           });
         });
     });
-    return [submodulesMap, translations];
+    return [submodulesMap as any, translations];
   }
 
-  function getRootQuestionsCount(submodules) {
+  function getRootQuestionsCount(submodules: any) {
     const rootQuestionsCount =
-      submodules?.flatMap(({ root_questions }) => root_questions).length || 0;
+      submodules?.flatMap(({ root_questions }: any) => root_questions).length || 0;
 
     const missedSubQuestionsCount =
-      submodules?.flatMap((submodule) =>
-        submodule.root_questions.flatMap((root) =>
-          root.sub_questions.filter((sub) => sub.suffix?.name === "_oth"),
+      submodules?.flatMap((submodule: any) =>
+        submodule.root_questions.flatMap((root: any) =>
+          root.sub_questions.filter((sub: any) => sub.suffix?.name === "_oth"),
         ),
       ).length || 0;
 
@@ -437,10 +435,8 @@ function Review({
       <div style={{ position: "fixed", bottom: 20, right: 20, zIndex: 2 }}>
         {APIError && (
           <Callout
-            iconDescription="close"
             kind="error"
             lowContrast
-            statusIconDescription=""
             subtitle={
               APIError.response?.data.message
                 ? APIError.response.data.message
@@ -455,13 +451,10 @@ function Review({
 
         {previewData && previewData.errors && previewData.errors.length > 0 && (
           <ToastNotification
-            iconDescription="close"
             kind="error"
             lowContrast
-            statusIconDescription=""
             subtitle=""
             title="Preview Errors"
-            caption=""
             // eslint-disable-next-line jsx-a11y/aria-role
             role="preview_errors"
           >
@@ -473,10 +466,8 @@ function Review({
           previewData.warnings &&
           previewData.warnings.length > 0 && (
             <Callout
-              iconDescription="close"
               kind="warning"
               lowContrast
-              statusIconDescription=""
               subtitle=""
               title="Preview Warnings"
               // eslint-disable-next-line jsx-a11y/aria-role
@@ -528,8 +519,8 @@ function Review({
                     isClearable
                     isMulti
                     value={value}
-                    getOptionLabel={(opt) => opt.language_display}
-                    getOptionValue={(opt) => opt.language}
+                    getOptionLabel={(opt: any) => opt.language_display}
+                    getOptionValue={(opt: any) => opt.language}
                     options={languages}
                     onChange={(e) => onChange(e)}
                   />

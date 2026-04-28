@@ -1,9 +1,6 @@
 import { InlineLoading, Modal, Callout } from "@wfp/react";
 import React, {
   ChangeEvent,
-  Dispatch,
-  SetStateAction,
-  SyntheticEvent,
   useCallback,
   useEffect,
   useState,
@@ -29,25 +26,27 @@ import { getCompareFunction } from "../../utils";
 import { apiValidation, getErrorDisplay } from "./utils";
 import { fetchIndicatorAreas } from "../../redux/actions/indicatorAreasActions";
 import { Indicator, Module, Submodule } from "../../types/api";
-import { ModulesProps } from "./Modules.interface";
 import { IndicatorAreaWithIndicators } from "../../types";
+import { useSurveyWizard } from "../SurveyWizard/Context/SurveyWizardContext";
 
-function Modules({
-  next,
-  selectAll,
-  setSelectAll,
-  collapseAllModules,
-  setCollapseAllModules,
-  collapseAllIndicatorAreas,
-  setCollapseAllIndicatorAreas,
-  prvsStep,
-  step,
-  setSelectedModuleCounts,
-  selectedSurveyToEdit,
-  setIsValidating,
-}: ModulesProps) {
+function Modules() {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
+  const {
+    next,
+    selectAllModules: selectAll,
+    setSelectAllModules: setSelectAll,
+    collapseAllModules,
+    setCollapseAllModules,
+    collapseAllIndicatorAreas,
+    setCollapseAllIndicatorAreas,
+    prvsStep,
+    step,
+    setSelectedModuleCounts,
+    selectedSurveyToEdit,
+    setIsValidating,
+  } = useSurveyWizard();
+
   const surveyForm = useAppSelector((state) => state.surveyForm);
   const { data, isLoading } = useAppSelector((state) => state.modules);
   const { data: indicatorAreasData, isLoading: indicatorAreasIsLoading } =
@@ -198,7 +197,7 @@ function Modules({
             .flatMap((module) =>
               module.submodules.filter(
                 (submodule) =>
-                  submodule.is_active ||
+                  (submodule as any).is_active ||
                   selectedSurveyToEdit?.submodules?.includes(submodule.id),
               ),
             )
@@ -296,21 +295,13 @@ function Modules({
     }
   };
 
-  function getModulesFromSubmodules(submodules: number[]) {
-    return Object.entries(modulesData.current.submodules_order)
-      .filter((entry) =>
-        entry[1].reduce((acc, cur) => acc || submodules.includes(cur), false),
-      )
-      .map((entry) => +entry[0]);
-  }
-
   function setModuleCountsFromSubmodules(submodules: number[]) {
     const visibleSubmodules = submodules.filter((id) =>
       data?.some((module) =>
         module.submodules.some(
           (sub) =>
             sub.id === id &&
-            ((sub.is_active ||
+            (((sub as any).is_active ||
               selectedSurveyToEdit?.submodules?.includes(sub.id)) ??
               false),
         ),
@@ -321,7 +312,7 @@ function Modules({
       data?.filter((module) =>
         module.submodules.some(
           (sub) =>
-            ((sub.is_active ||
+            (((sub as any).is_active ||
               selectedSurveyToEdit?.submodules?.includes(sub.id)) ??
               false) &&
             visibleSubmodules.includes(sub.id),
@@ -344,7 +335,7 @@ function Modules({
   }, []);
 
   useEffect(() => {
-    next((proceed, step, setGoToStep) => {
+    next()((proceed, step, setGoToStep) => {
       debouncedValidation(proceed, step, setGoToStep);
     });
   }, [next, debouncedValidation]);
@@ -376,7 +367,7 @@ function Modules({
         module.submodules.forEach((submodule) => {
           const shouldInclude = selectedSurveyToEdit
             ? true
-            : submodule.is_active;
+            : (submodule as any).is_active;
 
           if (shouldInclude) {
             submodulesCounter += 1;
@@ -403,7 +394,7 @@ function Modules({
           modulesData.current.submodules_order[module.id] =
             tempSubmoduleIDs.filter((submoduleID) =>
               module.submodules.some(
-                (sub) => sub.id === submoduleID && sub.is_active,
+                (sub) => sub.id === submoduleID && (sub as any).is_active,
               ),
             );
         }
@@ -427,7 +418,7 @@ function Modules({
           // Filter submodules to match visibility rules
           const filteredSubmodules = sortedSubmodules.filter(
             (submodule) =>
-              submodule.is_active ||
+              (submodule as any).is_active ||
               (selectedSurveyToEdit?.submodules?.includes(submodule.id) ??
                 false),
           );
@@ -594,10 +585,8 @@ function Modules({
       <div style={{ position: "fixed", bottom: 20, right: 20, zIndex: 2 }}>
         {submitError && (
           <Callout
-            iconDescription="close"
             kind="error"
             lowContrast
-            statusIconDescription=""
             subtitle={getErrorDisplay(submitError)}
             title="Error"
             onClick={() => setSubmitError(null)}
@@ -624,7 +613,7 @@ function Modules({
                       {sortedModules.map((module, index) => {
                         // Only include active submodules, OR those that are already selected in the edited survey
                         const filteredSubmodules = module.submodules.filter(
-                          (submodule) =>
+                          (submodule: any) =>
                             submodule.is_active ||
                             (selectedSurveyToEdit?.submodules?.includes(
                               submodule.id,

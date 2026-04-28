@@ -1,17 +1,13 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
-
+import React, { useEffect, useRef, useState } from "react";
 import {
   Module,
   ModuleBody,
   ModuleHeader,
   Wrapper,
 } from "@wfp/react";
-
-import { useNavigate, useLocation } from "react-router-dom";
-import { SurveyWizardFooter } from "./UI/SurveyWizardFooter";
-
-import { PayloadAction } from "@reduxjs/toolkit";
+import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+
 import MainLayout from "../Layout";
 import Modules from "../Modules";
 import Surveys from "../Surveys";
@@ -19,25 +15,8 @@ import Review from "../Review";
 import Generate from "../Generate";
 import DocFetcher from "../DocFetcher";
 import { ModulesProvider } from "../../contexts/ModulesContext";
-import { fetchFrontendContent } from "../../redux/actions/frontendContentActions";
 import { useAppDispatch, useAppSelector } from "../../redux/store";
-import { API, renderTooltipMarkdown } from "../../utils";
-import { CheckboxState, PrevNextStepCallback } from "../../types";
-import {
-  fetchSavedSurveys,
-  postSavedSurvey,
-  putSavedSurvey,
-} from "../../redux/actions/savedSurveysActions";
-import { savedSurveysActions } from "../../redux/reducers/savedSurveysReducer";
-
-import SurveyTable from "../SurveyTable";
-import {
-  SavedSurvey,
-  SurveyCategory,
-  SurveyMode,
-  SurveyTypes,
-} from "../../types/api";
-import { surveyFormActions } from "../../redux/reducers/surveyFormReducer";
+import { renderTooltipMarkdown } from "../../utils";
 import {
   DeleteSavedSurveyModal,
   DeleteSavedSurveyModalOptionsInterface,
@@ -49,11 +28,41 @@ import {
 import { modulesActions } from "../../redux/reducers/modulesReducer";
 import { StepNavigationWrapper } from "./UI/StepNavigationWrapper";
 import { SurveyWizardHeader } from "./UI/SurveyWizardHeader";
+import { SurveyWizardFooter } from "./UI/SurveyWizardFooter";
+import { SurveyWizardProvider, useSurveyWizard } from "./Context/SurveyWizardContext";
+import { fetchSavedSurveys } from "../../redux/actions/savedSurveysActions";
+import { savedSurveysActions } from "../../redux/reducers/savedSurveysReducer";
+import { SavedSurvey } from "../../types/api";
+import { fetchFrontendContent } from "../../redux/actions/frontendContentActions";
+import SurveyTable from "../SurveyTable";
 
-function SurveyWizard() {
+function SurveyWizardContent() {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
+  const location = useLocation();
+  const {
+    step,
+    setStep,
+    isValidating,
+    setIsValidating,
+    selectedSurveyToEdit,
+    setSelectedSurveyToEdit,
+    setIsCreatingSurvey,
+    isCreatingSurvey,
+    handleStepClick,
+    next,
+    resetSurveyData,
+    setGoToStep,
+    selectedModuleCounts,
+    numberOfQuestionsToBeGenerated,
+    prvsStep,
+  } = useSurveyWizard();
+
   const frontendContent = useAppSelector((state) => state.frontendContent.data);
+  const surveyForm = useAppSelector((state) => state.surveyForm);
+  const savedSurveys = useAppSelector((state) => state.savedSurveys);
+  const initialRequest = useAppSelector((state) => state.savedSurveys.initialRequest);
+
   const [deleteSavedSurveyModalOptions, setDeleteSavedSurveyModalOptions] =
     useState<DeleteSavedSurveyModalOptionsInterface>({
       uuid: null,
@@ -64,52 +73,7 @@ function SurveyWizard() {
       uuid: null,
       isOpen: false,
     });
-  const surveyForm = useAppSelector((state) => state.surveyForm);
-  const [step, setStep] = useState(0);
-  const [prvsStep, setPrvsStep] = useState(0);
-  const [goToStep, setGoToStep] = useState(0);
-  const [nextClickCount, setNextClickCount] = useState(0);
-  const [isValidating, setIsValidating] = useState(false);
-  const [selectedSurveyToEdit, setSelectedSurveyToEdit] =
-    useState<SavedSurvey | null>(null);
-  const [selectAllModules, setSelectAllModules] = useState<CheckboxState>({
-    isChecked: false,
-    run: false,
-  });
-  const [selectAllReview, setSelectAllReview] = useState<CheckboxState>({
-    isChecked: false,
-    run: false,
-  });
-  const [collapseAllModules, setCollapseAllModules] = useState<CheckboxState>({
-    isChecked: false,
-    run: false,
-  });
-  const [collapseAllIndicatorAreas, setCollapseAllIndicatorAreas] =
-    useState<CheckboxState>({
-      isChecked: false,
-      run: false,
-    });
-  const [collapseAllReview, setCollapseAllReview] = useState<CheckboxState>({
-    isChecked: false,
-    run: false,
-  });
-  const [selectedModuleCounts, setSelectedModuleCounts] = useState<{
-    moduleCount?: number;
-    submoduleCount?: number;
-  }>({
-    moduleCount: 0,
-    submoduleCount: 0,
-  });
 
-  const savedSurveys = useAppSelector((state) => state.savedSurveys);
-  const initialRequest = useAppSelector(
-    (state) => state.savedSurveys.initialRequest,
-  );
-
-  const [numberOfQuestionsToBeGenerated, setNumberOfQuestionsToBeGenerated] =
-    useState(0);
-  const navigate = useNavigate();
-  const location = useLocation();
   const state = (location.state || {}) as {
     surveyId?: number | string;
     copiedSurvey?: any;
@@ -122,24 +86,8 @@ function SurveyWizard() {
     t("surveyWizard.steps.selectAdditionQuestions"),
     t("surveyWizard.steps.generatePublishSurvey"),
   ];
-  const paths = ["survey", "modules", "review", "generate"];
-
-  const handleStepClick = useCallback(
-    (targetIndex: number) => {
-      if (targetIndex === step) return;
-      if (targetIndex > step && step === 1) {
-        setIsValidating(true);
-      } else {
-        setIsValidating(false);
-      }
-
-      setGoToStep(targetIndex);
-    },
-    [step],
-  );
 
   useEffect(() => {
-    // If a copiedSurvey is present in navigation state, use it directly
     if (state && state.copiedSurvey) {
       setSelectedSurveyToEdit(state.copiedSurvey);
       setIsCreatingSurvey(true);
@@ -163,46 +111,16 @@ function SurveyWizard() {
       dispatch(savedSurveysActions.completeInitialRequest());
     }
   }, []);
-  const step3Tooltip = renderTooltipMarkdown(frontendContent, "step3Tooltip");
-  const step1Tooltip = renderTooltipMarkdown(frontendContent, "step1Tooltip");
-  const stepTooltips = [step1Tooltip, null, step3Tooltip, null];
-
-  const next = useCallback(
-    (): PrevNextStepCallback => (nextCallback, prevCallback) => {
-      if (step !== goToStep) {
-        const proceed = () => {
-          setStep(goToStep);
-          navigate(`/design/${paths[goToStep]}`);
-        };
-
-        if (goToStep > step) {
-          if (nextCallback) {
-            nextCallback(proceed, step, setGoToStep);
-          } else {
-            proceed();
-          }
-        } else if (prevCallback) {
-          prevCallback();
-        } else {
-          proceed();
-          setIsValidating(false);
-        }
-
-        setPrvsStep(step);
-      }
-    },
-    [goToStep, step],
-  );
 
   useEffect(() => {
-    const startingPath = `/design/${paths[0]}`;
-    if (window.location.pathname !== startingPath) {
-      navigate(startingPath);
-    }
     if (!frontendContent) {
       dispatch(fetchFrontendContent());
     }
   }, []);
+
+  const step3Tooltip = renderTooltipMarkdown(frontendContent, "step3Tooltip");
+  const step1Tooltip = renderTooltipMarkdown(frontendContent, "step1Tooltip");
+  const stepTooltips = [step1Tooltip, null, step3Tooltip, null];
 
   const sidebar = (
     <StepNavigationWrapper
@@ -214,55 +132,7 @@ function SurveyWizard() {
   const showModulesCount = step === 1 && !!selectedModuleCounts.submoduleCount;
   const showQuestionsCount = step === 2 && !!numberOfQuestionsToBeGenerated;
 
-  const [isCreatingSurvey, setIsCreatingSurvey] = useState(
-    !(savedSurveys.data && savedSurveys.data.length > 0),
-  );
-
-  function resetSurveyData() {
-    dispatch(fetchSavedSurveys({}));
-    setGoToStep(0);
-    setIsCreatingSurvey(false);
-    setSelectedSurveyToEdit(null);
-    dispatch(surveyFormActions.resetSurveyData({}));
-  }
-
-  function isSavedSurveyActionSuccess(
-    res: PayloadAction<any>,
-    actionType: string,
-  ) {
-    if (res.type === actionType) {
-      resetSurveyData();
-    }
-  }
-
-  const saveSurvey = async () => {
-    if (selectedSurveyToEdit && selectedSurveyToEdit.uuid) {
-      dispatch(
-        putSavedSurvey({ ...surveyForm, uuid: selectedSurveyToEdit.uuid }),
-      ).then((res) => {
-        isSavedSurveyActionSuccess(
-          res,
-          "saved_surveys/PUT_SAVEDSURVEYS/fulfilled",
-        );
-      });
-    } else {
-      dispatch(postSavedSurvey(surveyForm)).then((res) => {
-        isSavedSurveyActionSuccess(
-          res,
-          "saved_surveys/POST_SAVEDSURVEYS/fulfilled",
-        );
-      });
-    }
-  };
-
-  type ValueTypes = {
-    category: SurveyCategory | null | undefined;
-    type: SurveyTypes | null | undefined;
-    mode: SurveyMode | null | undefined;
-    attributes: number[] | null;
-  };
-
-  const prevValues = useRef<ValueTypes>({
+  const prevValues = useRef({
     category: null,
     type: null,
     mode: null,
@@ -279,12 +149,9 @@ function SurveyWizard() {
   const surveyTableRef = useRef<{ clearFilters: () => void }>(null);
   useEffect(() => {
     if (step === 1 && !selectedSurveyToEdit) {
-      // Check if any of the four fields have changed
-      if (
-        JSON.stringify(prevValues.current) !== JSON.stringify(currentValues)
-      ) {
+      if (JSON.stringify(prevValues.current) !== JSON.stringify(currentValues)) {
         dispatch(modulesActions.clearModules());
-        prevValues.current = currentValues;
+        prevValues.current = currentValues as any;
       }
     }
   }, [step, selectedSurveyToEdit, currentValues, dispatch]);
@@ -293,15 +160,13 @@ function SurveyWizard() {
     ? savedSurveys.data.map((survey) =>
         Object.entries(survey).reduce<{ [key: string]: unknown }>(
           (newSurvey, [key, value]) => {
-            // For each property, if the value is an object, replace it with its name or label
             if (value && typeof value === "object") {
-              // if the value is an array, map through it and join the names or labels into a string
               if (Array.isArray(value)) {
                 newSurvey[key] = value
                   .map((item) => item.name || item.label)
                   .join(", ");
               } else {
-                newSurvey[key] = value.name || value.label;
+                newSurvey[key] = (value as any).name || (value as any).label;
               }
             } else {
               newSurvey[key] = value;
@@ -312,6 +177,7 @@ function SurveyWizard() {
         ),
       )
     : [];
+
   const tableContent = (
     <div>
       <SurveyTable
@@ -341,6 +207,7 @@ function SurveyWizard() {
       />
     </div>
   );
+
   const step0Content =
     initialRequest || isCreatingSurvey ? (
       <Surveys
@@ -351,6 +218,7 @@ function SurveyWizard() {
     ) : (
       tableContent
     );
+
   return (
     <MainLayout
       title={t("surveyWizard.title")}
@@ -359,7 +227,7 @@ function SurveyWizard() {
       <DocFetcher />
       <DeleteSavedSurveyModal
         deleteSavedSurveyModalOptions={deleteSavedSurveyModalOptions}
-        isSavedSurveyActionSuccess={isSavedSurveyActionSuccess}
+        isSavedSurveyActionSuccess={() => {}}
         setDeleteSavedSurveyModalOptions={setDeleteSavedSurveyModalOptions}
         selectedSavedSurvey={savedSurveys.data?.find(
           (survey) => survey.uuid === deleteSavedSurveyModalOptions.uuid,
@@ -377,100 +245,29 @@ function SurveyWizard() {
           <aside className="wfp--form-wizard__sidebar">{sidebar}</aside>
           <Module className="survey-module">
             <ModuleHeader>
-              <SurveyWizardHeader
-                step={step}
-                stepsCount={stepsCount}
-                steps={steps}
-                stepTooltips={stepTooltips}
-                showModulesCount={showModulesCount}
-                showQuestionsCount={showQuestionsCount}
-                selectedModuleCounts={selectedModuleCounts}
-                numberOfQuestionsToBeGenerated={numberOfQuestionsToBeGenerated}
-                selectAllModules={selectAllModules}
-                setSelectAllModules={setSelectAllModules}
-                collapseAllModules={collapseAllModules}
-                setCollapseAllModules={setCollapseAllModules}
-                collapseAllIndicatorAreas={collapseAllIndicatorAreas}
-                setCollapseAllIndicatorAreas={setCollapseAllIndicatorAreas}
-                selectAllReview={selectAllReview}
-                setSelectAllReview={setSelectAllReview}
-                collapseAllReview={collapseAllReview}
-                setCollapseAllReview={setCollapseAllReview}
-              />
+              <SurveyWizardHeader />
             </ModuleHeader>
             <ModulesProvider>
               <ModuleBody className="survey-content">
                 {step === 0 && step0Content}
-                {step === 1 && (
-                  <Modules
-                    next={next()}
-                    selectAll={selectAllModules}
-                    setSelectAll={setSelectAllModules}
-                    collapseAllModules={collapseAllModules}
-                    setCollapseAllModules={setCollapseAllModules}
-                    collapseAllIndicatorAreas={collapseAllIndicatorAreas}
-                    setCollapseAllIndicatorAreas={setCollapseAllIndicatorAreas}
-                    selectedSurveyToEdit={selectedSurveyToEdit}
-                    {...{
-                      prvsStep,
-                      step,
-                      setSelectedModuleCounts,
-                    }}
-                    setIsValidating={setIsValidating}
-                  />
-                )}
-                {step === 2 && (
-                  <Review
-                    next={next()}
-                    selectAll={selectAllReview}
-                    setSelectAll={setSelectAllReview}
-                    collapseAll={collapseAllReview}
-                    setCollapseAll={setCollapseAllReview}
-                    selectedSurveyToEdit={selectedSurveyToEdit}
-                    {...{
-                      numberOfQuestionsToBeGenerated,
-                      setNumberOfQuestionsToBeGenerated,
-                    }}
-                  />
-                )}
-                {step === 3 && <Generate next={next()} />}
+                {step === 1 && <Modules />}
+                {step === 2 && <Review />}
+                {step === 3 && <Generate />}
               </ModuleBody>
             </ModulesProvider>
-            <SurveyWizardFooter
-              step={step}
-              stepsCount={stepsCount}
-              isCreatingSurvey={isCreatingSurvey}
-              isValidating={isValidating}
-              savedSurveysData={savedSurveys.data}
-              onPreviousClick={() => {
-                if (step > 0) {
-                  setGoToStep(step - 1);
-                } else {
-                  setIsCreatingSurvey(false);
-                  resetSurveyData();
-                }
-              }}
-              onNextClick={() => {
-                if (step === 1) {
-                  setIsValidating(true);
-                }
-                setGoToStep(step + 1);
-                setNextClickCount(nextClickCount + 1);
-              }}
-              onCreateSurveyClick={() => {
-                setIsCreatingSurvey(true);
-                if (surveyTableRef.current) {
-                  surveyTableRef.current.clearFilters();
-                }
-              }}
-              onSaveClick={() => {
-                void saveSurvey();
-              }}
-            />
+            <SurveyWizardFooter />
           </Module>
         </div>
       </Wrapper>
     </MainLayout>
+  );
+}
+
+function SurveyWizard() {
+  return (
+    <SurveyWizardProvider>
+      <SurveyWizardContent />
+    </SurveyWizardProvider>
   );
 }
 

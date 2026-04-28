@@ -1,26 +1,18 @@
 import React from "react";
 import { Checkbox } from "@wfp/react";
 import { useTranslation } from "react-i18next";
-import { CheckboxState } from "../../../types";
+import { useSurveyWizard } from "../Context/SurveyWizardContext";
 
-type StepOneControlsProps = {
-  selectAllModules: CheckboxState;
-  setSelectAllModules: (value: CheckboxState) => void;
-  collapseAllModules: CheckboxState;
-  setCollapseAllModules: (value: CheckboxState) => void;
-  collapseAllIndicatorAreas: CheckboxState;
-  setCollapseAllIndicatorAreas: (value: CheckboxState) => void;
-};
-
-export function StepOneControls({
-  selectAllModules,
-  setSelectAllModules,
-  collapseAllModules,
-  setCollapseAllModules,
-  collapseAllIndicatorAreas,
-  setCollapseAllIndicatorAreas,
-}: StepOneControlsProps) {
+export function StepOneControls() {
   const { t } = useTranslation();
+  const {
+    selectAllModules,
+    setSelectAllModules,
+    collapseAllModules,
+    setCollapseAllModules,
+    collapseAllIndicatorAreas,
+    setCollapseAllIndicatorAreas,
+  } = useSurveyWizard();
 
   return (
     <>
