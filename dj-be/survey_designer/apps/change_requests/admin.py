@@ -86,7 +86,7 @@ class ChangeRequestAdmin(
         button_text = "Approve" if obj.user_can_approve(self.request.user) else "Review"
         url = reverse("approve_change_request", args=[obj.id])
         return format_html(
-            "<a class='button' type='button' href='{url}'>{button_text}</button>",
+            "<a class='button' href='{url}'>{button_text}</a>",
             url=url,
             button_text=button_text,
         )

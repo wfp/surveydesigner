@@ -123,6 +123,33 @@ class ChoicesImport(BaseImport):
     def get_processed_names(self) -> set:
         return set(self.cleaned_data.keys())
 
+    def _choice_group_has_changes(self, choice_group, choices_data):
+        existing_choices = {
+            choice.name.casefold(): choice
+            for choice in choice_group.choices.prefetch_related("translations").all()
+        }
+
+        for idx, choice_data in enumerate(choices_data, start=1):
+            existing_choice = existing_choices.get(choice_data["name"].casefold())
+            if existing_choice is None:
+                return True
+
+            if existing_choice.label != choice_data["label"]:
+                return True
+
+            if getattr(existing_choice, "order", 0) in (None, 0):
+                return True
+
+            existing_translations = {
+                translation.language: translation.label
+                for translation in existing_choice.translations.all()
+            }
+            for language_name, translation in choice_data["languages"].items():
+                if existing_translations.get(language_name) != translation:
+                    return True
+
+        return False
+
     def create(self, skip_saving=False):
         """
         Create/update ChoiceGroups, Choices, and ChoiceTranslations from cleaned_data.
@@ -134,8 +161,11 @@ class ChoicesImport(BaseImport):
 
         for name_key, c_data in self.cleaned_data.items():
             if skip_saving:
-                self.log_change(ChoiceGroup, name_key, create=True)
-                choice_group = ChoiceGroup.objects.filter(name=name_key).first()
+                choice_group = ChoiceGroup.objects.filter(name__iexact=name_key).first()
+                if not choice_group:
+                    self.log_change(ChoiceGroup, name_key, create=True)
+                elif self._choice_group_has_changes(choice_group, c_data["choices"]):
+                    self.log_change(ChoiceGroup, name_key, create=False)
             else:
                 choice_group, created_group = self.permissions_based_method(
                     name=name_key, defaults={**self.user_tracking_kwargs}

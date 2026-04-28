@@ -61,8 +61,11 @@ class RecallPeriodImport(BaseImport):
             description = data["description"]
 
             if skip_saving:
-                self.log_change(RecallPeriod, name, create=True)
-                recall_period = RecallPeriod.objects.filter(name=name).first()
+                recall_period = RecallPeriod.objects.filter(name__iexact=name).first()
+                if not recall_period:
+                    self.log_change(RecallPeriod, name, create=True)
+                elif (recall_period.description or "") != (description or ""):
+                    self.log_change(RecallPeriod, name, create=False)
             else:
                 recall_period, created = self.permissions_based_method(
                     name=name,

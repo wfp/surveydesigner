@@ -70,24 +70,39 @@ class IndicatorsImport(BaseImport):
 
             self._validate_question_name(question_name, processed_root_questions)
 
+    def _get_question(self, question_name):
+        question = BaseQuestion.objects.exclude(
+            ~Q(root_question__name=question_name),
+            ~Q(sub_question__name=question_name),
+        ).first()
+
+        if question:
+            return question
+
+        return BaseQuestion.objects.exclude(
+            ~Q(repeat_section__name=question_name)
+        ).first()
+
     def create(self, skip_saving=False):
         for data in self.cleaned_data:
             indicator_name = data["indicator_name"]
             indicator_label = data["indicator_label"]
             question_name = data["question_name"]
             if skip_saving:
-                self.log_change(Indicator, indicator_name, create=True)
+                indicator = Indicator.objects.filter(name__iexact=indicator_name).first()
+                if not indicator:
+                    self.log_change(Indicator, indicator_name, create=True)
+                    continue
+
+                question = self._get_question(question_name)
+                if (
+                    indicator.label != indicator_label
+                    or question is None
+                    or not indicator.questions.filter(id=question.id).exists()
+                ):
+                    self.log_change(Indicator, indicator_name, create=False)
             else:
-                question = BaseQuestion.objects.exclude(
-                    ~Q(root_question__name=question_name),
-                    ~Q(sub_question__name=question_name),
-                ).first()
-
-                if not question:
-                    question = BaseQuestion.objects.exclude(
-                        ~Q(repeat_section__name=question_name),
-                    ).first()
-
+                question = self._get_question(question_name)
                 if not question:
                     continue
 

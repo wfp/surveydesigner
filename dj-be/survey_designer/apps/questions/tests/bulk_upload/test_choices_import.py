@@ -164,6 +164,46 @@ def test_reimport_does_not_change_existing_nonzero_orders(admin):
     assert names_orders == [("1", 1), ("0", 2), ("777", 3), ("888", 4)]
 
 
+class TestChoicesImportPreview(TestCase):
+    def setUp(self):
+        self.admin = get_user_model().objects.create_user(
+            email="choices-preview@example.com",
+            password="test_user",
+            is_superuser=True,
+            is_staff=True,
+        )
+
+    def test_preview_of_unchanged_existing_choice_group_has_no_updates(self):
+        rows = [
+            {"choice_list": "Yesnodkref", "name": "1", "labels": {"en": "Yes"}},
+            {"choice_list": "Yesnodkref", "name": "0", "labels": {"en": "No"}},
+            {
+                "choice_list": "Yesnodkref",
+                "name": "777",
+                "labels": {"en": "Prefer not to answer"},
+            },
+        ]
+
+        wb_initial = load_workbook(build_choices_wb(rows, with_other_sheets=False))
+        initial_import = ChoicesImport(
+            wb_initial["choices"], dict(settings.LANGUAGES), self.admin
+        )
+        initial_import.process()
+        self.assertTrue(initial_import.is_valid())
+        initial_import.create()
+
+        wb_preview = load_workbook(build_choices_wb(rows, with_other_sheets=False))
+        preview_import = ChoicesImport(
+            wb_preview["choices"], dict(settings.LANGUAGES), self.admin
+        )
+        preview_import.process()
+        self.assertTrue(preview_import.is_valid())
+        preview_import.create(skip_saving=True)
+
+        self.assertEqual(dict(preview_import.to_be_created), {})
+        self.assertEqual(dict(preview_import.to_be_updated), {})
+
+
 @pytest.mark.django_db
 def test_reimport_repairs_zero_or_null_order(admin):
     rows = [

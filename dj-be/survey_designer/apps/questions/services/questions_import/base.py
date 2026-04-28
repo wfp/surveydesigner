@@ -71,7 +71,6 @@ class BaseImport:
         else:
             model_name = model._meta.verbose_name.title()
 
-        if create:
-            self.to_be_created[model_name].append(name)
-        else:
-            self.to_be_updated[model_name].append(name)
+        changes = self.to_be_created if create else self.to_be_updated
+        if name not in changes[model_name]:
+            changes[model_name].append(name)
