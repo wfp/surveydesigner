@@ -72,13 +72,16 @@ class SubmoduleRequiredGroupImport(BaseImport):
             suffix_2_name = data["suffix_2"]
             recall_period_name = data["recall_period"]
 
-            submodule = Submodule.objects.filter(name=submodule_name).first()
-            suffix = Suffix.objects.filter(name=suffix_name).first()
-            suffix_2 = Suffix.objects.filter(name=suffix_2_name).first()
-            recall_period = RecallPeriod.objects.filter(name=recall_period_name).first()
+            submodule = Submodule.objects.filter(name__iexact=submodule_name).first()
+            suffix = Suffix.objects.filter(name__iexact=suffix_name).first()
+            suffix_2 = Suffix.objects.filter(name__iexact=suffix_2_name).first()
+            recall_period = RecallPeriod.objects.filter(
+                name__iexact=recall_period_name
+            ).first()
 
             if skip_saving:
-                self.log_change(SubmoduleMapping, submodule_name, create=True)
+                if submodule is None or not submodule.mapping_id:
+                    self.log_change(SubmoduleMapping, submodule_name, create=True)
             else:
                 submodule_mapping = submodule.mapping
                 created = False
@@ -93,11 +96,21 @@ class SubmoduleRequiredGroupImport(BaseImport):
                     self.log_addition(submodule_mapping)
 
             if skip_saving:
-                self.log_change(
-                    SubmoduleRequiredGroup,
-                    f"{submodule_name}-{suffix_name}-{suffix_2_name}-{recall_period_name}",
-                    create=True,
-                )
+                group_exists = False
+                if submodule is not None:
+                    group_exists = SubmoduleRequiredGroup.objects.filter(
+                        submodule=submodule,
+                        required_suffix=suffix,
+                        required_nested_suffix=suffix_2,
+                        required_recall_period=recall_period,
+                    ).exists()
+
+                if not group_exists:
+                    self.log_change(
+                        SubmoduleRequiredGroup,
+                        f"{submodule_name}-{suffix_name}-{suffix_2_name}-{recall_period_name}",
+                        create=True,
+                    )
             else:
                 group_mapping, created = SubmoduleRequiredGroup.objects.get_or_create(
                     submodule=submodule,

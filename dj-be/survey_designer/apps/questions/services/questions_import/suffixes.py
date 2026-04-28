@@ -144,6 +144,25 @@ class SuffixesImport(BaseImport):
     def get_processed_names(self) -> dict:
         return self.processed_names_with_nested_suffixes
 
+    def _suffix_has_changes(self, suffix, data):
+        existing_choice_list = suffix.choices.name.casefold() if suffix.choices else ""
+        new_choice_list = (data.get("choice_list") or "").casefold()
+        existing_nested_suffixes = {
+            name.casefold()
+            for name in suffix.nested_suffixes.values_list("name", flat=True)
+        }
+        new_nested_suffixes = {
+            nested_suffix.casefold()
+            for nested_suffix in (data.get("nested_suffixes") or [])
+        }
+
+        return (
+            (suffix.description or "") != (data.get("description") or "")
+            or suffix.type != data["type"]
+            or existing_choice_list != new_choice_list
+            or existing_nested_suffixes != new_nested_suffixes
+        )
+
     def create(self, created_choices: dict, skip_saving=False):
         suffixes_to_process = {}
 
@@ -151,8 +170,11 @@ class SuffixesImport(BaseImport):
             name = data["name"]
 
             if skip_saving:
-                self.log_change(Suffix, name, create=True)
-                suffix = Suffix.objects.filter(name=name).first()
+                suffix = Suffix.objects.filter(name__iexact=name).first()
+                if not suffix:
+                    self.log_change(Suffix, name, create=True)
+                elif self._suffix_has_changes(suffix, data):
+                    self.log_change(Suffix, name, create=False)
             else:
                 suffix, created = self.permissions_based_method(
                     name=data["name"],
