@@ -50,16 +50,25 @@ export async function apiValidation(
 
 export function getErrorDisplay(error: string | string[]) {
   if (_.isArray(error)) {
+    const shouldScroll = error.length > 10;
+
     return (
-      <>
+      <div
+        className={
+          shouldScroll
+            ? "modules-validation-errors modules-validation-errors--scrollable"
+            : "modules-validation-errors"
+        }
+      >
         {error.map((e, index) => (
-          // eslint-disable-next-line react/jsx-key
-          <div className="d-flex">
-            <div style={{ minWidth: "15px" }}>{index + 1}. </div>
+          <div className="modules-validation-errors__item" key={`${index}-${e}`}>
+            <div className="modules-validation-errors__index">
+              {index + 1}.
+            </div>
             <div>{e}</div>
           </div>
         ))}
-      </>
+      </div>
     );
   }
   return error;

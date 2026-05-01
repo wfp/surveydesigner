@@ -7,11 +7,13 @@ from django.contrib import admin as django_admin
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.contrib.admin import AdminSite
+from django.contrib.admin.widgets import AutocompleteSelectMultiple
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from lxml import html
 from modules.models import Module, Submodule
-from questions.admin import RootQuestionTranslationInline
+from questions.admin import RepeatSectionAdmin, RootQuestionTranslationInline
 from questions.const import QuestionType
 from questions.models import (
     BaseQuestion,
@@ -26,6 +28,10 @@ from questions.models import (
     Suffix,
 )
 from surveys.models import SurveyCategory, SurveyType
+
+
+def _build_repeat_section_admin():
+    return RepeatSectionAdmin(RepeatSection, AdminSite())
 
 
 def _assert_admin_search_works(logged_admin_client, model, expected_text):
@@ -610,6 +616,15 @@ def test_repeat_section_search_view(logged_admin_client, repeat_section_1):
     _assert_admin_search_works(
         logged_admin_client, RepeatSection, repeat_section_1.name
     )
+
+
+def test_repeat_section_questions_field_uses_autocomplete_widget(request_factory):
+    repeat_section_admin = _build_repeat_section_admin()
+    request = request_factory.get(reverse("admin:questions_repeatsection_add"))
+    form = repeat_section_admin.get_form(request)()
+
+    assert repeat_section_admin.autocomplete_fields == ("questions",)
+    assert isinstance(form.fields["questions"].widget, AutocompleteSelectMultiple)
 
 
 def test_sub_question_list_view(

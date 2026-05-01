@@ -14,6 +14,37 @@ from surveys.models import SurveyAttribute, SurveyCategory, SurveyMode, SurveyTy
 from surveys.serializers import SurveyCategoryWithoutIndicatorsSerializer
 
 
+def _get_request_cached_value(request, key, factory):
+    if request is None:
+        return factory()
+    if not hasattr(request, key):
+        setattr(request, key, factory())
+    return getattr(request, key)
+
+
+def _set_cached_model_choices(
+    field,
+    request,
+    queryset_cache_key,
+    choices_cache_key,
+    queryset_factory,
+):
+    queryset = _get_request_cached_value(request, queryset_cache_key, queryset_factory)
+    field.queryset = queryset
+    if request is None:
+        return
+
+    empty_choices = []
+    if field.empty_label is not None:
+        empty_choices.append(("", field.empty_label))
+
+    field.choices = empty_choices + _get_request_cached_value(
+        request,
+        choices_cache_key,
+        lambda: [(obj.pk, field.label_from_instance(obj)) for obj in queryset],
+    )
+
+
 class SubmoduleMappingForm(forms.ModelForm):
     category_to_type = forms.JSONField(required=False, widget=forms.HiddenInput())
 
@@ -51,9 +82,17 @@ class SurveyCategoryForm(BaseMappingForm):
         fields = "__all__"
 
     def __init__(self, *args, **kwargs):
+        request = kwargs.pop("request", None) or getattr(self, "request", None)
+        user = kwargs.pop("user", None) or getattr(self, "user", None)
         super().__init__(*args, **kwargs)
-        self.fields["survey_category"].queryset = (
-            SurveyCategory.objects.visible_for_user(self.user)
+        _set_cached_model_choices(
+            self.fields["survey_category"],
+            request,
+            "_visible_survey_categories",
+            "_visible_survey_category_choices",
+            lambda: SurveyCategory.objects.visible_for_user(user).prefetch_related(
+                "organizations"
+            ),
         )
 
 
@@ -64,8 +103,17 @@ class SurveyTypeForm(BaseMappingForm):
 
     def __init__(self, *args, **kwargs):
         user = kwargs.pop("user", None)
+        request = kwargs.pop("request", None) or getattr(self, "request", None)
         super().__init__(*args, **kwargs)
-        self.fields["survey_type"].queryset = SurveyType.objects.visible_for_user(user)
+        _set_cached_model_choices(
+            self.fields["survey_type"],
+            request,
+            "_visible_survey_types",
+            "_visible_survey_type_choices",
+            lambda: SurveyType.objects.visible_for_user(user).prefetch_related(
+                "organizations"
+            ),
+        )
 
 
 class SurveyModeForm(BaseMappingForm):
@@ -75,10 +123,17 @@ class SurveyModeForm(BaseMappingForm):
 
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop("user", None)
+        request = kwargs.pop("request", None) or getattr(self, "request", None)
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.survey_type:
-            self.fields["survey_mode"].queryset = SurveyMode.objects.visible_for_user(
-                self.user
+            _set_cached_model_choices(
+                self.fields["survey_mode"],
+                request,
+                "_visible_survey_modes",
+                "_visible_survey_mode_choices",
+                lambda: SurveyMode.objects.visible_for_user(
+                    self.user
+                ).prefetch_related("organizations"),
             )
 
 
@@ -88,9 +143,17 @@ class SurveyAttributeForm(BaseMappingForm):
         fields = "__all__"
 
     def __init__(self, *args, **kwargs):
+        request = kwargs.pop("request", None) or getattr(self, "request", None)
+        user = kwargs.pop("user", None) or getattr(self, "user", None)
         super().__init__(*args, **kwargs)
-        self.fields["survey_attribute"].queryset = (
-            SurveyAttribute.objects.visible_for_user(self.user)
+        _set_cached_model_choices(
+            self.fields["survey_attribute"],
+            request,
+            "_visible_survey_attributes",
+            "_visible_survey_attribute_choices",
+            lambda: SurveyAttribute.objects.visible_for_user(user).prefetch_related(
+                "organizations"
+            ),
         )
 
 
@@ -101,9 +164,16 @@ class IndicatorSurveyTypeForm(BaseMappingForm):
 
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop("user", None)
+        request = kwargs.pop("request", None) or getattr(self, "request", None)
         super().__init__(*args, **kwargs)
-        self.fields["survey_type"].queryset = SurveyType.objects.visible_for_user(
-            self.user
+        _set_cached_model_choices(
+            self.fields["survey_type"],
+            request,
+            "_visible_survey_types",
+            "_visible_survey_type_choices",
+            lambda: SurveyType.objects.visible_for_user(
+                self.user
+            ).prefetch_related("organizations"),
         )
 
 
@@ -114,9 +184,16 @@ class IndicatorSurveyModeForm(BaseMappingForm):
 
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop("user", None)
+        request = kwargs.pop("request", None) or getattr(self, "request", None)
         super().__init__(*args, **kwargs)
-        self.fields["survey_mode"].queryset = SurveyMode.objects.visible_for_user(
-            self.user
+        _set_cached_model_choices(
+            self.fields["survey_mode"],
+            request,
+            "_visible_survey_modes",
+            "_visible_survey_mode_choices",
+            lambda: SurveyMode.objects.visible_for_user(
+                self.user
+            ).prefetch_related("organizations"),
         )
 
 
@@ -161,9 +238,13 @@ class SubmoduleMappingSurveyCategoryInlineFormSet(BaseInlineFormSet):
     def __init__(self, *args, **kwargs):
         instance = kwargs.get("instance")
         user = self.request.user
-        categories = SurveyCategory.objects.prefetch_related(
-            "organizations"
-        ).visible_for_user(user)
+        categories = _get_request_cached_value(
+            self.request,
+            "_visible_survey_categories",
+            lambda: SurveyCategory.objects.visible_for_user(user).prefetch_related(
+                "organizations"
+            ),
+        )
 
         if instance and instance.id:
             ids = instance.survey_categories.values_list("id", flat=True)
@@ -175,13 +256,25 @@ class SubmoduleMappingSurveyCategoryInlineFormSet(BaseInlineFormSet):
             ]
         super().__init__(*args, **kwargs)
 
+    def get_form_kwargs(self, index):
+        kwargs = super().get_form_kwargs(index)
+        kwargs["request"] = self.request
+        kwargs["user"] = self.request.user
+        return kwargs
+
 
 class MappingSurveyTypeInlineFormSet(BaseInlineFormSet):
     def __init__(self, *args, **kwargs):
         instance = kwargs.get("instance")
         user = self.request.user if self.request else None
         self.user = user
-        types = SurveyType.objects.visible_for_user(user)
+        types = _get_request_cached_value(
+            self.request,
+            "_visible_survey_types",
+            lambda: SurveyType.objects.visible_for_user(user).prefetch_related(
+                "organizations"
+            ),
+        )
         if instance and instance.id:
             ids = instance.survey_types.values_list("id", flat=True)
             types = types.exclude(id__in=ids)
@@ -196,6 +289,7 @@ class MappingSurveyTypeInlineFormSet(BaseInlineFormSet):
     def get_form_kwargs(self, index):
         kwargs = super().get_form_kwargs(index)
         kwargs["user"] = self.user
+        kwargs["request"] = self.request
         return kwargs
 
 
@@ -204,7 +298,13 @@ class MappingSurveyModeInlineFormSet(BaseInlineFormSet):
         instance = kwargs.get("instance")
         user = self.request.user if self.request else None
         self.user = user
-        modes = SurveyMode.objects.visible_for_user(user)
+        modes = _get_request_cached_value(
+            self.request,
+            "_visible_survey_modes",
+            lambda: SurveyMode.objects.visible_for_user(user).prefetch_related(
+                "organizations"
+            ),
+        )
         if instance and instance.id:
             ids = instance.modes.values_list("survey_mode__id", flat=True)
             modes = modes.exclude(id__in=ids)
@@ -219,6 +319,7 @@ class MappingSurveyModeInlineFormSet(BaseInlineFormSet):
     def get_form_kwargs(self, index):
         kwargs = super().get_form_kwargs(index)
         kwargs["user"] = self.user
+        kwargs["request"] = self.request
         return kwargs
 
 
@@ -226,9 +327,13 @@ class MappingSurveyAttributeInlineFormSet(BaseInlineFormSet):
     def __init__(self, *args, **kwargs):
         instance = kwargs.get("instance")
         user = self.request.user
-        attrs = SurveyAttribute.objects.prefetch_related(
-            "organizations"
-        ).visible_for_user(user)
+        attrs = _get_request_cached_value(
+            self.request,
+            "_visible_survey_attributes",
+            lambda: SurveyAttribute.objects.visible_for_user(user).prefetch_related(
+                "organizations"
+            ),
+        )
 
         if instance and instance.id:
             ids = instance.survey_attributes.values_list("id", flat=True)
@@ -239,3 +344,9 @@ class MappingSurveyAttributeInlineFormSet(BaseInlineFormSet):
                 {"survey_attribute": sc, "include": False} for sc in attrs
             ]
         super().__init__(*args, **kwargs)
+
+    def get_form_kwargs(self, index):
+        kwargs = super().get_form_kwargs(index)
+        kwargs["request"] = self.request
+        kwargs["user"] = self.request.user
+        return kwargs

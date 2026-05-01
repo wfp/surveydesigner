@@ -312,6 +312,7 @@ class UserAPIKeyAdmin(admin.ModelAdmin):
         "site",
         "name",
     )
+    list_select_related = ("user", "site")
     list_display_links = None
 
     def has_change_permission(self, request, obj=None):

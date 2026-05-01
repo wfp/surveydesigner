@@ -10,7 +10,6 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 from django.db.models import Q
-from django.utils.functional import cached_property
 from organization.models import Organization
 from organization.utils import get_organizations
 
@@ -56,7 +55,7 @@ class User(SoftDeleteMixin, TimestampMixin, PermissionsMixin, AbstractBaseUser):
             ).exists()
         )
 
-    @cached_property
+    @property
     def can_manage_change_requests(self) -> bool:
         return (
             self.is_superuser
