@@ -79,6 +79,12 @@ def sync_relevant_dependencies(obj):
     obj.relevant_dependencies.clear()
 
 
+def get_request_cached_value(request, key, factory):
+    if not hasattr(request, key):
+        setattr(request, key, factory())
+    return getattr(request, key)
+
+
 class ModuleListFilter(admin.SimpleListFilter):
     title = "Module"
     parameter_name = "module_id"
@@ -198,7 +204,7 @@ class ModuleAdmin(
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        return queryset.annotate(
+        return queryset.select_related("updated_by").annotate(
             module_organizations=ArrayAgg("organizations__name", distinct=True)
         )
 
@@ -289,7 +295,7 @@ class SubmoduleAdmin(
         ModuleListFilter,
     )
     restricted_visibility_fields = ["module"]
-    list_select_related = ("module",)
+    list_select_related = ("module", "updated_by")
     search_fields = ("label", "name", "description")
     inlines = (SubmoduleRequiredGroupInline, SubmoduleTranslationInline)
     readonly_fields = ("question_list_button",)
@@ -340,7 +346,7 @@ class SubmoduleAdmin(
         sync_relevant_dependencies(obj)
 
     def get_queryset(self, request):
-        queryset = super().get_queryset(request)
+        queryset = super().get_queryset(request).select_related("module", "updated_by")
 
         queryset = queryset.annotate(
             question_count=models.Count("root_questions"),
@@ -350,7 +356,7 @@ class SubmoduleAdmin(
         if admin.options.TO_FIELD_VAR in request.GET:
             queryset = queryset.visible_for_user(request.user)
 
-        return queryset.order_by("order")
+        return queryset.order_by("order", "pk")
 
     @admin.display(description="Module")
     def module_display(self, obj):
@@ -414,9 +420,19 @@ class SubmoduleMappingSurveyCategoryInline(
         )
 
     def get_extra(self, request, obj=None, **kwargs):
-        if obj:
-            return SurveyCategory.objects.count() - obj.survey_categories.count()
-        return SurveyCategory.objects.count()
+        total_categories = get_request_cached_value(
+            request,
+            "_visible_survey_category_count",
+            lambda: SurveyCategory.objects.visible_for_user(request.user).count(),
+        )
+        if obj and obj.pk:
+            existing_categories_count = get_request_cached_value(
+                request,
+                f"_submodule_mapping_categories_count_{obj.pk}",
+                lambda: obj.survey_categories.visible_for_user(request.user).count(),
+            )
+            return max(total_categories - existing_categories_count, 0)
+        return total_categories
 
 
 class SubmoduleMappingSurveyModeInline(
@@ -437,9 +453,21 @@ class SubmoduleMappingSurveyModeInline(
         )
 
     def get_extra(self, request, obj=None, **kwargs):
+        total_modes = get_request_cached_value(
+            request,
+            "_visible_survey_mode_count",
+            lambda: SurveyMode.objects.visible_for_user(request.user).count(),
+        )
         if obj and obj.pk:
-            return SurveyMode.objects.count() - obj.modes.count()
-        return SurveyMode.objects.count()
+            existing_modes_count = get_request_cached_value(
+                request,
+                f"_submodule_mapping_modes_count_{obj.pk}",
+                lambda: obj.modes.filter(
+                    survey_mode__in=SurveyMode.objects.visible_for_user(request.user)
+                ).count(),
+            )
+            return max(total_modes - existing_modes_count, 0)
+        return total_modes
 
 
 class SubmoduleMappingSurveyTypeInline(
@@ -462,9 +490,19 @@ class SubmoduleMappingSurveyTypeInline(
         )
 
     def get_extra(self, request, obj=None, **kwargs):
-        if obj:
-            return SurveyType.objects.count() - obj.survey_types.count()
-        return SurveyType.objects.count()
+        total_types = get_request_cached_value(
+            request,
+            "_visible_survey_type_count",
+            lambda: SurveyType.objects.visible_for_user(request.user).count(),
+        )
+        if obj and obj.pk:
+            existing_types_count = get_request_cached_value(
+                request,
+                f"_submodule_mapping_types_count_{obj.pk}",
+                lambda: obj.survey_types.visible_for_user(request.user).count(),
+            )
+            return max(total_types - existing_types_count, 0)
+        return total_types
 
 
 class SubmoduleMappingSurveyAttributeInline(
@@ -486,9 +524,19 @@ class SubmoduleMappingSurveyAttributeInline(
         )
 
     def get_extra(self, request, obj=None, **kwargs):
-        if obj:
-            return SurveyAttribute.objects.count() - obj.survey_attributes.count()
-        return SurveyAttribute.objects.count()
+        total_attributes = get_request_cached_value(
+            request,
+            "_visible_survey_attribute_count",
+            lambda: SurveyAttribute.objects.visible_for_user(request.user).count(),
+        )
+        if obj and obj.pk:
+            existing_attributes_count = get_request_cached_value(
+                request,
+                f"_submodule_mapping_attributes_count_{obj.pk}",
+                lambda: obj.survey_attributes.visible_for_user(request.user).count(),
+            )
+            return max(total_attributes - existing_attributes_count, 0)
+        return total_attributes
 
 
 @admin.register(SubmoduleMapping)
@@ -516,6 +564,7 @@ class SubmoduleMappingAdmin(AdminUserTrackingMixin, nested_admin.NestedModelAdmi
         inlines = super().get_inlines(request, obj)
         for inline in inlines:
             inline.form.user = request.user
+            inline.form.request = request
         return inlines
 
     def get_model_perms(self, request):
@@ -646,7 +695,7 @@ class IndicatorAdmin(
     nested_admin.NestedModelAdmin,
 ):
     exclude = ("created_by", "updated_by")
-    # autocomplete_fields = ("questions", "survey_types")
+    autocomplete_fields = ("questions",)
     search_fields = ("name", "label", "description")
     list_display = (
         "name",
@@ -660,11 +709,24 @@ class IndicatorAdmin(
     list_filter = (IndicatorSurveyTypeFilter, IndicatorSurveyModeFilter)
     actions = ("export_action",)
     dynamic_raw_id_fields = ("mapping",)
-    filter_horizontal = ("questions",)
+    list_select_related = ("indicator_area", "updated_by")
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        return queryset.annotate(question_count=models.Count("questions"))
+        return (
+            queryset.select_related("indicator_area", "updated_by")
+            .annotate(question_count=models.Count("questions"))
+            .order_by("order", "pk")
+        )
+
+    def formfield_for_manytomany(self, db_field, request=None, **kwargs):
+        if db_field.name == "questions":
+            kwargs["queryset"] = BaseQuestion.objects.select_related(
+                "root_question",
+                "sub_question",
+                "repeat_section",
+            )
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
 
     @admin.display(
         description="Number of Questions",
@@ -738,9 +800,21 @@ class IndicatorMappingSurveyModeInline(
         )
 
     def get_extra(self, request, obj=None, **kwargs):
+        total_modes = get_request_cached_value(
+            request,
+            "_visible_survey_mode_count",
+            lambda: SurveyMode.objects.visible_for_user(request.user).count(),
+        )
         if obj and obj.pk:
-            return SurveyMode.objects.count() - obj.modes.count()
-        return SurveyMode.objects.count()
+            existing_modes_count = get_request_cached_value(
+                request,
+                f"_indicator_mapping_modes_count_{obj.pk}",
+                lambda: obj.modes.filter(
+                    survey_mode__in=SurveyMode.objects.visible_for_user(request.user)
+                ).count(),
+            )
+            return max(total_modes - existing_modes_count, 0)
+        return total_modes
 
 
 class IndicatorMappingSurveyTypeInline(
@@ -763,9 +837,19 @@ class IndicatorMappingSurveyTypeInline(
         )
 
     def get_extra(self, request, obj=None, **kwargs):
-        if obj:
-            return SurveyType.objects.count() - obj.survey_types.count()
-        return SurveyType.objects.count()
+        total_types = get_request_cached_value(
+            request,
+            "_visible_survey_type_count",
+            lambda: SurveyType.objects.visible_for_user(request.user).count(),
+        )
+        if obj and obj.pk:
+            existing_types_count = get_request_cached_value(
+                request,
+                f"_indicator_mapping_types_count_{obj.pk}",
+                lambda: obj.survey_types.visible_for_user(request.user).count(),
+            )
+            return max(total_types - existing_types_count, 0)
+        return total_types
 
 
 class IndicatorMappingSurveyAttributeInline(
@@ -787,9 +871,19 @@ class IndicatorMappingSurveyAttributeInline(
         )
 
     def get_extra(self, request, obj=None, **kwargs):
-        if obj:
-            return SurveyAttribute.objects.count() - obj.survey_attributes.count()
-        return SurveyAttribute.objects.count()
+        total_attributes = get_request_cached_value(
+            request,
+            "_visible_survey_attribute_count",
+            lambda: SurveyAttribute.objects.visible_for_user(request.user).count(),
+        )
+        if obj and obj.pk:
+            existing_attributes_count = get_request_cached_value(
+                request,
+                f"_indicator_mapping_attributes_count_{obj.pk}",
+                lambda: obj.survey_attributes.visible_for_user(request.user).count(),
+            )
+            return max(total_attributes - existing_attributes_count, 0)
+        return total_attributes
 
 
 @admin.register(IndicatorMapping)
@@ -804,6 +898,7 @@ class IndicatorMappingAdmin(AdminUserTrackingMixin, nested_admin.NestedModelAdmi
         inlines = super().get_inlines(request, obj)
         for inline in inlines:
             inline.form.user = request.user
+            inline.form.request = request
         return inlines
 
     def get_model_perms(self, request):

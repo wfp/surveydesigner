@@ -590,9 +590,18 @@ function Modules({
         </p>
       </Modal>
 
-      <div style={{ position: "fixed", bottom: 20, right: 20, zIndex: 2 }}>
+      <div
+        style={{
+          position: "fixed",
+          bottom: 20,
+          right: 20,
+          zIndex: 2,
+          width: "min(42rem, calc(100vw - 2rem))",
+        }}
+      >
         {submitError && (
           <Callout
+            className="modules-validation-callout"
             iconDescription="close"
             kind="error"
             lowContrast

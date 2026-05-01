@@ -32,6 +32,7 @@ from modules.models import (
     IndicatorMappingSurveyType,
     Module,
     Submodule,
+    SubmoduleRequiredGroup,
     SubmoduleMappingSurveyAttribute,
     SubmoduleMappingSurveyMode,
     SubmoduleMappingSurveyType,
@@ -45,7 +46,13 @@ from modules.serializers import (
 )
 from modules.services import SubmodulesOrderValidator
 from organization.models import Organization
-from questions.models import BaseQuestion, RepeatSection, RootQuestion, SubQuestion
+from questions.models import (
+    BaseQuestion,
+    Choice,
+    RepeatSection,
+    RootQuestion,
+    SubQuestion,
+)
 from questions.services import DocConversion, XLSForm, XMLConversion
 from rest_framework import serializers, status
 from rest_framework.exceptions import ValidationError
@@ -785,14 +792,19 @@ class SubmoduleViewSet(ModelViewSet):
 
     def filter_queryset(self, queryset):
         qs = super().filter_queryset(queryset)
-        submodule_ids = self.request.query_params.get("submodule_ids")
-        indicator_ids = self.request.query_params.get("indicator_ids")
+        submodule_ids = parse_int_list_param(
+            self.request.query_params.get("submodule_ids", ""),
+            "submodule_ids",
+        )
+        indicator_ids = parse_int_list_param(
+            self.request.query_params.get("indicator_ids", ""),
+            "indicator_ids",
+        )
         submodule_ids_set = set()
         if submodule_ids:
-            submodule_ids_set.update(set(submodule_ids.split(",")))
+            submodule_ids_set.update(submodule_ids)
         # get submodules related to indicators through BaseQuestion
         if indicator_ids:
-            indicator_ids = indicator_ids.split(",")
             indicator_submodule_ids = (
                 BaseQuestion.objects.filter(indicators__in=indicator_ids)
                 .exclude(root_question__submodule=None)
@@ -805,40 +817,50 @@ class SubmoduleViewSet(ModelViewSet):
         return qs
 
     def get_queryset(self):
-        qs = (
-            super()
-            .get_queryset()
-            .annotate(
-                sub_question_count=Count(
-                    "root_questions__sub_questions",
-                    distinct=True,
-                ),
-            )
-        )
+        qs = super().get_queryset()
 
         sub_questions_prefetch = Prefetch(
             "sub_questions",
             queryset=SubQuestion.objects.all()
             .order_by()
-            .select_related("suffix", "suffix_2", "recall_period")
-            .prefetch_related("translations"),
+            .select_related(
+                "root_question",
+                "root_question__choices",
+                "root_question__choices_file",
+                "suffix",
+                "suffix__choices",
+                "suffix__choices_file",
+                "suffix_2",
+                "suffix_2__choices",
+                "suffix_2__choices_file",
+                "recall_period",
+            )
+            .prefetch_related(
+                "translations",
+                Prefetch(
+                    "root_question__choices__choices",
+                    queryset=Choice.objects.order_by().prefetch_related("translations"),
+                ),
+                Prefetch(
+                    "suffix__choices__choices",
+                    queryset=Choice.objects.order_by().prefetch_related("translations"),
+                ),
+                Prefetch(
+                    "suffix_2__choices__choices",
+                    queryset=Choice.objects.order_by().prefetch_related("translations"),
+                ),
+            ),
         )
-
-        # Filter root_questions by indicator for use in SubmoduleWithQuestionsSerializer
-        query = Q(submodule__in=qs)
-        indicator_ids = self.request.query_params.get("indicator_ids")
-        if indicator_ids:
-            indicator_ids = indicator_ids.split(",")
-            base_questions = BaseQuestion.objects.filter(
-                indicators__in=indicator_ids
-            ).values_list("id", flat=True)
-            query |= Q(base_question__in=base_questions)
 
         root_questions_prefetch = Prefetch(
             "root_questions",
-            queryset=RootQuestion.objects.filter(query)
+            queryset=RootQuestion.objects.select_related("choices", "choices_file")
             .prefetch_related(
                 "translations",
+                Prefetch(
+                    "choices__choices",
+                    queryset=Choice.objects.order_by().prefetch_related("translations"),
+                ),
                 sub_questions_prefetch,
             )
             .order_by(),
@@ -850,8 +872,19 @@ class SubmoduleViewSet(ModelViewSet):
             queryset=RepeatSection.objects.prefetch_related("translations"),
         )
 
+        required_groups_prefetch = Prefetch(
+            "required_groups",
+            queryset=SubmoduleRequiredGroup.objects.select_related(
+                "required_suffix",
+                "required_nested_suffix",
+                "required_recall_period",
+            ),
+        )
+
         return qs.prefetch_related(
-            root_questions_prefetch, repeat_section_prefetch
+            root_questions_prefetch,
+            repeat_section_prefetch,
+            required_groups_prefetch,
         ).distinct()
 
 
@@ -865,6 +898,16 @@ examples = [
         description="An example response showing error messages for incompatible module combinations.",
     )
 ]
+
+
+def parse_int_list_param(raw_value, param_name):
+    values = raw_value.replace(",", " ").split()
+    try:
+        return [int(value) for value in values]
+    except ValueError as exc:
+        raise ValidationError(
+            {param_name: "This parameter must contain only integers."}
+        ) from exc
 
 
 @extend_schema(
@@ -885,21 +928,21 @@ class SubmodulesOrderValidationView(APIView):
     @method_decorator(vary_on_cookie)
     @method_decorator(cache_page(60 * 60))
     def get(self, request, *args, **kwargs):
-        submodule_ids = (
-            self.request.query_params.get("submodule_ids", "").replace(",", " ").split()
+        submodule_ids = parse_int_list_param(
+            self.request.query_params.get("submodule_ids", ""),
+            "submodule_ids",
         )
-        indicator_ids = (
-            self.request.query_params.get("indicator_ids", "").replace(",", " ").split()
+        indicator_ids = parse_int_list_param(
+            self.request.query_params.get("indicator_ids", ""),
+            "indicator_ids",
         )
-        all_submodule_ids = (
-            self.request.query_params.get("all_submodule_ids", "")
-            .replace(",", " ")
-            .split()
+        all_submodule_ids = parse_int_list_param(
+            self.request.query_params.get("all_submodule_ids", ""),
+            "all_submodule_ids",
         )
         result = []
 
         if submodule_ids:
-            submodule_ids = [int(id_) for id_ in submodule_ids]
             validator = SubmodulesOrderValidator(
                 submodule_ids, indicator_ids, all_submodule_ids
             )

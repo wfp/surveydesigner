@@ -417,6 +417,43 @@ h6, .wfp--type-zeta {
     z-index: 1000;
 }
 
+.modules-validation-errors {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.modules-validation-errors--scrollable {
+  max-height: 24rem;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(197, 25, 45, 0.65) rgba(197, 25, 45, 0.12);
+}
+
+.modules-validation-errors--scrollable::-webkit-scrollbar {
+  width: 0.5rem;
+}
+
+.modules-validation-errors--scrollable::-webkit-scrollbar-track {
+  background: rgba(197, 25, 45, 0.12);
+}
+
+.modules-validation-errors--scrollable::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(197, 25, 45, 0.65);
+}
+
+.modules-validation-errors__item {
+  display: flex;
+  align-items: flex-start;
+}
+
+.modules-validation-errors__index {
+  min-width: 2rem;
+  flex-shrink: 0;
+}
+
 .generate-doc-spinner {
   .wfp--inline-loading__text {
     font-weight: bold;

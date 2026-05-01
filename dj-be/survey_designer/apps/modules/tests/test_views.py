@@ -6,7 +6,10 @@ from xml.etree import ElementTree as ET
 import pytest
 from accounts.const import UserAPISiteAPITypes
 from accounts.models import UserAPIKey, UserAPISite
+from django.core.cache import cache
 from django.core.files.base import ContentFile
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django_rq import get_queue
 from documents.models import Document
 from modules.models import (
@@ -14,8 +17,16 @@ from modules.models import (
     IndicatorMappingSurveyAttribute,
     IndicatorMappingSurveyMode,
     IndicatorMappingSurveyType,
+    SubmoduleRequiredGroup,
 )
 from modules.views import generate_docx
+from questions.const import QuestionType
+from questions.models import (
+    RootQuestion,
+    RootQuestionTranslation,
+    SubQuestion,
+    SubQuestionTranslation,
+)
 from rest_framework import status
 from rq.exceptions import NoSuchJobError
 from rq.job import Job
@@ -307,6 +318,96 @@ def test_submodule_view_set_list_with_all_params(
     assert response.status_code == 200
     assert len(response.json()) == 1
     assert response.json()[0]["id"] == submodule_1.id
+
+
+def test_submodule_view_set_list_invalid_submodule_ids(logged_admin_client):
+    response = logged_admin_client.get("/api/submodules/?submodule_ids=1,bad,3")
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.json() == {
+        "submodule_ids": "This parameter must contain only integers."
+    }
+
+
+def test_submodule_view_set_list_invalid_indicator_ids(logged_admin_client):
+    response = logged_admin_client.get("/api/submodules/?indicator_ids=1,bad,3")
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.json() == {
+        "indicator_ids": "This parameter must contain only integers."
+    }
+
+
+def test_submodule_view_set_list_uses_bounded_queries(
+    api_client_authenticated_admin,
+    submodule_1,
+    indicator_1,
+    choices_1,
+    choices_2,
+    suffix_1,
+    suffix_2,
+    recall_period_1,
+    repeat_section_1,
+):
+    for index in range(5):
+        root_question = RootQuestion.objects.create(
+            name=f"PerfQuestion{index}",
+            label=f"Perf Question {index}",
+            type=(
+                QuestionType.SELECT_ONE
+                if index % 2 == 0
+                else QuestionType.SELECT_MULTIPLE
+            ),
+            choices=choices_1 if index % 2 == 0 else choices_2,
+        )
+        root_question.submodule.add(submodule_1)
+        RootQuestionTranslation.objects.create(
+            root_question=root_question,
+            language="fr",
+            label=f"Perf Question {index} FR",
+        )
+
+        sub_question_1 = SubQuestion.objects.create(
+            root_question=root_question,
+            suffix=suffix_1,
+            label=f"Perf SubQuestion {index} A",
+        )
+        SubQuestionTranslation.objects.create(
+            sub_question=sub_question_1,
+            language="fr",
+            label=f"Perf SubQuestion {index} A FR",
+        )
+
+        sub_question_2 = SubQuestion.objects.create(
+            root_question=root_question,
+            suffix=suffix_2,
+            recall_period=recall_period_1,
+            label=f"Perf SubQuestion {index} B",
+        )
+        SubQuestionTranslation.objects.create(
+            sub_question=sub_question_2,
+            language="fr",
+            label=f"Perf SubQuestion {index} B FR",
+        )
+
+    SubmoduleRequiredGroup.objects.create(
+        submodule=submodule_1,
+        required_suffix=suffix_1,
+        required_nested_suffix=suffix_2,
+        required_recall_period=recall_period_1,
+    )
+
+    cache.clear()
+    url = f"/api/submodules/?submodule_ids={submodule_1.id}&indicator_ids={indicator_1.id}"
+
+    with CaptureQueriesContext(connection) as queries:
+        response = api_client_authenticated_admin.get(url)
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["id"] == submodule_1.id
+    # Current optimized path is well below this threshold in local profiling.
+    assert len(queries) <= 25
 
 
 def test_indicator_view_set_list(logged_admin_client, indicator_1):
@@ -952,3 +1053,20 @@ class TestSubmodulesOrderValidationView:
         response = logged_admin_client.get(url, query_params)
 
         assert response.status_code == status.HTTP_200_OK
+
+    def test_submodules_order_validation_view_invalid_indicator_ids(
+        self, logged_admin_client
+    ):
+        url = "/api/order-validation/"
+
+        query_params = {
+            "submodule_ids": "1 2 3",
+            "indicator_ids": "1 two 3",
+            "all_submodule_ids": "1 2 3 4 5",
+        }
+        response = logged_admin_client.get(url, query_params)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.json() == {
+            "indicator_ids": "This parameter must contain only integers."
+        }

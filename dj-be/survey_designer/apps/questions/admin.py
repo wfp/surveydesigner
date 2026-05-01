@@ -1087,29 +1087,68 @@ class BaseQuestionAdmin(
         ]
 
     def get_queryset(self, request):
+        submodule_prefetch = models.Prefetch(
+            "submodule",
+            queryset=Submodule.objects.select_related("module").order_by("order", "pk"),
+        )
         queryset = super().get_queryset(request)
-        return queryset.annotate(
-            sub_question_count=models.Count(
-                "root_question__sub_questions", distinct=True
-            ),
-            annotated_name=Coalesce(
-                "root_question__name",
-                "sub_question__name",
-                "repeat_section__name",
-            ),
-            annotated_date_updated=Coalesce(
-                "root_question__date_updated",
-                "sub_question__date_updated",
-                "repeat_section__date_updated",
-            ),
-            organizations=ArrayAgg(
-                Coalesce(
-                    "root_question__submodule__module__organizations__name",
-                    "sub_question__root_question__submodule__module__organizations__name",
+        return (
+            queryset.select_related(
+                "root_question",
+                "root_question__updated_by",
+                "sub_question",
+                "sub_question__updated_by",
+                "sub_question__root_question",
+                "sub_question__suffix",
+                "sub_question__suffix_2",
+                "repeat_section",
+                "repeat_section__updated_by",
+            )
+            .prefetch_related(
+                models.Prefetch("root_question__submodule", queryset=submodule_prefetch.queryset),
+                models.Prefetch(
+                    "sub_question__root_question__submodule",
+                    queryset=submodule_prefetch.queryset,
                 ),
-                distinct=True,
-            ),
-        ).reverse()
+                models.Prefetch(
+                    "repeat_section__submodule",
+                    queryset=submodule_prefetch.queryset,
+                ),
+            )
+            .annotate(
+                sub_question_count=models.Count(
+                    "root_question__sub_questions", distinct=True
+                ),
+                annotated_name=Coalesce(
+                    "root_question__name",
+                    "sub_question__name",
+                    "repeat_section__name",
+                ),
+                annotated_date_updated=Coalesce(
+                    "root_question__date_updated",
+                    "sub_question__date_updated",
+                    "repeat_section__date_updated",
+                ),
+                organizations=ArrayAgg(
+                    Coalesce(
+                        "root_question__submodule__module__organizations__name",
+                        "sub_question__root_question__submodule__module__organizations__name",
+                    ),
+                    distinct=True,
+                ),
+            )
+            .order_by("order", "pk")
+        )
+
+    def _get_related_submodules(self, obj):
+        if obj.repeat_section_id:
+            return list(obj.repeat_section.submodule.all())
+
+        root_question = obj.real_root_question
+        if not root_question:
+            return []
+
+        return list(root_question.submodule.all())
 
     def get_search_results(self, request, queryset, search_term):
         queryset, use_distinct = super().get_search_results(
@@ -1159,34 +1198,37 @@ class BaseQuestionAdmin(
 
     @admin.display(description="Modules")
     def module_display(self, obj):
-        root_question = obj.real_root_question or obj.repeat_section
-        if not root_question or not root_question.submodule.count():
+        submodules = self._get_related_submodules(obj)
+        if not submodules:
             return "-"
 
-        module_ids = root_question.submodule.values_list("module", flat=True)
+        modules = {}
+        for submodule in submodules:
+            if submodule.module_id:
+                modules[submodule.module_id] = submodule.module
 
         return format_html_join(
             ",\n",
             "<a href='{}' target='_blank'>{}</a>",
             (
                 (get_model_admin_base_url(Module, "_change", [m.id]), m.label)
-                for m in Module.objects.filter(id__in=module_ids)
+                for m in modules.values()
             ),
         )
 
     @admin.display(description="Submodules")
     def submodule_display(self, obj):
-        root_question = obj.real_root_question or obj.repeat_section
-        if not root_question or not root_question.submodule.count():
+        submodules = self._get_related_submodules(obj)
+        if not submodules:
             return "-"
 
         return format_html_join(
             ",\n",
             "<a href='{}' target='_blank'>{}</a>",
-            (
+            [
                 (get_model_admin_base_url(Submodule, "_change", [s.id]), s.label)
-                for s in root_question.submodule.all()
-            ),
+                for s in submodules
+            ],
         )
 
     @admin.display(
@@ -1571,15 +1613,35 @@ class RepeatSectionAdmin(
         "modified_by",
         "modified_on",
     )
-    # autocomplete_fields = ("questions",)
+    autocomplete_fields = ("questions",)
     dynamic_raw_id_fields = ("submodule",)
     search_fields = ("name", "label", "description")
     inlines = (RepeatSectionTranslationInline,)
-    filter_horizontal = ("questions",)
 
     class Media:
         css = {"all": (static("js/tribute/tribute.css"),)}
         js = [static("js/tribute/tribute.js"), static("js/admin/repeat_section.js")]
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.select_related("updated_by").prefetch_related(
+            models.Prefetch(
+                "submodule",
+                queryset=Submodule.objects.select_related("module").order_by(
+                    "order",
+                    "pk",
+                ),
+            )
+        )
+
+    def formfield_for_manytomany(self, db_field, request=None, **kwargs):
+        if db_field.name == "questions":
+            kwargs["queryset"] = BaseQuestion.objects.select_related(
+                "root_question",
+                "sub_question",
+                "repeat_section",
+            )
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
@@ -1604,7 +1666,8 @@ class RepeatSectionAdmin(
 
     @admin.display(description="Submodule")
     def submodule_display(self, obj):
-        if not obj.submodule.count():
+        submodules = list(obj.submodule.all())
+        if not submodules:
             return "-"
 
         return format_html_join(
@@ -1612,6 +1675,6 @@ class RepeatSectionAdmin(
             "<a href='{}' target='_blank'>{}</a>",
             (
                 (get_model_admin_base_url(Submodule, "_change", [s.id]), s.label)
-                for s in obj.submodule.all()
+                for s in submodules
             ),
         )
