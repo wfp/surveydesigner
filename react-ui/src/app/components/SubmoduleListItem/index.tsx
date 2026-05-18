@@ -36,7 +36,7 @@ function SubmoduleListItem({
     ) : (
       submodule.label
     );
-    label = <div style={{ minWidth: "fit-content" }}>{label}</div>;
+    label = <span className="survey-list-row__label-text">{label}</span>;
     if (!submodule.description) {
       return label;
     }
@@ -106,71 +106,61 @@ function SubmoduleListItem({
               name="submodules"
               control={control}
               render={({ field: { onChange, value } }) => (
-                <div className="d-flex">
-                  <Checkbox
-                    id={`id-submodule-${submodule.id}`}
-                    labelText={getSubmoduleLabel(submodule)}
-                    checked={submodules.includes(submodule.id)}
-                    onChange={(event, checked, customId) => {
-                      event.persist();
-                      handleSubmoduleChange(checked, submodule, event);
-                    }}
-                  />
-
-                  {/* Admin link icon */}
-                  <Link
-                    style={{ marginLeft: "5px" }}
-                    onClick={() => openPopup(adminUrl)}
-                  >
-                    <FontAwesomeIcon
-                      icon={faArrowUpRightFromSquare}
-                      className="wfp--btn__icon cms-link-icon"
+                <div>
+                  <div className="survey-list-row">
+                    <Checkbox
+                      id={`id-submodule-${submodule.id}`}
+                      labelText={getSubmoduleLabel(submodule)}
+                      wrapperClassName="survey-list-row__checkbox"
+                      checked={submodules.includes(submodule.id)}
+                      onChange={(event, checked, customId) => {
+                        event.persist();
+                        handleSubmoduleChange(checked, submodule, event);
+                      }}
                     />
-                  </Link>
 
-                  {/* Info link icon */}
-                  {submodule.url && (
-                    <Link
-                      style={{ marginLeft: "5px" }}
-                      href={submodule.url}
-                      target="_blank"
-                    >
-                      <FontAwesomeIcon
-                        style={{
-                          width: 15,
-                          height: 15,
-                          verticalAlign: "middle",
-                        }}
-                        icon={faCircleInfo}
-                      />
-                    </Link>
-                  )}
+                    {/* Admin link icon */}
+                    <div className="survey-list-row__actions">
+                      <Link
+                        className="survey-list-row__icon-link"
+                        onClick={() => openPopup(adminUrl)}
+                      >
+                        <FontAwesomeIcon
+                          icon={faArrowUpRightFromSquare}
+                          className="wfp--btn__icon cms-link-icon"
+                        />
+                      </Link>
 
-                  {/* Drag & Drop icon */}
-                  <div
-                    className="d-flex"
-                    style={{
-                      alignItems: "center",
-                      marginBottom: "1rem",
-                      marginLeft: "10px",
-                    }}
-                  >
-                    <FontAwesomeIcon
-                      className="draggable-icon"
-                      style={{ width: 14, height: 14 }}
-                      icon={faGripVertical}
-                    />
+                      {/* Info link icon */}
+                      {submodule.url && (
+                        <Link
+                          className="survey-list-row__icon-link"
+                          href={submodule.url}
+                          target="_blank"
+                        >
+                          <FontAwesomeIcon
+                            style={{
+                              width: 15,
+                              height: 15,
+                              verticalAlign: "middle",
+                            }}
+                            icon={faCircleInfo}
+                          />
+                        </Link>
+                      )}
+
+                      {/* Drag & Drop icon */}
+                      <div className="survey-list-row__drag">
+                        <FontAwesomeIcon
+                          className="draggable-icon"
+                          style={{ width: 14, height: 14 }}
+                          icon={faGripVertical}
+                        />
+                      </div>
+                    </div>
                   </div>
                   {isSelectedByIndicator && (
-                    <div
-                      className="d-flex"
-                      style={{
-                        fontSize: "14px",
-                        color: "red",
-                        alignItems: "center",
-                        marginBottom: "1rem",
-                      }}
-                    >
+                    <div className="survey-list-row__status">
                       {renderSubmoduleText(
                         submodule.id,
                         selectedIndicatorMatchingSubmoduleIdMap,

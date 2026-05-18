@@ -112,43 +112,29 @@ function ModuleListItem({
 
   function getModuleLabel(module: Module) {
     let label = (
-      <div className="d-flex" style={{ cursor: "pointer" }}>
+      <div className="survey-list-row__label" style={{ cursor: "pointer" }}>
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/interactive-supports-focus */}
-        <div role="button" onClick={() => saveAndSetExpanded(!expanded)}>
+        <div
+          className="survey-list-row__toggle"
+          role="button"
+          onClick={() => saveAndSetExpanded(!expanded)}
+        >
           {expanded ? (
             <FontAwesomeIcon
-              style={{ verticalAlign: "middle", marginRight: "0.5rem" }}
+              style={{ verticalAlign: "middle" }}
               icon={faCaretDown}
             />
           ) : (
             <FontAwesomeIcon
-              style={{ verticalAlign: "middle", marginRight: "0.5rem" }}
+              style={{ verticalAlign: "middle" }}
               icon={faCaretRight}
             />
           )}
         </div>
-        <div>{module.label}</div>
+        <div className="survey-list-row__label-text">{module.label}</div>
       </div>
     );
 
-    if (module.url) {
-      label = (
-        <span className="d-flex">
-          {label}
-          <Link
-            className="d-flex align-items-center"
-            style={{ marginLeft: "10px" }}
-            href={module.url}
-            target="_blank"
-          >
-            <FontAwesomeIcon
-              style={{ width: 15, height: 15, verticalAlign: "middle" }}
-              icon={faCircleInfo}
-            />
-          </Link>
-        </span>
-      );
-    }
     if (module.description) {
       label = (
         <Tooltip
@@ -167,25 +153,39 @@ function ModuleListItem({
     const adminUrl = getModuleCmsUrl(module);
 
     return (
-      <div className="d-flex">
-        {label}
-        {/* eslint-disable-next-line jsx-a11y/anchor-is-valid */}
-        <Link onClick={() => openPopup(adminUrl)}>
-          <FontAwesomeIcon
-            description={adminUrl}
-            icon={faArrowUpRightFromSquare}
-            className="wfp--btn__icon cms-link-icon"
-          />
-        </Link>
-        <div
-          className="d-flex"
-          style={{ alignItems: "center", marginLeft: "10px" }}
-        >
-          <FontAwesomeIcon
-            className="draggable-icon"
-            style={{ width: 14, height: 14 }}
-            icon={faGripVertical}
-          />
+      <div className="survey-list-row survey-list-row--heading">
+        <div className="survey-list-row__label">{label}</div>
+        <div className="survey-list-row__actions">
+          {module.url && (
+            <Link
+              className="survey-list-row__icon-link"
+              href={module.url}
+              target="_blank"
+            >
+              <FontAwesomeIcon
+                style={{ width: 15, height: 15, verticalAlign: "middle" }}
+                icon={faCircleInfo}
+              />
+            </Link>
+          )}
+          {/* eslint-disable-next-line jsx-a11y/anchor-is-valid */}
+          <Link
+            className="survey-list-row__icon-link"
+            onClick={() => openPopup(adminUrl)}
+          >
+            <FontAwesomeIcon
+              description={adminUrl}
+              icon={faArrowUpRightFromSquare}
+              className="wfp--btn__icon cms-link-icon"
+            />
+          </Link>
+          <div className="survey-list-row__drag">
+            <FontAwesomeIcon
+              className="draggable-icon"
+              style={{ width: 14, height: 14 }}
+              icon={faGripVertical}
+            />
+          </div>
         </div>
       </div>
     );
