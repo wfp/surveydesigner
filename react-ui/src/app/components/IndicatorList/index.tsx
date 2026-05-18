@@ -32,7 +32,7 @@ function IndicatorList({
       indicator.label
     );
 
-    label = <div style={{ minWidth: "fit-content" }}>{label}</div>;
+    label = <span className="survey-list-row__label-text">{label}</span>;
     if (!indicator.description) {
       return label;
     }
@@ -71,10 +71,11 @@ function IndicatorList({
               name="indicators"
               control={control}
               render={({ field: { onChange, value } }) => (
-                <div className="d-flex">
+                <div className="survey-list-row">
                   <Checkbox
                     id={`id-indicator-${indicator.id}`}
                     labelText={getIndicatorLabel(indicator)}
+                    wrapperClassName="survey-list-row__checkbox"
                     checked={
                       watchAllFields?.indicators?.includes(indicator.id) &&
                       indicators?.some((item) => item.id === indicator.id)
@@ -86,47 +87,42 @@ function IndicatorList({
                   />
                   {/* Admin link icon */}
                   {/* eslint-disable-next-line jsx-a11y/anchor-is-valid */}
-                  <Link
-                    style={{ marginLeft: "5px" }}
-                    onClick={() => openPopup(adminUrl)}
-                  >
-                    <FontAwesomeIcon
-                      icon={faArrowUpRightFromSquare}
-                      className="wfp--btn__icon cms-link-icon"
-                    />
-                  </Link>
-
-                  {/* Info link icon */}
-                  {indicator.url && (
+                  <div className="survey-list-row__actions">
                     <Link
-                      style={{ marginLeft: "5px" }}
-                      href={indicator.url}
-                      target="_blank"
+                      className="survey-list-row__icon-link"
+                      onClick={() => openPopup(adminUrl)}
                     >
                       <FontAwesomeIcon
-                        style={{
-                          width: 15,
-                          height: 15,
-                          verticalAlign: "middle",
-                        }}
-                        icon={faCircleInfo}
+                        icon={faArrowUpRightFromSquare}
+                        className="wfp--btn__icon cms-link-icon"
                       />
                     </Link>
-                  )}
-                  {/* Drag & Drop icon */}
-                  <div
-                    className="d-flex"
-                    style={{
-                      alignItems: "center",
-                      marginBottom: "1rem",
-                      marginLeft: "10px",
-                    }}
-                  >
-                    <FontAwesomeIcon
-                      className="draggable-icon"
-                      style={{ width: 14, height: 14 }}
-                      icon={faGripVertical}
-                    />
+
+                    {/* Info link icon */}
+                    {indicator.url && (
+                      <Link
+                        className="survey-list-row__icon-link"
+                        href={indicator.url}
+                        target="_blank"
+                      >
+                        <FontAwesomeIcon
+                          style={{
+                            width: 15,
+                            height: 15,
+                            verticalAlign: "middle",
+                          }}
+                          icon={faCircleInfo}
+                        />
+                      </Link>
+                    )}
+                    {/* Drag & Drop icon */}
+                    <div className="survey-list-row__drag">
+                      <FontAwesomeIcon
+                        className="draggable-icon"
+                        style={{ width: 14, height: 14 }}
+                        icon={faGripVertical}
+                      />
+                    </div>
                   </div>
                 </div>
               )}

@@ -1,4 +1,4 @@
-@import '@wfp/styles/styles.css';
+@import "@wfp/styles/styles.css";
 
 .checkbox-row .allCheckboxWrapper {
   min-width: 130px;
@@ -23,7 +23,6 @@
   flex-direction: row;
 }
 
-
 .wfp--step-navigation__nav-item__text {
   display: flex;
   flex-direction: column;
@@ -31,10 +30,9 @@
 }
 
 .wfp--step-navigation__nav--hidden {
-        display: flex;
-        justify-content: space-evenly;
+  display: flex;
+  justify-content: space-evenly;
 }
-
 
 .wfp--sub-navigation__list {
   margin: 0;
@@ -52,11 +50,13 @@
 .wfp--sub-navigation__list a,
 .wfp--sub-navigation__list .cursor-pointer-on-hover {
   display: block;
-  color: var(--interactive-01, #0a6eb4);  /* fallback if var not set */
+  color: var(--interactive-01, #0a6eb4); /* fallback if var not set */
   text-decoration: none;
   font-weight: 500;
   font-size: 1rem;
-  transition: background 0.1s, color 0.1s;
+  transition:
+    background 0.1s,
+    color 0.1s;
   border: none;
   background: none;
   cursor: pointer;
@@ -73,14 +73,13 @@
   color: var(--interactive-02, #08548a); /* slightly darker if you want */
 }
 
-
 .wfp--wrapper--spacing-md {
-    /* Keep your intended padding (edit as you prefer): */
-    padding-top: 3rem;
-    padding-bottom: 1rem;
-    /* Override any accidental global or library margin: */
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
+  /* Keep your intended padding (edit as you prefer): */
+  padding-top: 3rem;
+  padding-bottom: 1rem;
+  /* Override any accidental global or library margin: */
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
 }
 
 .survey-wizard .wfp--module__content:first-child {
@@ -101,10 +100,90 @@
 }
 
 .wfp--list__element.module-title {
-    margin-bottom: 0;
+  margin-bottom: 0;
 }
 .indicator-area-label-row {
-    margin-bottom: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.survey-list-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.survey-list-row--heading {
+  font-weight: 600;
+}
+
+.survey-list-row__label {
+  display: flex;
+  align-items: flex-start;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.survey-list-row__label > .wfp--tooltip--trigger {
+  display: flex;
+  align-items: flex-start;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.survey-list-row__toggle {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 1rem;
+  justify-content: center;
+  margin-right: 0.5rem;
+}
+
+.survey-list-row__label-text {
+  min-width: 0;
+  line-height: 1.25;
+  overflow-wrap: break-word;
+}
+
+.survey-list-row__checkbox {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.survey-list-row__checkbox .wfp--checkbox-label {
+  align-items: flex-start;
+}
+
+.survey-list-row__checkbox .wfp--checkbox-label-text {
+  min-width: 0;
+  line-height: 1.25;
+  overflow-wrap: break-word;
+}
+
+.survey-list-row__actions {
+  display: inline-flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  gap: 0.5rem;
+  margin-left: auto;
+  padding-top: 0.125rem;
+}
+
+.survey-list-row__icon-link,
+.survey-list-row__drag {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  line-height: 1;
+}
+
+.survey-list-row__status {
+  color: red;
+  font-size: 0.875rem;
+  line-height: 1.25;
+  margin: 0.25rem 0 1rem 1.75rem;
 }
 
 .submodule-item {
@@ -152,13 +231,13 @@
 
 .faq-wrapper {
   & .wfp--blockquote--toggleable .wfp--blockquote__title:after {
-    content: ' +';
+    content: " +";
     font-weight: 800;
     float: right;
   }
 
   & .wfp--blockquote--toggle--open .wfp--blockquote__title:after {
-    content: ' -';
+    content: " -";
     float: right;
   }
 }
@@ -348,7 +427,7 @@
     border-radius: 0.25em;
     line-height: 1.4;
     word-wrap: anywhere;
-    flex-grow: 1
+    flex-grow: 1;
   }
 
   .img-wrapper {
@@ -359,15 +438,16 @@
   }
 }
 
-h6, .wfp--type-zeta {
-    font-size: 1rem;
-    line-height: 1.25;
-    font-weight: 600;
+h6,
+.wfp--type-zeta {
+  font-size: 1rem;
+  line-height: 1.25;
+  font-weight: 600;
 }
 
 .wfp--list__element__title {
-    font-weight: 700;
-    margin-right: .3125rem;
+  font-weight: 700;
+  margin-right: 0.3125rem;
 }
 
 #landing-page {
@@ -395,26 +475,27 @@ h6, .wfp--type-zeta {
 
   /* Submenu content — reset to default, but skip the trigger itself */
   .wfp--main-navigation__sub--open,
-  .wfp--main-navigation__sub--open *:not(.wfp--main-navigation__trigger):not(.wfp--main-navigation__trigger *) {
+  .wfp--main-navigation__sub--open
+    *:not(.wfp--main-navigation__trigger):not(
+      .wfp--main-navigation__trigger *
+    ) {
     color: var(--action-default-text-ghost-default) !important;
   }
 }
-
 
 /* Make sure only intro heading is white, not its links */
 .page-intro,
 .page-intro h1 {
   color: #fff !important;
-  text-shadow: 1px 1px 6px rgba(0,0,0,0.4);
+  text-shadow: 1px 1px 6px rgba(0, 0, 0, 0.4);
 }
-
 
 .wfp--wrapper--background-lighter {
   padding-bottom: 200px;
 }
 
 .wfp--inline-notification {
-    z-index: 1000;
+  z-index: 1000;
 }
 
 .generate-doc-spinner {
@@ -514,7 +595,7 @@ h6, .wfp--type-zeta {
   line-height: 1.5;
 }
 
-.share-survey-text-input{
+.share-survey-text-input {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -536,14 +617,14 @@ h6, .wfp--type-zeta {
   text-transform: capitalize;
 }
 
-.saved-survey-not-found{
+.saved-survey-not-found {
   display: flex;
   align-self: center;
   justify-content: center;
   align-items: center;
 }
 
-.shared-survey-content{
+.shared-survey-content {
   height: 300px;
   justify-content: center;
   align-items: center;
@@ -570,21 +651,27 @@ h6, .wfp--type-zeta {
 }
 
 html {
-    font-family: var(--font-family-primary);
+  font-family: var(--font-family-primary);
 }
 
 /* pointer on clickable steps */
-nav.custom-step-navigation .wfp--step-navigation__nav .wfp--step-navigation__nav-item {
+nav.custom-step-navigation
+  .wfp--step-navigation__nav
+  .wfp--step-navigation__nav-item {
   cursor: pointer;
 }
 
 /* current step stays default */
-nav.custom-step-navigation .wfp--step-navigation__nav .wfp--step-navigation__nav-item--selected {
+nav.custom-step-navigation
+  .wfp--step-navigation__nav
+  .wfp--step-navigation__nav-item--selected {
   cursor: default;
 }
 
 /* if the lib ever marks disabled steps */
-nav.custom-step-navigation .wfp--step-navigation__nav .wfp--step-navigation__nav-item--after {
+nav.custom-step-navigation
+  .wfp--step-navigation__nav
+  .wfp--step-navigation__nav-item--after {
   cursor: not-allowed;
 }
 
@@ -596,10 +683,10 @@ nav.custom-step-navigation .wfp--step-navigation__nav .wfp--step-navigation__nav
   z-index: 0; /* Lower than popups and notifications */
   background: #0d2a56;         /* dark navy */
   color: #fff;
-  border-top: 1px solid rgba(255,255,255,.25);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   padding-top: 0;
-  padding-bottom: .5rem;
+  padding-bottom: 0.5rem;
 }
 
 .wfp--footer__cta .wfp--footer__cta-logo {

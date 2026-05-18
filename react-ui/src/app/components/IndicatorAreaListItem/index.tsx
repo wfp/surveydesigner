@@ -68,45 +68,30 @@ function IndicatorAreaListItem({
   function getIndicatorAreaLabel(indicatorArea: IndicatorArea) {
     let label = (
       <div
-        className="indicator-area-label"
+        className="survey-list-row__label indicator-area-label"
         style={{
-          display: "flex",
-          alignItems: "center",
           cursor: "pointer",
         }}
       >
         {/* Expand/collapse */}
         <div
+          className="survey-list-row__toggle"
           role="button"
           onClick={() => saveAndSetExpanded(!expanded)}
-          style={{ display: "flex", alignItems: "center" }}
         >
           {expanded ? (
             <FontAwesomeIcon
-              style={{ verticalAlign: "middle", marginRight: "0.5rem" }}
+              style={{ verticalAlign: "middle" }}
               icon={faCaretDown}
             />
           ) : (
             <FontAwesomeIcon
-              style={{ verticalAlign: "middle", marginRight: "0.5rem" }}
+              style={{ verticalAlign: "middle" }}
               icon={faCaretRight}
             />
           )}
         </div>
-        <div style={{ marginLeft: 6 }}>{indicatorArea.label}</div>
-        {indicatorArea.url && (
-          <Link
-            className="d-flex align-items-center"
-            style={{ marginLeft: "10px" }}
-            href={indicatorArea.url}
-            target="_blank"
-          >
-            <FontAwesomeIcon
-              style={{ width: 15, height: 15, verticalAlign: "middle" }}
-              icon={faCircleInfo}
-            />
-          </Link>
-        )}
+        <div className="survey-list-row__label-text">{indicatorArea.label}</div>
       </div>
     );
 
@@ -126,24 +111,28 @@ function IndicatorAreaListItem({
     }
 
     return (
-      <div
-        className="indicator-area-label-row"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          width: "100%",
-          marginBottom: "1rem",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", flexGrow: 1 }}>
-          {label}
-        </div>
-        <div style={{ marginLeft: 10, display: "flex", alignItems: "center" }}>
-          <FontAwesomeIcon
-            className="draggable-icon"
-            style={{ width: 14, height: 14 }}
-            icon={faGripVertical}
-          />
+      <div className="survey-list-row survey-list-row--heading indicator-area-label-row">
+        <div className="survey-list-row__label">{label}</div>
+        <div className="survey-list-row__actions">
+          {indicatorArea.url && (
+            <Link
+              className="survey-list-row__icon-link"
+              href={indicatorArea.url}
+              target="_blank"
+            >
+              <FontAwesomeIcon
+                style={{ width: 15, height: 15, verticalAlign: "middle" }}
+                icon={faCircleInfo}
+              />
+            </Link>
+          )}
+          <div className="survey-list-row__drag">
+            <FontAwesomeIcon
+              className="draggable-icon"
+              style={{ width: 14, height: 14 }}
+              icon={faGripVertical}
+            />
+          </div>
         </div>
       </div>
     );
