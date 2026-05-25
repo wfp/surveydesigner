@@ -3,6 +3,9 @@
 This document is an outline of the things we tell new collaborators at their
 onboarding session.
 
+> [!NOTE]
+> **Open Access & Public Contributions:** The Survey Designer repository is a fully public repository. Anyone who requests access and is approved by the Technical Steering Committee (TSC) or project maintainers can contribute. We actively encourage public participation and aim to maintain a welcoming, low-barrier entry point for all qualified collaborators.
+
 ## One week before the onboarding session
 
 * If the new Collaborator is not yet a member of the WFP GitHub organization,
@@ -70,6 +73,7 @@ The project has a venue for real-time discussion:
   * Generally: try to be nice to people!
   * The best outcome is for people who come to our issue tracker to feel like
     they can come back again.
+  * Understand our decoupled architectural setup, local pnpm/Node frontend environment, dockerized backend services, and trunk-based development workflow by reviewing the [Technical Values and Development Principles][Technical Values].
 
 * You are expected to follow _and_ hold others accountable to the
   [Code of Conduct][].
@@ -117,9 +121,9 @@ The project has a venue for real-time discussion:
     report the moderation action taken in accordance to the moderation
     policy.
   * You can always refer to the
-    [full moderation policy](moderation-policy.md).
+    [full moderation policy](MODERATION_POLICY.md).
   * You can contact someone in the
-    [full list of moderation team members](moderation-policy.md#current-members-of-moderation-team).
+    [full list of moderation team members](MODERATION_POLICY.md#current-members-of-moderation-team).
 
 ## Reviewing pull requests
 
@@ -203,6 +207,8 @@ The project has a venue for real-time discussion:
 ## Landing pull requests
 
 See the Collaborator Guide: [Landing pull requests][].
+
+For our versioning conventions, tagging strategy, stability flows, and semantic versioning rules, refer to our [Release Management & Tagging Strategy][Release Management] guide.
 
 Commits in one pull request that belong to one logical change should
 be squashed. It is rarely the case in onboarding exercises, so this
@@ -309,3 +315,5 @@ needs to be pointed out separately during the onboarding.
 [subsystem teams]: GOVERNANCE.md
 [WFP Slack Community]: https://wfp.slack.com/
 [a bot]: https://github.com/nodejs-github-bot/github-bot
+[Technical Values]: doc/contributing/TECHNICAL_VALUES.md
+[Release Management]: doc/contributing/RELEASE_MANAGEMENT.md

@@ -22,7 +22,7 @@ If you discover a security-related bug:
 
 ## 🔄 Contribution Workflow
 
-We use a **monorepo** structure and follow **trunk-based development**. All new work should be branched directly from the main trunk. Please follow this specific process for all features and non-security bug fixes:
+We use a **monorepo** structure and follow **trunk-based development**. All new work should be branched directly from the main trunk. For a comprehensive guide on our technical runtimes, services, and core architectural alignment, refer to our [Technical Values & Development Principles](doc/contributing/TECHNICAL_VALUES.md) document. Please follow this specific process for all features and non-security bug fixes:
 
 ### 1. Identify the Need
 
@@ -51,6 +51,7 @@ We use a **monorepo** structure and follow **trunk-based development**. All new 
 ### 4. Merging
 
 - Once the PR is **Approved**, it will be merged into the target branch by a maintainer.
+- All code changes follow our semantic versioning and Git tagging standards. See the [Release Management & Tagging Strategy](doc/contributing/RELEASE_MANAGEMENT.md) for details on release criteria and tagging naming rules.
 
 ---
 

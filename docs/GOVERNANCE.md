@@ -331,7 +331,7 @@ the nominee once they are onboarded.
 ### Onboarding
 
 After the nomination passes, a TSC member onboards the new collaborator. See
-[the onboarding guide](./onboarding.md) for details of the onboarding
+[the onboarding guide](./ONBOARDING.md) for details of the onboarding
 process.
 
 ## Consensus seeking process
