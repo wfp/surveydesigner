@@ -105,7 +105,7 @@ Before Moderating a Post, Collaborators should carefully consider the possible
 intent of the author. It may be that the author has simply made an error or is
 not yet familiar with the [Code of Conduct][]; or it may be that cultural
 differences exist, or that the author is unaware that certain content is
-inappropriate. In such cases, the author should be given an
+appropriate. In such cases, the author should be given an
 opportunity to correct any error that may have been made.
 
 Note, however, that unfamiliarity with the [Code of Conduct][] does not excuse
@@ -156,8 +156,8 @@ a Post from Moderation.
 ### Non-Collaborator Posts
 
 * Posts authored by non-Collaborators are always subject to immediate Moderation
-by any Collaborator if the content is intentionally disruptive or in violation
-of the [Code of Conduct][].
+  by any Collaborator if the content is intentionally disruptive or in violation
+  of the [Code of Conduct][].
 * When moderating non-Collaborator posts, the moderating Collaborator must:
   * Explain the justification for Moderating the post, and
   * Identify all changes made to the Post.
@@ -326,7 +326,7 @@ following the [appeal process][].
 
 Moderation disputes involving TSC or Moderation Team members,
 including questions of whether a TSC or Moderation Team member has
-violated the Code of Conduct, are to be handled by the other TSC members.
+failed the Code of Conduct, are to be handled by the other TSC members.
 This process will be mediated by a volunteer from the moderation team.
 
 TSC or Moderation Team members directly involved in a Moderation
