@@ -101,7 +101,7 @@ export const postSavedSurvey = createAppAsyncThunk(
           msg: "Survey saved successfully",
         }),
       );
-      return response;
+      return response.data;
     } catch (err: any) {
       dispatch(
         notificationsActions.setErrorNotification({
@@ -138,7 +138,7 @@ export const putSavedSurvey = createAppAsyncThunk(
           msg: "Survey Updated successfully",
         }),
       );
-      return response;
+      return response.data;
     } catch (err: any) {
       dispatch(
         notificationsActions.setErrorNotification({
