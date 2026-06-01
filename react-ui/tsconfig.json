@@ -18,14 +18,10 @@
     "noImplicitAny": true,
     "types": ["vitest/globals"]
   },
-  "include": [
-    "survey_designer/apps/**/*.ts",
-    "survey_designer/apps/**/*.tsx",
-    ".eslintrc.js"
-  ],
+  "include": ["src/**/*.ts", "src/**/*.tsx", ".eslintrc.js"],
   "exclude": [
-    "survey_designer/apps/**/*.test.ts",
-    "survey_designer/apps/**/*.test.tsx"
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx"
   ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
