@@ -479,6 +479,20 @@ def test_root_question_admin_add_view_uses_single_jquery_for_dal_widgets(
     assert "id=id_indicators" in content
 
 
+def test_translation_form_language_widget_renders_language_options():
+    form = _build_root_question_translation_form()
+
+    language_select = html.fromstring(str(form["language"]))
+    options = {
+        option.get("value"): option.text
+        for option in language_select.xpath(".//option")
+    }
+
+    assert "en" not in options
+    assert options["fr"] == "French"
+    assert options["es"] == "Spanish"
+
+
 def test_translation_form_rejects_new_english_translation(root_question_1):
     form = _build_root_question_translation_form(
         data={

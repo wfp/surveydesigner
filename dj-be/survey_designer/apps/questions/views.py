@@ -6,7 +6,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.db.models.functions import Collate
 from django.forms import formset_factory
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, reverse
 from django.views.generic import FormView
 from modules.models import Indicator
@@ -376,8 +376,16 @@ class IndicatorAutocomplete(autocomplete.Select2QuerySetView):
 
 # language autocomplete for list of languages
 class LanguageAutocomplete(autocomplete.Select2ListView):
-    def get_list(self):
-        return [language for language in settings.LANGUAGES if language[0] != "en"]
+    def get(self, request, *args, **kwargs):
+        self.q = request.GET.get("q", "")
+        query = self.q.lower()
+        results = [
+            {"id": code, "text": str(label)}
+            for code, label in settings.LANGUAGES
+            if code != "en"
+            and (not query or query in code.lower() or query in str(label).lower())
+        ]
+        return JsonResponse({"results": results})
 
 
 class RepeatSectionAutocomplete(autocomplete.Select2QuerySetView):
