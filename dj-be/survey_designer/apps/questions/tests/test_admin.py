@@ -1,6 +1,16 @@
+import json
+
+from accounts.const import PermissionGroups
+from core.permissions import AdminPermissions
 from core.utils import get_model_admin_base_url
+from django.contrib import admin as django_admin
+from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.urls import reverse
 from lxml import html
+from modules.models import Module, Submodule
 from questions.admin import RootQuestionTranslationInline
 from questions.const import QuestionType
 from questions.models import (
@@ -15,6 +25,7 @@ from questions.models import (
     SubQuestionProxy,
     Suffix,
 )
+from surveys.models import SurveyCategory, SurveyType
 
 
 def _assert_admin_search_works(logged_admin_client, model, expected_text):
@@ -24,6 +35,57 @@ def _assert_admin_search_works(logged_admin_client, model, expected_text):
     )
     assert response.status_code == 200
     assert expected_text in response.content.decode()
+
+
+def _create_non_global_admin(organization):
+    group, _ = Group.objects.get_or_create(name=PermissionGroups.ADMINS)
+    AdminPermissions().set_permissions(group)
+    user = get_user_model().objects.create_user(
+        email=f"org-admin-{organization.id}@example.invalid",
+        password="password",
+        is_staff=True,
+    )
+    user.organization = organization
+    user.save()
+    user.groups.add(group)
+    return user
+
+
+def _create_root_question_for_org(organization, name):
+    module = Module.objects.create(
+        name=f"{name}Module",
+        label=f"{name} Module",
+    )
+    module.organizations.add(organization)
+    submodule = Submodule.objects.create(
+        module=module,
+        name=f"{name}Submodule",
+        label=f"{name} Submodule",
+    )
+    question = RootQuestion.objects.create(
+        name=name,
+        label=f"{name} label",
+        type=QuestionType.INTEGER,
+    )
+    question.submodule.add(submodule)
+    return question
+
+
+def _create_survey_type_for_org(organization, name):
+    category = SurveyCategory.objects.create(
+        name=f"{name}Category",
+        label=f"{name} Category",
+        order=1,
+    )
+    category.organizations.add(organization)
+    survey_type = SurveyType.objects.create(
+        category=category,
+        name=name,
+        label=f"{name} label",
+        order=10,
+    )
+    survey_type.organizations.add(organization)
+    return survey_type
 
 
 def _build_root_question_translation_form(*, data=None, instance=None):
@@ -225,6 +287,165 @@ def test_base_questions_search_view(logged_admin_client, root_question_1):
     response = logged_admin_client.get(url)
     assert response.status_code == 200
     assert root_question_1.name in response.content.decode()
+
+
+def test_non_global_admin_cannot_duplicate_other_org_question(
+    django_client, organization_1, organization_2
+):
+    user = _create_non_global_admin(organization_1)
+    django_client.force_login(user)
+    question = _create_root_question_for_org(organization_2, "OtherOrgActionQuestion")
+
+    response = django_client.post(
+        reverse("admin:questions_basequestion_changelist"),
+        {
+            "action": "duplicate",
+            "index": "0",
+            ACTION_CHECKBOX_NAME: [str(question.base_question.id)],
+        },
+        follow=True,
+    )
+
+    assert response.status_code == 200
+    assert (
+        "Action not allowed for objects outside your organization"
+        in response.content.decode()
+    )
+    assert not RootQuestion.objects.filter(name="OtherOrgActionQuestion_1").exists()
+
+
+def test_non_global_admin_can_duplicate_own_org_question(django_client, organization_1):
+    user = _create_non_global_admin(organization_1)
+    django_client.force_login(user)
+    question = _create_root_question_for_org(organization_1, "OwnOrgActionQuestion")
+
+    response = django_client.post(
+        reverse("admin:questions_basequestion_changelist"),
+        {
+            "action": "duplicate",
+            "index": "0",
+            ACTION_CHECKBOX_NAME: [str(question.base_question.id)],
+        },
+    )
+
+    assert response.status_code == 302
+    assert RootQuestion.objects.filter(name="OwnOrgActionQuestion_1").exists()
+
+
+def test_non_global_admin_cannot_sort_other_org_question(
+    django_client, organization_1, organization_2
+):
+    user = _create_non_global_admin(organization_1)
+    django_client.force_login(user)
+    question = _create_root_question_for_org(organization_2, "OtherOrgSortQuestion")
+    question.base_question.order = 20
+    question.base_question.save(update_fields=["order"])
+
+    response = django_client.post(
+        reverse("admin:questions_basequestion_sortable_update"),
+        data=json.dumps({"updatedItems": [[question.base_question.id, 1]]}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 403
+    question.base_question.refresh_from_db()
+    assert question.base_question.order == 20
+
+
+def test_non_global_admin_cannot_sort_other_org_survey_type(
+    django_client, organization_1, organization_2
+):
+    user = _create_non_global_admin(organization_1)
+    django_client.force_login(user)
+    survey_type = _create_survey_type_for_org(organization_2, "OtherOrgSurveyType")
+
+    response = django_client.post(
+        reverse("admin:surveys_surveytype_sortable_update"),
+        data=json.dumps({"updatedItems": [[survey_type.id, 1]]}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 403
+    survey_type.refresh_from_db()
+    assert survey_type.order == 10
+
+
+def test_non_global_admin_can_sort_own_org_question(django_client, organization_1):
+    user = _create_non_global_admin(organization_1)
+    django_client.force_login(user)
+    question = _create_root_question_for_org(organization_1, "OwnOrgSortQuestion")
+    question.base_question.order = 20
+    question.base_question.save(update_fields=["order"])
+
+    response = django_client.post(
+        reverse("admin:questions_basequestion_sortable_update"),
+        data=json.dumps({"updatedItems": [[question.base_question.id, 1]]}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    question.base_question.refresh_from_db()
+    assert question.base_question.order == 1
+
+
+def test_non_global_admin_can_sort_own_org_survey_type(django_client, organization_1):
+    user = _create_non_global_admin(organization_1)
+    django_client.force_login(user)
+    survey_type = _create_survey_type_for_org(organization_1, "OwnOrgSurveyType")
+
+    response = django_client.post(
+        reverse("admin:surveys_surveytype_sortable_update"),
+        data=json.dumps({"updatedItems": [[survey_type.id, 1]]}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    survey_type.refresh_from_db()
+    assert survey_type.order == 1
+
+
+def test_non_global_admin_only_gets_reorder_handle_for_changeable_rows(
+    django_client, organization_1, organization_2
+):
+    user = _create_non_global_admin(organization_1)
+    django_client.force_login(user)
+    own_survey_type = _create_survey_type_for_org(
+        organization_1, "OwnOrgSurveyTypeHandle"
+    )
+    other_survey_type = _create_survey_type_for_org(
+        organization_2, "OtherOrgSurveyTypeHandle"
+    )
+
+    response = django_client.get(reverse("admin:surveys_surveytype_changelist"))
+    model_admin = django_admin.site._registry[SurveyType]
+    model_admin.get_list_display(response.wsgi_request)
+    model_admin.enable_sorting = True
+
+    assert response.status_code == 200
+    assert "_reorder_" in response.context["cl"].list_display
+    assert "drag handle" in str(model_admin._reorder_(own_survey_type))
+    assert "drag handle" not in str(model_admin._reorder_(other_survey_type))
+
+
+def test_non_global_admin_cannot_directly_post_relevant_for_other_org_question(
+    django_client, organization_1, organization_2
+):
+    user = _create_non_global_admin(organization_1)
+    django_client.force_login(user)
+    question = _create_root_question_for_org(organization_2, "OtherOrgRelevantQuestion")
+
+    response = django_client.post(
+        reverse("relevant"),
+        {
+            "base_questions": [str(question.base_question.id)],
+            "relevant": "1 = 1",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "You do not have permission to change" in response.content.decode()
+    question.refresh_from_db()
+    assert question.relevant == ""
 
 
 def test_root_question_admin_edit_view(

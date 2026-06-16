@@ -5,6 +5,7 @@ from core.validators import validate_name, validate_names
 from dal import autocomplete
 from django import forms
 from django.conf import settings
+from django.contrib.auth import get_permission_codename
 from django.forms import Form, ModelForm
 from django.forms.models import BaseInlineFormSet
 from modules.models import Indicator, Submodule
@@ -25,6 +26,12 @@ from questions.models import (
     SubQuestion,
     Suffix,
 )
+
+
+def _user_has_change_permission(user, obj):
+    opts = obj._meta
+    codename = get_permission_codename("change", opts)
+    return user.has_perm(f"{opts.app_label}.{codename}", obj)
 
 
 class SubQuestionAdminModelForm(ModelForm):
@@ -308,7 +315,22 @@ class NestedSuffixForm(ModelForm):
 
         suffix_names = suffix_names.split(",")
 
-        self.cleaned_data["suffixes"] = Suffix.objects.filter(name__in=suffix_names)
+        suffixes = Suffix.objects.filter(name__in=suffix_names)
+        user = getattr(self, "user", None)
+        if user:
+            unauthorized_suffixes = [
+                suffix.name
+                for suffix in suffixes
+                if not _user_has_change_permission(user, suffix)
+            ]
+            if unauthorized_suffixes:
+                self.add_error(
+                    "",
+                    "You do not have permission to change: "
+                    + ", ".join(unauthorized_suffixes),
+                )
+
+        self.cleaned_data["suffixes"] = suffixes
         return self.cleaned_data
 
     def save(self, commit=True):
@@ -352,6 +374,31 @@ class SubQuestionProxyForm(ModelForm):
 
         root_question_ids = root_question_ids.split(",")
         root_questions = RootQuestion.objects.filter(id__in=root_question_ids)
+        user = getattr(self, "user", None)
+        if user:
+            unauthorized_suffixes = [
+                suffix.name
+                for suffix in (suffix, suffix_2)
+                if suffix and not _user_has_change_permission(user, suffix)
+            ]
+            if unauthorized_suffixes:
+                self.add_error(
+                    "",
+                    "You do not have permission to change: "
+                    + ", ".join(unauthorized_suffixes),
+                )
+
+            unauthorized_questions = [
+                root_question.name
+                for root_question in root_questions
+                if not _user_has_change_permission(user, root_question)
+            ]
+            if unauthorized_questions:
+                self.add_error(
+                    "",
+                    "You do not have permission to change: "
+                    + ", ".join(unauthorized_questions),
+                )
 
         for root_question in root_questions:
             full_name = f"{root_question.name}{partial_name}"
