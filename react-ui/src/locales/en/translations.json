@@ -118,7 +118,13 @@
         "type": "Type",
         "mode": "Mode",
         "context": "Context",
-        "lastSavedDate": "Last Saved"
+        "lastSavedDate": "Last Saved",
+        "empty": {
+            "title": "No saved surveys yet",
+            "description": "Create a survey to save it here and return to it later.",
+            "filteredTitle": "No saved surveys match your filters",
+            "filteredDescription": "Clear the filters or adjust your search to see saved surveys."
+        }
     },
     "surveyWizard": {
         "title": "Survey Wizard",

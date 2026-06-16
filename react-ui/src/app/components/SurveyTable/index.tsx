@@ -1,4 +1,5 @@
 import React, {
+  useCallback,
   useImperativeHandle,
   useMemo,
   useState,
@@ -44,7 +45,7 @@ export interface ActionsInterface {
 export const generateActions = (
   original: { uuid: number },
   actions: ActionsInterface,
-  t: (string: string) => string
+  t: (string: string) => string,
 ) => {
   const actionComponents: ActionComponentInterface[] = [
     {
@@ -103,42 +104,39 @@ const SurveyTable = React.forwardRef(
       isFetching,
       count,
       actions,
+      onCreateSurvey,
     }: {
       data?: unknown[];
       isFetching: boolean;
       count: number;
       actions: ActionsInterface;
+      onCreateSurvey?: () => void;
     },
-    ref
+    ref,
   ) => {
     const { t } = useTranslation();
     const dispatch = useDispatch();
 
     const [filters, setFilters] = useState({});
-    const [paginationFilters, setPaginationFilters] = useState({});
     const [showFilters, setShowFilters] = useState(false);
 
-    useEffect(() => {
-      loadPage(paginationFilters);
-    }, [paginationFilters]);
+    const loadPage = useCallback(
+      (filterParams: object) => {
+        dispatch(fetchSavedSurveys(filterParams));
+      },
+      [dispatch],
+    );
 
     useEffect(() => {
       loadPage(filters);
-    }, [filters]);
-
-    const loadPage = (filterParams: object) => {
-      dispatch(fetchSavedSurveys(filterParams));
-    };
+    }, [filters, loadPage]);
 
     const updateFilters = (newFilters: object) => {
       setFilters(newFilters);
-      setPaginationFilters(newFilters);
     };
 
     const clearFilters = () => {
       setFilters({});
-      setPaginationFilters({});
-      loadPage({});
     };
 
     useImperativeHandle(ref, () => ({
@@ -197,6 +195,59 @@ const SurveyTable = React.forwardRef(
       clearFilters,
     };
 
+    const hasActiveFilters = useMemo(
+      () =>
+        Object.values(filters).some(
+          (value) =>
+            value !== null &&
+            value !== undefined &&
+            !(typeof value === "string" && value.trim() === ""),
+        ),
+      [filters],
+    );
+
+    const emptyState = (
+      <div className="survey-table-empty-state">
+        <h3>
+          {hasActiveFilters
+            ? t(
+                "surveyTable.empty.filteredTitle",
+                "No saved surveys match your filters",
+              )
+            : t("surveyTable.empty.title", "No saved surveys yet")}
+        </h3>
+        <p>
+          {hasActiveFilters
+            ? t(
+                "surveyTable.empty.filteredDescription",
+                "Clear the filters or adjust your search to see saved surveys.",
+              )
+            : t(
+                "surveyTable.empty.description",
+                "Create a survey to save it here and return to it later.",
+              )}
+        </p>
+        {hasActiveFilters ? (
+          <Button
+            kind="secondary"
+            small
+            onClick={() => {
+              setShowFilters(false);
+              clearFilters();
+            }}
+          >
+            {t("filters.clear")}
+          </Button>
+        ) : (
+          onCreateSurvey && (
+            <Button small onClick={onCreateSurvey}>
+              {t("surveyWizard.createSurvey")}
+            </Button>
+          )
+        )}
+      </div>
+    );
+
     if (isFetching) {
       return loadingContent;
     }
@@ -204,7 +255,7 @@ const SurveyTable = React.forwardRef(
     return (
       <div>
         <Filters {...filtersProps} />
-        <div className="table">
+        <div className="table survey-table-wrapper">
           <TableComponent
             columns={columns}
             data={data}
@@ -212,11 +263,12 @@ const SurveyTable = React.forwardRef(
             totalItems={count}
             sortBy={[{ id: "sortable_updated_at", desc: true }]}
             showSort
+            emptyState={emptyState}
           />
         </div>
       </div>
     );
-  }
+  },
 );
 
 SurveyTable.displayName = "SurveyTable";

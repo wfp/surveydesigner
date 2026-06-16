@@ -477,6 +477,10 @@ h6, .wfp--type-zeta {
   background-color: white;
 }
 
+.survey-table-wrapper {
+  overflow-x: auto;
+}
+
 .surveyActionsWrapper {
   display: flex;
   flex-direction: row;
@@ -500,6 +504,21 @@ h6, .wfp--type-zeta {
 
 .survey-table-cell {
   font-size: 0.75rem;
+}
+
+.survey-table-empty-state {
+  text-align: center;
+  padding: 2rem 1rem;
+
+  h3 {
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+  }
+
+  p {
+    margin-bottom: 1rem;
+    color: var(--text-02, #6f6f6f);
+  }
 }
 
 .delete-saved-survey-text {
@@ -607,4 +626,36 @@ nav.custom-step-navigation .wfp--step-navigation__nav .wfp--step-navigation__nav
   width: 120px;
   display: inline-block;
   object-fit: contain;
+}
+
+@media (max-width: 768px) {
+  .survey-content {
+    padding: 0.75rem;
+
+    form > .d-flex {
+      flex-direction: column;
+    }
+
+    form > .d-flex > .flex-column {
+      width: 100%;
+      margin-left: 0;
+      margin-right: 0;
+      margin-bottom: 1rem;
+    }
+  }
+
+  .filter-options > div {
+    flex-basis: 100%;
+    max-width: 100%;
+  }
+
+  .surveyActionsWrapper {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .survey-action {
+    margin-left: 0;
+    margin-bottom: 0.25rem;
+  }
 }

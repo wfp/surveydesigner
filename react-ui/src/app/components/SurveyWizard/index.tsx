@@ -208,6 +208,14 @@ function SurveyWizardContent() {
     dispatch(surveyFormActions.resetSurveyData({}));
   }
 
+  function startCreatingSurvey() {
+    setIsCreatingSurvey(true);
+    setSelectedSurveyToEdit(null);
+    dispatch(surveyFormActions.resetSurveyData({}));
+    refreshModulesContext();
+    surveyTableRef.current?.clearFilters();
+  }
+
   function isSavedSurveyActionSuccess(
     res: PayloadAction<any>,
     actionType: string,
@@ -265,6 +273,7 @@ function SurveyWizardContent() {
       data={savedSurveyLabelsData}
       isFetching={savedSurveys.isLoading}
       count={savedSurveyLabelsData ? savedSurveyLabelsData.length : 0}
+      onCreateSurvey={startCreatingSurvey}
       actions={{
         edit: (surveyID: number) => {
           dispatch(modulesActions.clearModules());

@@ -1,5 +1,5 @@
 import React from "react";
-import { Column, usePagination, useTable, useSortBy } from "react-table";
+import { Column, usePagination, useSortBy, useTable } from "react-table";
 import { Pagination, Table } from "@wfp/react";
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
   showSort?: boolean;
   loadPage?: (filters: { [key: string]: string }) => void;
   sortBy?: { id: string; desc: boolean }[];
+  emptyState?: React.ReactNode;
 }
 
 export function TableComponent({
@@ -22,6 +23,7 @@ export function TableComponent({
   showSort = false,
   loadPage,
   sortBy,
+  emptyState,
 }: Props) {
   const memoColumns = React.useMemo(
     () =>
@@ -35,14 +37,14 @@ export function TableComponent({
                 : (column.Header as string),
           }))
         : [],
-    [columns]
+    [columns],
   );
   const memoSortBy = React.useMemo(
     () =>
       sortBy && sortBy.length
         ? sortBy.map((sortingObject) => {
             const conColumn = memoColumns?.find(
-              (column) => column.accessor === sortingObject.id
+              (column) => column.accessor === sortingObject.id,
             );
             return {
               ...sortingObject,
@@ -50,7 +52,7 @@ export function TableComponent({
             };
           })
         : [],
-    [sortBy, memoColumns]
+    [sortBy, memoColumns],
   );
 
   const dataArray = Array.isArray(data) ? data : [];
@@ -76,13 +78,12 @@ export function TableComponent({
       disableSortBy: !sortBy,
     },
     useSortBy,
-    usePagination
+    usePagination,
   );
 
   const changePage: any = (page: { page: number; pageSize: number }) => {
     gotoPage(page.page - 1);
 
-    // Update PageSize
     if (pageSize !== page.pageSize) {
       setPageSize(page.pageSize);
     }
@@ -93,56 +94,82 @@ export function TableComponent({
     <>
       <Table {...getTableProps()}>
         <thead>
-          {headerGroups.map((headerGroup: any) => (
-            <tr {...headerGroup.getHeaderGroupProps()}>
-              {headerGroup.headers.map((column) => (
-                <th
-                  {...column.getHeaderProps(column.getSortByToggleProps())}
-                  className="survey-table-header"
-                  style={{ width: column.width }}
-                >
-                  {showSort && column.canSort ? (
-                    <div
-                      {...column.getSortByToggleProps()}
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        justifyContent: "space-between",
-                      }}
+          {headerGroups.map((headerGroup: any) => {
+            const { key: headerGroupKey, ...headerGroupProps } =
+              headerGroup.getHeaderGroupProps();
+            return (
+              <tr key={headerGroupKey} {...headerGroupProps}>
+                {headerGroup.headers.map((column) => {
+                  const { key: headerKey, ...headerProps } =
+                    column.getHeaderProps(column.getSortByToggleProps());
+                  const { key: sortKey, ...sortProps } =
+                    column.getSortByToggleProps();
+                  return (
+                    <th
+                      key={headerKey}
+                      {...headerProps}
+                      className="survey-table-header"
+                      style={{ width: column.width }}
                     >
-                      <div>{column.render("Header")}</div>
-                      <div>
-                        {column.isSorted
-                          ? column.isSortedDesc
-                            ? " ↓"
-                            : " ↑"
-                          : "↑↓"}
-                      </div>
-                    </div>
-                  ) : (
-                    column.render("Header")
-                  )}
-                </th>
-              ))}
-            </tr>
-          ))}
+                      {showSort && column.canSort ? (
+                        <div
+                          {...sortProps}
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <div>{column.render("Header")}</div>
+                          <div>
+                            {column.isSorted
+                              ? column.isSortedDesc
+                                ? "desc"
+                                : "asc"
+                              : "-"}
+                          </div>
+                        </div>
+                      ) : (
+                        column.render("Header")
+                      )}
+                    </th>
+                  );
+                })}
+              </tr>
+            );
+          })}
         </thead>
         <tbody {...getTableBodyProps()}>
+          {page.length === 0 && (
+            <tr>
+              <td colSpan={memoColumns.length} className="survey-table-cell">
+                {emptyState}
+              </td>
+            </tr>
+          )}
           {page.map((row) => {
             prepareRow(row);
+            const { key: rowKey, ...rowProps } = row.getRowProps();
             return (
-              <tr {...row.getRowProps()}>
-                {row.cells.map((cell) => (
-                  <td {...cell.getCellProps()} className="survey-table-cell">
-                    {cell.render("Cell")}
-                  </td>
-                ))}
+              <tr key={rowKey} {...rowProps}>
+                {row.cells.map((cell) => {
+                  const { key: cellKey, ...cellProps } = cell.getCellProps();
+                  return (
+                    <td
+                      key={cellKey}
+                      {...cellProps}
+                      className="survey-table-cell"
+                    >
+                      {cell.render("Cell")}
+                    </td>
+                  );
+                })}
               </tr>
             );
           })}
         </tbody>
       </Table>
-      {showPagination && (
+      {showPagination && page.length > 0 && (
         <Pagination
           pageSize={pageSize}
           pageSizes={[10, 20, 30]}
