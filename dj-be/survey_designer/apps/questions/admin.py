@@ -261,6 +261,9 @@ class ChoiceGroupAdmin(
     inlines = (ChoiceInline,)
     search_fields = ("name",)
 
+    class Media:
+        js = [static("js/admin/jquery-bridge.js")]
+
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
 

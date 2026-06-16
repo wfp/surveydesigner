@@ -85,39 +85,51 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     if (this.value) {
-      const dataAjaxUrl = suffix2Select.data("ajax--url").split("?")[0];
+      const autocompleteURL = suffix2Select.data("ajax--url");
       suffix2SelectWrapper.show();
-      suffix2Select.data("ajax--url", `${dataAjaxUrl}?parent_id=${this.value}`);
-      suffix2Select.select2();
+
+      if (autocompleteURL && suffix2Select.select2) {
+        const dataAjaxUrl = autocompleteURL.split("?")[0];
+        suffix2Select.data("ajax--url", `${dataAjaxUrl}?parent_id=${this.value}`);
+        suffix2Select.select2();
+      }
     } else {
       suffix2SelectWrapper.hide();
     }
   });
 
-  let tribute = new Tribute({
-    values: function (text, cb) {
-      const url = `/admin/questions/basequestion/autocomplete/?term=${text}`;
-      $.get(url, function (data) {
-        cb(data.results);
-      });
-    },
-    trigger: "$",
-    lookup: "text",
-    fillAttr: "text",
-    requireLeadingSpace: false,
-    selectTemplate: (item) => {
-      return "${" + item.original.text + "}";
-    },
-  });
+  if (window.Tribute) {
+    const tribute = new Tribute({
+      values: function (text, cb) {
+        const url = `/admin/questions/basequestion/autocomplete/?term=${text}`;
+        $.get(url, function (data) {
+          cb(data.results);
+        });
+      },
+      trigger: "$",
+      lookup: "text",
+      fillAttr: "text",
+      requireLeadingSpace: false,
+      selectTemplate: (item) => {
+        return "${" + item.original.text + "}";
+      },
+    });
 
-  tribute.attach(document.getElementById("id_constraint"));
-  tribute.attach(document.getElementsByClassName("sub_question_constraint"));
-  tribute.attach(document.getElementById("id_relevant"));
-  tribute.attach(document.getElementsByClassName("sub_question_relevant"));
-  tribute.attach(document.getElementById("id_choice_filter"));
-  tribute.attach(document.getElementsByClassName("sub_question_choice_filter"));
-  tribute.attach(document.getElementById("id_calculation"));
-  tribute.attach(document.getElementsByClassName("sub_question_calculation"));
+    [
+      document.getElementById("id_constraint"),
+      document.getElementsByClassName("sub_question_constraint"),
+      document.getElementById("id_relevant"),
+      document.getElementsByClassName("sub_question_relevant"),
+      document.getElementById("id_choice_filter"),
+      document.getElementsByClassName("sub_question_choice_filter"),
+      document.getElementById("id_calculation"),
+      document.getElementsByClassName("sub_question_calculation"),
+    ].forEach(function (target) {
+      if (target && target.length !== 0) {
+        tribute.attach(target);
+      }
+    });
+  }
 
   if (!$("#id_constraint").val()) {
     $("#id_constraint_message")
