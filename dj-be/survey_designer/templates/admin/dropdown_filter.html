@@ -1,7 +1,9 @@
 {% load i18n %}
 
 <script type="text/javascript">
-  const go_from_select = function(opt) { window.location = window.location.pathname + opt };
+  window.go_from_select = window.go_from_select || function(opt) {
+    window.location = window.location.pathname + opt;
+  };
 </script>
 
 <h3>{% blocktrans with title as filter_title %} By {{ filter_title }} {% endblocktrans %}</h3>

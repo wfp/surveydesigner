@@ -1,6 +1,6 @@
 {% load i18n %}
 <script type="text/javascript">
-  const goFromSelectMultiple = function(selectElem) {
+  window.goFromSelectMultiple = window.goFromSelectMultiple || function(selectElem) {
     const urlParams = new URLSearchParams(window.location.search);
     const parameterName = selectElem.dataset.parameterName;
     const selected = [];
@@ -32,6 +32,9 @@
 </ul>
 
 <script type="text/javascript">
-  const $ = django.jQuery;
-  $('#id_filter_{{ spec.parameter_name }}').select2();
+  (function($) {
+    if ($ && $.fn && $.fn.select2) {
+      $('#id_filter_{{ spec.parameter_name }}').select2();
+    }
+  })(django.jQuery);
 </script>
