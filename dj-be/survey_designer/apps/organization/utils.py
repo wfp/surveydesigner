@@ -3,13 +3,16 @@ from django.db.models import Q, QuerySet
 from modules.models import Indicator, Module, Submodule
 from organization.models import Organization
 from questions.models import (
+    BaseQuestion,
     Calculation,
     ChoiceGroup,
+    ChoiceGroupFile,
     RepeatSection,
     RootQuestion,
     SubQuestion,
     Suffix,
 )
+from saved_surveys.models import SavedSurvey
 from surveys.models import SurveyAttribute, SurveyCategory, SurveyMode, SurveyType
 
 
@@ -28,9 +31,15 @@ def get_organizations(obj) -> QuerySet:
             SurveyMode,
             SurveyAttribute,
             ChangeRequest,
+            SavedSurvey,
         ),
     ):
         return obj.organizations.all()
+
+    if isinstance(obj, BaseQuestion):
+        if not obj.instance:
+            return Organization.objects.none()
+        return get_organizations(obj.instance)
 
     if isinstance(obj, Submodule):
         return obj.module.organizations.all()
@@ -44,6 +53,16 @@ def get_organizations(obj) -> QuerySet:
         q1 = Q(module__submodules__root_questions__choices=obj)
         q2 = Q(module__submodules__root_questions__sub_questions__suffix__choices=obj)
         q3 = Q(module__submodules__root_questions__sub_questions__suffix_2__choices=obj)
+        return Organization.objects.filter(q1 | q2 | q3).distinct()
+
+    if isinstance(obj, ChoiceGroupFile):
+        q1 = Q(module__submodules__root_questions__choices_file=obj)
+        q2 = Q(
+            module__submodules__root_questions__sub_questions__suffix__choices_file=obj
+        )
+        q3 = Q(
+            module__submodules__root_questions__sub_questions__suffix_2__choices_file=obj
+        )
         return Organization.objects.filter(q1 | q2 | q3).distinct()
 
     if isinstance(obj, Calculation):

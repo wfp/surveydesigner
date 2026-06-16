@@ -42,7 +42,30 @@ def _collation_safe_icontains(queryset, search_term, field_names):
     return queryset.filter(predicate)
 
 
-class ConstraintCreateView(FormView):
+class AdminQuestionBulkEditMixin(LoginRequiredMixin, UserPassesTestMixin):
+    login_url = "/admin/login/"
+
+    def test_func(self):
+        return self.request.user.is_staff
+
+    def add_object_permission_errors(self, form, base_questions):
+        unauthorized_questions = [
+            question.name
+            for question in base_questions
+            if not self.request.user.has_perm("questions.change_basequestion", question)
+        ]
+        if not unauthorized_questions:
+            return False
+
+        form.add_error(
+            None,
+            "You do not have permission to change: "
+            + ", ".join(unauthorized_questions),
+        )
+        return True
+
+
+class ConstraintCreateView(AdminQuestionBulkEditMixin, FormView):
     template_name = "questions/question_constraint.html"
     form_class = QuestionValidationForm
 
@@ -149,6 +172,15 @@ class ConstraintCreateView(FormView):
             formula = None
             dependencies = None
             base_questions = form.cleaned_data["base_questions"]
+            if self.add_object_permission_errors(form, base_questions):
+                return self.render_to_response(
+                    self.get_context_data(
+                        form=form,
+                        formset=formset,
+                        translation_formset=translation_formset,
+                    )
+                )
+
             if form.cleaned_data["mode"] == "text":
                 formula = form.cleaned_data["constraint"]
                 formula, dependencies = self.break_down_text_formula(form, formula)
@@ -178,7 +210,7 @@ class ConstraintCreateView(FormView):
         )
 
 
-class RelevantCreateView(FormView):
+class RelevantCreateView(AdminQuestionBulkEditMixin, FormView):
     template_name = "questions/question_relevant.html"
     form_class = QuestionRelevantForm
 
@@ -216,6 +248,13 @@ class RelevantCreateView(FormView):
 
         if form.is_valid():
             base_questions = form.cleaned_data["base_questions"]
+            if self.add_object_permission_errors(form, base_questions):
+                return self.render_to_response(
+                    self.get_context_data(
+                        form=form,
+                    )
+                )
+
             formula = form.cleaned_data["relevant"]
             formula, dependencies = self.break_down_text_formula(form, formula)
 

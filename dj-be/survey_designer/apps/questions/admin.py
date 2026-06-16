@@ -927,7 +927,10 @@ class SubQuestionAdmin(
 
 @admin.register(BaseQuestion)
 class BaseQuestionAdmin(
-    CollationSafeSearchAdminMixin, SortableAdminMixin, admin.ModelAdmin
+    CollationSafeSearchAdminMixin,
+    ObjectPermissionMixin,
+    SortableAdminMixin,
+    admin.ModelAdmin,
 ):
     list_display = (
         "name",
@@ -1011,7 +1014,7 @@ class BaseQuestionAdmin(
 
     def get_list_display(self, request):
         list_display = list(super().get_list_display(request))
-        if request.user.read_only_member:
+        if request.user.read_only_member and "_reorder_" in list_display:
             list_display.remove("_reorder_")
         if IS_POPUP_VAR not in request.GET:
             # Use default rendering for popups, otherwise use our
@@ -1393,7 +1396,7 @@ class CalculationAdmin(
 
 
 @admin.register(NestedSuffix)
-class NestedSuffixAdmin(admin.ModelAdmin):
+class NestedSuffixAdmin(RequestUserFormMixin, ObjectPermissionMixin, admin.ModelAdmin):
     exclude = (
         "created_by",
         "updated_by",

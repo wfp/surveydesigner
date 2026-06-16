@@ -10,6 +10,12 @@ def test_get_organizations_question_not_shared(root_question_1, organization_1):
     assert organizations.first() == organization_1
 
 
+def test_get_organizations_base_question(root_question_1, organization_1):
+    organizations = get_organizations(root_question_1.base_question)
+    assert organizations.count() == 1
+    assert organizations.first() == organization_1
+
+
 def test_get_organizations_module_not_shared(module_1, organization_1):
     organizations = get_organizations(module_1)
     assert organizations.count() == 1
