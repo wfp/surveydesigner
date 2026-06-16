@@ -37,23 +37,24 @@ import { fetchIndicatorAreas } from "../../redux/actions/indicatorAreasActions";
 import { Indicator, Module, Submodule } from "../../types/api";
 import { ModulesProps } from "./Modules.interface";
 import { IndicatorAreaWithIndicators } from "../../types";
+import { useSurveyWizardContext } from "../../contexts/SurveyWizardContext";
 
-function Modules({
-  next,
-  selectAll,
-  setSelectAll,
-  collapseAllModules,
-  setCollapseAllModules,
-  collapseAllIndicatorAreas,
-  setCollapseAllIndicatorAreas,
-  prvsStep,
-  step,
-  setSelectedModuleCounts,
-  selectedSurveyToEdit,
-  setIsValidating,
-}: ModulesProps) {
+function Modules({ next }: ModulesProps) {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
+  const {
+    selectAllModules: selectAll,
+    setSelectAllModules: setSelectAll,
+    collapseAllModules,
+    setCollapseAllModules,
+    collapseAllIndicatorAreas,
+    setCollapseAllIndicatorAreas,
+    prvsStep,
+    step,
+    setSelectedModuleCounts,
+    selectedSurveyToEdit,
+    setIsValidating,
+  } = useSurveyWizardContext();
   const surveyForm = useAppSelector((state) => state.surveyForm);
   const { data, isLoading } = useAppSelector((state) => state.modules);
   const { data: indicatorAreasData, isLoading: indicatorAreasIsLoading } =
@@ -219,7 +220,9 @@ function Modules({
       checked && data
         ? data
             .flatMap((module) =>
-              module.submodules.filter((submodule) => isVisibleSubmodule(submodule)),
+              module.submodules.filter((submodule) =>
+                isVisibleSubmodule(submodule),
+              ),
             )
             .map((submodule) => submodule.id)
         : [];
@@ -328,8 +331,7 @@ function Modules({
     const visibleSubmodules = submodules.filter((id) =>
       data?.some((module) =>
         module.submodules.some(
-          (sub) =>
-            sub.id === id && isVisibleSubmodule(sub),
+          (sub) => sub.id === id && isVisibleSubmodule(sub),
         ),
       ),
     );
@@ -337,7 +339,8 @@ function Modules({
     const visibleModules =
       data?.filter((module) =>
         module.submodules.some(
-          (sub) => isVisibleSubmodule(sub) && visibleSubmodules.includes(sub.id),
+          (sub) =>
+            isVisibleSubmodule(sub) && visibleSubmodules.includes(sub.id),
         ),
       ) ?? [];
 
@@ -462,7 +465,9 @@ function Modules({
         selectedSurveyToEdit?.indicator_areas_order,
       );
       const indicatorsIDs: number[] = [];
-      const indicatorAreaIds = indicatorAreasData.map((indicatorArea) => indicatorArea.id);
+      const indicatorAreaIds = indicatorAreasData.map(
+        (indicatorArea) => indicatorArea.id,
+      );
 
       modulesData.current.indicator_areas_order = mergeOrderedIds(
         getFirstDefinedOrder(
@@ -497,15 +502,16 @@ function Modules({
           }
         });
 
-        modulesData.current.indicators_order[indicatorArea.id] = mergeOrderedIds(
-          getFirstDefinedNestedOrder(
-            indicatorArea.id,
-            modulesData.current.indicators_order,
-            surveyForm.indicators_order,
-            selectedSurveyToEdit?.indicators_order,
-          ),
-          tempIndicatorIDs,
-        );
+        modulesData.current.indicators_order[indicatorArea.id] =
+          mergeOrderedIds(
+            getFirstDefinedNestedOrder(
+              indicatorArea.id,
+              modulesData.current.indicators_order,
+              surveyForm.indicators_order,
+              selectedSurveyToEdit?.indicators_order,
+            ),
+            tempIndicatorIDs,
+          );
       });
       const indicatorsToUse = hasSavedOrSessionState
         ? surveyForm.indicators || []

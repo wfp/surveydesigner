@@ -32,19 +32,20 @@ import {
 import { ApiError } from "../../types";
 import { ReviewProps } from "./Review.interface";
 import { getOrderedSubmodules } from "../../utils/generate";
+import { useSurveyWizardContext } from "../../contexts/SurveyWizardContext";
 
-function Review({
-  next,
-  numberOfQuestionsToBeGenerated,
-  selectAll,
-  setSelectAll,
-  collapseAll,
-  setCollapseAll,
-  setNumberOfQuestionsToBeGenerated,
-  selectedSurveyToEdit,
-}: ReviewProps) {
+function Review({ next }: ReviewProps) {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
+  const {
+    numberOfQuestionsToBeGenerated,
+    selectAllReview: selectAll,
+    setSelectAllReview: setSelectAll,
+    collapseAllReview: collapseAll,
+    setCollapseAllReview: setCollapseAll,
+    setNumberOfQuestionsToBeGenerated,
+    selectedSurveyToEdit,
+  } = useSurveyWizardContext();
   const surveyForm = useAppSelector((state) => state.surveyForm);
   const submodulesData = useAppSelector((state) => state.submodules);
   const submodules = submodulesData.data;
@@ -249,7 +250,9 @@ function Review({
         data.submodules_order = modulesData.current.modules_order.flatMap(
           (moduleId) => modulesData.current.submodules_order[moduleId],
         );
-        data.indicator_areas_order = [...modulesData.current.indicator_areas_order];
+        data.indicator_areas_order = [
+          ...modulesData.current.indicator_areas_order,
+        ];
         data.indicators_order = { ...modulesData.current.indicators_order };
         data.sub_questions = subQuestions;
         dispatch(surveyFormActions.setSurveyData(data));
