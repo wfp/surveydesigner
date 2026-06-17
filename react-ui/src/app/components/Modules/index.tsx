@@ -29,8 +29,9 @@ import { getCompareFunction } from "../../utils";
 import { apiValidation, getErrorDisplay } from "./utils";
 import {
   deriveModuleOrderFromSubmodulesOrder,
-  getFirstDefinedNestedOrder,
   getFirstDefinedOrder,
+  getPreferredEditNestedOrder,
+  getPreferredEditOrder,
   mergeOrderedIds,
 } from "./ordering";
 import { fetchIndicatorAreas } from "../../redux/actions/indicatorAreasActions";
@@ -86,8 +87,9 @@ function Modules({
     submodules: watchAllFields.submodules || [],
     indicators: watchAllFields.indicators || [],
   };
+  const isEditingSavedSurvey = !!selectedSurveyToEdit;
   const hasSavedOrSessionState =
-    !!selectedSurveyToEdit ||
+    isEditingSavedSurvey ||
     surveyForm.modules_order.length > 0 ||
     surveyForm.submodules_order.length > 0 ||
     surveyForm.indicator_areas_order.length > 0 ||
@@ -219,7 +221,9 @@ function Modules({
       checked && data
         ? data
             .flatMap((module) =>
-              module.submodules.filter((submodule) => isVisibleSubmodule(submodule)),
+              module.submodules.filter((submodule) =>
+                isVisibleSubmodule(submodule),
+              ),
             )
             .map((submodule) => submodule.id)
         : [];
@@ -328,8 +332,7 @@ function Modules({
     const visibleSubmodules = submodules.filter((id) =>
       data?.some((module) =>
         module.submodules.some(
-          (sub) =>
-            sub.id === id && isVisibleSubmodule(sub),
+          (sub) => sub.id === id && isVisibleSubmodule(sub),
         ),
       ),
     );
@@ -337,7 +340,8 @@ function Modules({
     const visibleModules =
       data?.filter((module) =>
         module.submodules.some(
-          (sub) => isVisibleSubmodule(sub) && visibleSubmodules.includes(sub.id),
+          (sub) =>
+            isVisibleSubmodule(sub) && visibleSubmodules.includes(sub.id),
         ),
       ) ?? [];
 
@@ -364,10 +368,11 @@ function Modules({
 
   useEffect(() => {
     if (data) {
-      const savedSubmodulesOrder = getFirstDefinedOrder(
-        surveyForm.submodules_order,
-        selectedSurveyToEdit?.submodules_order,
-      );
+      const savedSubmodulesOrder = getPreferredEditOrder({
+        surveyFormOrder: surveyForm.submodules_order,
+        selectedSurveyOrder: selectedSurveyToEdit?.submodules_order,
+        isEditing: isEditingSavedSurvey,
+      });
       const submodulesIDs: number[] = [];
       const visibleModules = data
         .map((module) => ({
@@ -384,12 +389,13 @@ function Modules({
       );
 
       modulesData.current.modules_order = mergeOrderedIds(
-        getFirstDefinedOrder(
-          modulesData.current.modules_order,
-          surveyForm.modules_order,
-          selectedSurveyToEdit?.modules_order,
-          derivedModulesOrder,
-        ),
+        getPreferredEditOrder({
+          currentOrder: modulesData.current.modules_order,
+          surveyFormOrder: surveyForm.modules_order,
+          selectedSurveyOrder: selectedSurveyToEdit?.modules_order,
+          fallbackOrder: derivedModulesOrder,
+          isEditing: isEditingSavedSurvey,
+        }),
         visibleModuleIds,
       );
 
@@ -457,12 +463,15 @@ function Modules({
 
   useEffect(() => {
     if (indicatorAreasData) {
-      const savedIndicatorAreaOrder = getFirstDefinedOrder(
-        surveyForm.indicator_areas_order,
-        selectedSurveyToEdit?.indicator_areas_order,
-      );
+      const savedIndicatorAreaOrder = getPreferredEditOrder({
+        surveyFormOrder: surveyForm.indicator_areas_order,
+        selectedSurveyOrder: selectedSurveyToEdit?.indicator_areas_order,
+        isEditing: isEditingSavedSurvey,
+      });
       const indicatorsIDs: number[] = [];
-      const indicatorAreaIds = indicatorAreasData.map((indicatorArea) => indicatorArea.id);
+      const indicatorAreaIds = indicatorAreasData.map(
+        (indicatorArea) => indicatorArea.id,
+      );
 
       modulesData.current.indicator_areas_order = mergeOrderedIds(
         getFirstDefinedOrder(
@@ -497,15 +506,17 @@ function Modules({
           }
         });
 
-        modulesData.current.indicators_order[indicatorArea.id] = mergeOrderedIds(
-          getFirstDefinedNestedOrder(
-            indicatorArea.id,
-            modulesData.current.indicators_order,
-            surveyForm.indicators_order,
-            selectedSurveyToEdit?.indicators_order,
-          ),
-          tempIndicatorIDs,
-        );
+        modulesData.current.indicators_order[indicatorArea.id] =
+          mergeOrderedIds(
+            getPreferredEditNestedOrder({
+              key: indicatorArea.id,
+              currentOrderMap: modulesData.current.indicators_order,
+              surveyFormOrderMap: surveyForm.indicators_order,
+              selectedSurveyOrderMap: selectedSurveyToEdit?.indicators_order,
+              isEditing: isEditingSavedSurvey,
+            }),
+            tempIndicatorIDs,
+          );
       });
       const indicatorsToUse = hasSavedOrSessionState
         ? surveyForm.indicators || []

@@ -27,6 +27,50 @@ export function getFirstDefinedNestedOrder(
   return [];
 }
 
+export function getPreferredEditOrder({
+  currentOrder,
+  surveyFormOrder,
+  selectedSurveyOrder,
+  fallbackOrder,
+  isEditing,
+}: {
+  currentOrder?: number[];
+  surveyFormOrder?: number[];
+  selectedSurveyOrder?: number[];
+  fallbackOrder?: number[];
+  isEditing: boolean;
+}): number[] {
+  return getFirstDefinedOrder(
+    currentOrder,
+    ...(isEditing
+      ? [selectedSurveyOrder, surveyFormOrder]
+      : [surveyFormOrder, selectedSurveyOrder]),
+    fallbackOrder,
+  );
+}
+
+export function getPreferredEditNestedOrder({
+  key,
+  currentOrderMap,
+  surveyFormOrderMap,
+  selectedSurveyOrderMap,
+  isEditing,
+}: {
+  key: number;
+  currentOrderMap?: OrderMap;
+  surveyFormOrderMap?: OrderMap;
+  selectedSurveyOrderMap?: OrderMap;
+  isEditing: boolean;
+}): number[] {
+  return getFirstDefinedNestedOrder(
+    key,
+    currentOrderMap,
+    ...(isEditing
+      ? [selectedSurveyOrderMap, surveyFormOrderMap]
+      : [surveyFormOrderMap, selectedSurveyOrderMap]),
+  );
+}
+
 export function mergeOrderedIds(
   preferredOrder: number[] | undefined,
   availableIds: number[],

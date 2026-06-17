@@ -27,11 +27,14 @@ import {
   SubQuestion,
   Submodule,
   SubmoduleWithQuestions,
-  SuffixSerializer,
 } from "../../types/api";
 import { ApiError } from "../../types";
 import { ReviewProps } from "./Review.interface";
 import { getOrderedSubmodules } from "../../utils/generate";
+import {
+  getSavedSelectionsForSubmoduleItems,
+  getSavedSubquestionIdsBySubmodule,
+} from "./selection";
 
 function Review({
   next,
@@ -85,82 +88,6 @@ function Review({
     defaultValues: surveyForm,
   });
 
-  function addToResult(
-    result: {
-      [key: number]: any;
-    },
-    listOfSubQuestionSubmodule: (SubQuestion | Submodule)[],
-  ) {
-    if (listOfSubQuestionSubmodule && listOfSubQuestionSubmodule.length === 0) {
-      return result;
-    }
-    listOfSubQuestionSubmodule.forEach((item) => {
-      if (!result[item.id]) {
-        result[item.id] = item;
-      }
-    });
-    return result;
-  }
-
-  function findSubQuestions(
-    submodule: Submodule | SubQuestion,
-    suffixList: SuffixSerializer,
-    depth: number,
-    result: { [key: number]: any },
-    parentSuffix?: any,
-  ) {
-    if (depth === 0 || !submodule) return [];
-    const keys = Object.keys(submodule.next);
-    let selectedSuffix;
-    // check matching recall period
-    if (
-      parentSuffix &&
-      !submodule.real_item.suffix_1_id &&
-      !submodule.real_item.suffix_2_id &&
-      submodule.real_item.recall_period_id
-    ) {
-      selectedSuffix = suffixList.find(
-        (obj: any) =>
-          (obj.suffix_2 === parentSuffix.suffix_2_id ||
-            obj.suffix === parentSuffix.suffix_1_id) &&
-          obj.recall_period_id === submodule.real_item.recall_period_id,
-      );
-      // Check matching suffix 2 first
-    } else if (parentSuffix && submodule.real_item.suffix_2_id) {
-      selectedSuffix = suffixList.find(
-        (obj: any) =>
-          obj.suffix === parentSuffix.suffix_1_id &&
-          obj.suffix_2 === submodule.real_item.suffix_2_id,
-      );
-      // Check matching suffix 1
-    } else if (submodule.real_item.suffix_1_id) {
-      selectedSuffix = suffixList.find(
-        (obj: any) => obj.suffix === submodule.real_item.suffix_1_id,
-      );
-    }
-
-    if (!selectedSuffix) return [];
-    // If no "next" values, then we can stop here. There are no more subquestions.
-    if (keys.length === 0) {
-      return submodule.sub_questions;
-    }
-    result = addToResult(result, [submodule]);
-    keys.forEach((key) => {
-      const nextSubmodule = submodule.next[key];
-      const subQuestions = findSubQuestions(
-        nextSubmodule,
-        suffixList,
-        depth - 1,
-        result,
-        { ...parentSuffix, ...submodule.real_item },
-      );
-      if (subQuestions.length > 0) {
-        result = addToResult(result, subQuestions);
-      }
-    });
-    return result;
-  }
-
   useEffect(() => {
     if (!submodules) {
       dispatch(fetchSubmodules());
@@ -188,55 +115,38 @@ function Review({
         setValue("languages", selectedLanguages);
       }
 
-      const selectedQuestions = Object.keys(
-        selectedSurveyToEdit.subquestion_submodule_mapping,
-      )
-        .flatMap((submoduleID) => {
-          const foundID = Object.keys(submodulesMapValue).find(
-            (key) => submoduleID === key,
+      const savedMappings = selectedSurveyToEdit
+        .subquestion_submodule_mapping as unknown as Record<
+        string,
+        Array<{ id: number }>
+      >;
+      const savedSubquestionIdsBySubmodule =
+        getSavedSubquestionIdsBySubmodule(savedMappings);
+      const selectedQuestions: SubQuestion[] = [];
+      const selectedIds = new Set<string | number>();
+      const seenQuestionKeys = new Set<string>();
+
+      Object.entries(savedSubquestionIdsBySubmodule).forEach(
+        ([submoduleId, savedSubquestionIds]) => {
+          const savedSelections = getSavedSelectionsForSubmoduleItems(
+            submodulesMapValue[Number(submoduleId)],
+            savedSubquestionIds,
+            seenQuestionKeys,
           );
-          let result: { [key: number]: any } = {};
-          if (foundID) {
-            const selectedPrefix = submodulesMapValue[parseInt(foundID, 10)];
 
-            const firstKeys = Object.keys(selectedPrefix);
-            firstKeys.forEach((key) => {
-              const foundSubmodule = selectedPrefix[key];
-              const subQuestions = findSubQuestions(
-                foundSubmodule,
-                selectedSurveyToEdit.subquestion_submodule_mapping[
-                  parseInt(submoduleID, 10)
-                ],
-                3,
-                result,
-              );
-              result = { ...result, ...subQuestions };
-            });
-          }
-          return Object.values(result);
-        })
-        .filter((submodule) => submodule !== null);
-      const selectedIds = [
-        ...new Set(
-          selectedQuestions.map((item: any) => item.submodule_id || item.id),
-        ),
-      ];
-      const uniqueSelectedQuestions: SubQuestion[] = [];
+          selectedQuestions.push(
+            ...(savedSelections.selectedQuestions as SubQuestion[]),
+          );
+          savedSelections.selectedIds.forEach((id) => selectedIds.add(id));
+        },
+      );
 
-      selectedQuestions.forEach((item: any) => {
-        if (!uniqueSelectedQuestions.find((q: any) => q.id === item.id)) {
-          uniqueSelectedQuestions.push(item);
-        }
-      });
-      setSubQuestions([...subQuestions, ...uniqueSelectedQuestions]);
+      setSubQuestions(selectedQuestions);
       dispatch(
-        submodulesActions.setSelectedSubmodulesOptions([
-          ...selectedOptions,
-          ...selectedIds,
-        ]),
+        submodulesActions.setSelectedSubmodulesOptions([...selectedIds]),
       );
       setNumberOfQuestionsToBeGenerated(
-        numberOfQuestionsToBeGenerated + selectedIds.length,
+        getRootQuestionsCount(submodules) + selectedQuestions.length,
       );
     }
   }, [submodules]);
@@ -249,7 +159,9 @@ function Review({
         data.submodules_order = modulesData.current.modules_order.flatMap(
           (moduleId) => modulesData.current.submodules_order[moduleId],
         );
-        data.indicator_areas_order = [...modulesData.current.indicator_areas_order];
+        data.indicator_areas_order = [
+          ...modulesData.current.indicator_areas_order,
+        ];
         data.indicators_order = { ...modulesData.current.indicators_order };
         data.sub_questions = subQuestions;
         dispatch(surveyFormActions.setSurveyData(data));
@@ -370,14 +282,12 @@ function Review({
                 subQuestion.group.find((group) => group.recall_period_id)
                   ?.name || undefined,
             };
-            const isRequired = !selectedSurveyToEdit
-              ? submodule.required_groups.find(
-                  (group) =>
-                    group.suffix === lookup.suffix &&
-                    group.suffix_2 === lookup.suffix_2 &&
-                    group.recall_period === lookup.recall_period,
-                )
-              : false;
+            const isRequired = submodule.required_groups.find(
+              (group) =>
+                group.suffix === lookup.suffix &&
+                group.suffix_2 === lookup.suffix_2 &&
+                group.recall_period === lookup.recall_period,
+            );
 
             const extendedSubmoduleId = `id-${submodule.id}-${currentPath.join(
               "-",
@@ -496,6 +406,7 @@ function Review({
         <div className="d-flex">
           <div className="flex-column">
             <SubmoduleList
+              autoSelectRequired={!selectedSurveyToEdit}
               submodules={relevantSubmodules}
               {...{
                 collapseAll,

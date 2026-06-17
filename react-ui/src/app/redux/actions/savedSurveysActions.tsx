@@ -1,4 +1,4 @@
-import { AxiosError, AxiosResponse } from "axios";
+import { AxiosResponse } from "axios";
 import { Cookies } from "react-cookie";
 import { ApiError } from "../../types";
 import { SavedSurvey } from "../../types/api";
@@ -14,7 +14,7 @@ export const fetchSavedSurveys = createAppAsyncThunk(
     filters: {
       [key: string]: unknown;
     },
-    { dispatch, getState }
+    { dispatch, getState },
   ) => {
     dispatch(savedSurveysActions.getSavedSurveys());
 
@@ -35,7 +35,7 @@ export const fetchSavedSurveys = createAppAsyncThunk(
     } catch (err: any) {
       dispatch(savedSurveysActions.setSavedSurveysError(err));
     }
-  }
+  },
 );
 
 // Function to link a question to a submodule in the backend.
@@ -90,31 +90,29 @@ export const postSavedSurvey = createAppAsyncThunk(
     const data = getDataForSave(timestamp, survey);
 
     try {
-      API.post("/saved-surveys/", data, {
+      const response = await API.post("/saved-surveys/", data, {
         headers: {
           "Content-Type": "application/json",
           "X-CSRFToken": csrfToken,
         },
-      })
-        .then((response) => {
-          dispatch(
-            notificationsActions.setSuccessNotification({
-              msg: "Survey saved successfully",
-            })
-          );
-        })
-        .catch((err) => {
-          dispatch(
-            notificationsActions.setErrorNotification({
-              msg: extractErrorMessage(err),
-              title: "Error Saving Survey",
-            })
-          );
-        });
+      });
+      dispatch(
+        notificationsActions.setSuccessNotification({
+          msg: "Survey saved successfully",
+        }),
+      );
+      return response;
     } catch (err: any) {
+      dispatch(
+        notificationsActions.setErrorNotification({
+          msg: extractErrorMessage(err),
+          title: "Error Saving Survey",
+        }),
+      );
       dispatch(savedSurveysActions.setSavedSurveysError(err));
+      throw err;
     }
-  }
+  },
 );
 
 interface PutSurveyParams extends SurveyFormState {
@@ -129,31 +127,29 @@ export const putSavedSurvey = createAppAsyncThunk(
     const timestamp = new Date().getTime().toString();
     const data = getDataForSave(timestamp, survey);
     try {
-      API.put(`/saved-surveys/${uuid}/`, data, {
+      const response = await API.put(`/saved-surveys/${uuid}/`, data, {
         headers: {
           "Content-Type": "application/json",
           "X-CSRFToken": csrfToken,
         },
-      })
-        .then((response) => {
-          dispatch(
-            notificationsActions.setSuccessNotification({
-              msg: "Survey Updated successfully",
-            })
-          );
-        })
-        .catch((err) => {
-          dispatch(
-            notificationsActions.setErrorNotification({
-              msg: extractErrorMessage(err),
-              title: "Error Saving Survey",
-            })
-          );
-        });
+      });
+      dispatch(
+        notificationsActions.setSuccessNotification({
+          msg: "Survey Updated successfully",
+        }),
+      );
+      return response;
     } catch (err: any) {
+      dispatch(
+        notificationsActions.setErrorNotification({
+          msg: extractErrorMessage(err),
+          title: "Error Saving Survey",
+        }),
+      );
       dispatch(savedSurveysActions.setSavedSurveysError(err));
+      throw err;
     }
-  }
+  },
 );
 
 interface DeleteSavedSurveyParams {
@@ -168,33 +164,29 @@ export const deleteSavedSurvey = createAppAsyncThunk(
 
     try {
       if (!uuid || uuid === null) throw new Error("No survey id provided");
-      const res = await API.delete(`/saved-surveys/${uuid}/`, {
+      const response = await API.delete(`/saved-surveys/${uuid}/`, {
         headers: {
           "Content-Type": "application/json",
           "X-CSRFToken": csrfToken,
         },
-      })
-        .then((response) => {
-          dispatch(
-            notificationsActions.setSuccessNotification({
-              msg: "Survey Delete successfully",
-            })
-          );
-          return response;
-        })
-        .catch((err) => {
-          dispatch(
-            notificationsActions.setErrorNotification({
-              msg: extractErrorMessage(err),
-              title: "Error Deleting Survey",
-            })
-          );
-        });
-      return res;
+      });
+      dispatch(
+        notificationsActions.setSuccessNotification({
+          msg: "Survey Delete successfully",
+        }),
+      );
+      return response;
     } catch (err: any) {
+      dispatch(
+        notificationsActions.setErrorNotification({
+          msg: extractErrorMessage(err),
+          title: "Error Deleting Survey",
+        }),
+      );
       dispatch(savedSurveysActions.setSavedSurveysError(err));
+      throw err;
     }
-  }
+  },
 );
 
 interface getSavedSurveyParams {
@@ -210,27 +202,25 @@ export const fetchSavedSurvey = createAppAsyncThunk(
 
     try {
       if (!uuid || uuid === null) throw new Error("No survey id provided");
-      API.get(`/saved-surveys/${uuid}/`, {
+      const response = await API.get(`/saved-surveys/${uuid}/`, {
         headers: {
           "Content-Type": "application/json",
           "X-CSRFToken": csrfToken,
         },
-      })
-        .then((res) => {
-          dispatch(savedSurveysActions.setSavedSurveyDetail(res.data));
-        })
-        .catch((err) => {
-          dispatch(
-            notificationsActions.setErrorNotification({
-              msg: extractErrorMessage(err),
-              title: `Error Getting Survey: ID: ${uuid}`,
-            })
-          );
-        });
+      });
+      dispatch(savedSurveysActions.setSavedSurveyDetail(response.data));
+      return response;
     } catch (err: any) {
+      dispatch(
+        notificationsActions.setErrorNotification({
+          msg: extractErrorMessage(err),
+          title: `Error Getting Survey: ID: ${uuid}`,
+        }),
+      );
       dispatch(savedSurveysActions.setSavedSurveysError(err));
+      throw err;
     }
-  }
+  },
 );
 
 interface getSavedSurveyParams {
@@ -247,33 +237,28 @@ export const getSavedSurveyCopy = createAppAsyncThunk(
 
     try {
       if (!uuid || uuid === null) throw new Error("No survey id provided");
-      await API.get(`/saved-surveys/${uuid}/copy/`, {
+      response = await API.get(`/saved-surveys/${uuid}/copy/`, {
         headers: {
           "Content-Type": "application/json",
           "X-CSRFToken": csrfToken,
         },
-      })
-        .then((res) => {
-          dispatch(savedSurveysActions.setSavedSurveyDetail(res.data));
-          dispatch(
-            notificationsActions.setSuccessNotification({
-              msg: "Survey Copied successfully",
-            })
-          );
-          response = res;
-          return res;
-        })
-        .catch((err) => {
-          dispatch(
-            notificationsActions.setErrorNotification({
-              msg: extractErrorMessage(err),
-              title: `Error Copying Survey: ID: ${uuid}`,
-            })
-          );
-        });
+      });
+      dispatch(savedSurveysActions.setSavedSurveyDetail(response.data));
+      dispatch(
+        notificationsActions.setSuccessNotification({
+          msg: "Survey Copied successfully",
+        }),
+      );
     } catch (err: any) {
+      dispatch(
+        notificationsActions.setErrorNotification({
+          msg: extractErrorMessage(err),
+          title: `Error Copying Survey: ID: ${uuid}`,
+        }),
+      );
       dispatch(savedSurveysActions.setSavedSurveysError(err));
+      throw err;
     }
     return response;
-  }
+  },
 );

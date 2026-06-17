@@ -4,6 +4,8 @@ import {
   deriveModuleOrderFromSubmodulesOrder,
   getFirstDefinedNestedOrder,
   getFirstDefinedOrder,
+  getPreferredEditNestedOrder,
+  getPreferredEditOrder,
   mergeOrderedIds,
 } from "./ordering";
 
@@ -37,14 +39,41 @@ describe("Modules ordering helpers", () => {
     expect(getFirstDefinedOrder([], undefined, [3, 2, 1])).toEqual([3, 2, 1]);
   });
 
+  it("prefers saved survey order over redux order on a fresh edit mount", () => {
+    expect(
+      getPreferredEditOrder({
+        surveyFormOrder: [1, 2, 3],
+        selectedSurveyOrder: [3, 2, 1],
+        isEditing: true,
+      }),
+    ).toEqual([3, 2, 1]);
+  });
+
+  it("keeps current drag order over saved survey order", () => {
+    expect(
+      getPreferredEditOrder({
+        currentOrder: [2, 3, 1],
+        surveyFormOrder: [1, 2, 3],
+        selectedSurveyOrder: [3, 2, 1],
+        isEditing: true,
+      }),
+    ).toEqual([2, 3, 1]);
+  });
+
+  it("prefers saved nested order over redux nested order on a fresh edit mount", () => {
+    expect(
+      getPreferredEditNestedOrder({
+        key: 7,
+        surveyFormOrderMap: { 7: [1, 2] },
+        selectedSurveyOrderMap: { 7: [2, 1] },
+        isEditing: true,
+      }),
+    ).toEqual([2, 1]);
+  });
+
   it("reads nested order maps with numeric and string keys", () => {
     expect(
-      getFirstDefinedNestedOrder(
-        7,
-        undefined,
-        { 7: [1, 2] },
-        { "7": [3, 4] },
-      ),
+      getFirstDefinedNestedOrder(7, undefined, { 7: [1, 2] }, { "7": [3, 4] }),
     ).toEqual([1, 2]);
 
     expect(getFirstDefinedNestedOrder(9, { "9": [8, 7] })).toEqual([8, 7]);
