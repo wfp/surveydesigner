@@ -5,7 +5,7 @@ import { Provider } from "react-redux";
 import { useForm } from "react-hook-form";
 import { vi } from "vitest";
 import SubmoduleList from "./index";
-import { render } from "../../utils/tests";
+import { render, waitFor } from "../../utils/tests";
 import { createTestStore } from "../../redux/store";
 import { ModulesProvider } from "../../contexts/ModulesContext";
 
@@ -22,27 +22,27 @@ const fakeSubmodule = {
 
 const fakeModule = { id: 0, submodules: [fakeSubmodule] };
 
-window.initialState = {
-  modules: { data: [fakeModule] },
-};
+const getPreloadedState = () => ({
+  modules: { data: [fakeModule], error: null, isLoading: false },
+});
 
-const store = createTestStore();
-
-function Wrapper({ children }) {
-  return (
-    <Provider store={store}>
-      <ModulesProvider
-        initialValue={{
-          modules_order: [fakeModule.id],
-          submodules_order: [[fakeSubmodule.id]],
-        }}
-      >
-        <DragDropContext>
-          <Droppable droppableId="0">{() => children}</Droppable>
-        </DragDropContext>
-      </ModulesProvider>
-    </Provider>
-  );
+function createWrapper(testStore = createTestStore(getPreloadedState())) {
+  return function Wrapper({ children }) {
+    return (
+      <Provider store={testStore}>
+        <ModulesProvider
+          initialValue={{
+            modules_order: [fakeModule.id],
+            submodules_order: { [fakeModule.id]: [fakeSubmodule.id] },
+          }}
+        >
+          <DragDropContext>
+            <Droppable droppableId="0">{() => children}</Droppable>
+          </DragDropContext>
+        </ModulesProvider>
+      </Provider>
+    );
+  };
 }
 
 function SubmoduleListWithFormControl(props) {
@@ -78,9 +78,60 @@ describe("SubmoduleList", () => {
         setSubQuestions={vi.fn()}
         getRootQuestionsCount={mockGetRootQuestionsCount}
       />,
-      { wrapper: Wrapper }
+      { wrapper: createWrapper() }
     );
 
     expect(container).toMatchSnapshot();
+  });
+
+  it("does not auto-select required groups when disabled", async () => {
+    const requiredSubQuestion = {
+      id: 123,
+      suffix: { name: "MOCK_SUFFIX" },
+      submodule: fakeSubmodule.id,
+    };
+    const requiredItem = {
+      id: "id-0-required",
+      display: "Required group",
+      real_item: { name: "MOCK_NAME" },
+      required: true,
+      sub_questions: [requiredSubQuestion],
+      next: {},
+    };
+    const testStore = createTestStore({
+      ...getPreloadedState(),
+      submodules: {
+        data: [],
+        error: null,
+        isLoading: false,
+        selectedOptions: [],
+      },
+    });
+    const setNumberOfQuestionsToBeGenerated = vi.fn();
+    const setSubQuestions = vi.fn();
+
+    render(
+      <SubmoduleListWithFormControl
+        autoSelectRequired={false}
+        submodules={[fakeSubmodule]}
+        submodulesMap={{ 0: { requiredItem } }}
+        selectedOptions={new Set()}
+        submodulesData={{ isLoading: false }}
+        setSelectAll={vi.fn()}
+        selectAll={{ isChecked: false, run: false }}
+        collapseAll={{ isChecked: false, run: false }}
+        subQuestions={[]}
+        setSubQuestions={setSubQuestions}
+        setNumberOfQuestionsToBeGenerated={setNumberOfQuestionsToBeGenerated}
+        getRootQuestionsCount={vi.fn(() => 0)}
+      />,
+      { wrapper: createWrapper(testStore) }
+    );
+
+    await waitFor(() =>
+      expect(setNumberOfQuestionsToBeGenerated).toHaveBeenCalled()
+    );
+    expect(testStore.getState().submodules.selectedOptions).toEqual([]);
+    expect(setSubQuestions).not.toHaveBeenCalled();
   });
 });

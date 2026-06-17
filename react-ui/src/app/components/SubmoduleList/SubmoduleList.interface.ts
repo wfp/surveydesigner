@@ -15,6 +15,7 @@ export interface SubmoduleListProps {
   control: Control<SurveyFormState>;
   getRootQuestionsCount: (submodules: SubmoduleWithQuestions[]) => number;
   numberOfQuestionsToBeGenerated: number;
+  autoSelectRequired?: boolean;
   selectAll: {
     isChecked: boolean;
     run: boolean;

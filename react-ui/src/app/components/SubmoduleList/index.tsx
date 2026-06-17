@@ -26,6 +26,7 @@ function SubmoduleList({
   control,
   getRootQuestionsCount,
   numberOfQuestionsToBeGenerated,
+  autoSelectRequired = true,
   selectAll,
   selectedOptions,
   setCollapseAll,
@@ -451,9 +452,11 @@ function SubmoduleList({
   }, [selectAll]);
 
   useEffect(() => {
+    if (!autoSelectRequired) return;
+
     const requiredItems = allItems.filter((item) => isRequired(item));
     handleSelectForMultipleItems(requiredItems);
-  }, [submodulesMap]);
+  }, [submodulesMap, autoSelectRequired]);
 
   const handleModalRequestClose = () => {
     setSubmoduleModal(null);
