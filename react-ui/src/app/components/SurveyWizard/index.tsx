@@ -44,12 +44,7 @@ import {
 import { savedSurveysActions } from "../../redux/reducers/savedSurveysReducer";
 
 import SurveyTable from "../SurveyTable";
-import {
-  SavedSurvey,
-  SurveyCategory,
-  SurveyMode,
-  SurveyTypes,
-} from "../../types/api";
+import { SavedSurvey } from "../../types/api";
 import { surveyFormActions } from "../../redux/reducers/surveyFormReducer";
 import {
   DeleteSavedSurveyModal,
@@ -120,6 +115,12 @@ function SurveyWizard() {
   const [numberOfQuestionsToBeGenerated, setNumberOfQuestionsToBeGenerated] =
     useState(0);
   const [modulesContextKey, setModulesContextKey] = useState(0);
+  const [moduleCriteriaWereChanged, setModuleCriteriaWereChanged] =
+    useState(false);
+  const handleModuleCriteriaChange = useCallback(() => {
+    setModuleCriteriaWereChanged(true);
+    setModulesContextKey((value) => value + 1);
+  }, []);
   const navigate = useNavigate();
   const location = useLocation();
   const state = (location.state || {}) as {
@@ -190,6 +191,7 @@ function SurveyWizard() {
     // If a copiedSurvey is present in navigation state, use it directly
     if (state && state.copiedSurvey) {
       setSelectedSurveyToEdit(state.copiedSurvey);
+      setModuleCriteriaWereChanged(false);
       setModulesContextKey((value) => value + 1);
       setIsCreatingSurvey(true);
       return;
@@ -204,6 +206,7 @@ function SurveyWizard() {
             );
             if (selectedSurveyFromCopy) {
               setSelectedSurveyToEdit(selectedSurveyFromCopy);
+              setModuleCriteriaWereChanged(false);
               setModulesContextKey((value) => value + 1);
               setIsCreatingSurvey(true);
             }
@@ -273,6 +276,7 @@ function SurveyWizard() {
     setGoToStep(0);
     setIsCreatingSurvey(false);
     setSelectedSurveyToEdit(null);
+    setModuleCriteriaWereChanged(false);
     setModulesContextKey((value) => value + 1);
     dispatch(surveyFormActions.resetSurveyData({}));
   }
@@ -306,39 +310,7 @@ function SurveyWizard() {
     }
   };
 
-  type ValueTypes = {
-    category: SurveyCategory | null | undefined;
-    type: SurveyTypes | null | undefined;
-    mode: SurveyMode | null | undefined;
-    attributes: number[] | null;
-  };
-
-  const prevValues = useRef<ValueTypes>({
-    category: null,
-    type: null,
-    mode: null,
-    attributes: null,
-  });
-
-  const currentValues = {
-    category: surveyForm.category,
-    type: surveyForm.type,
-    mode: surveyForm.mode,
-    attributes: surveyForm.attributes,
-  };
-
   const surveyTableRef = useRef<{ clearFilters: () => void }>(null);
-  useEffect(() => {
-    if (step === 1 && !selectedSurveyToEdit) {
-      // Check if any of the four fields have changed
-      if (
-        JSON.stringify(prevValues.current) !== JSON.stringify(currentValues)
-      ) {
-        dispatch(modulesActions.clearModules());
-        prevValues.current = currentValues;
-      }
-    }
-  }, [step, selectedSurveyToEdit, currentValues, dispatch]);
 
   const savedSurveyLabelsData = savedSurveys.data
     ? savedSurveys.data.map((survey) =>
@@ -382,6 +354,7 @@ function SurveyWizard() {
             setIsCreatingSurvey(true);
             setModulesContextKey((value) => value + 1);
             setSelectedSurveyToEdit(survey || null);
+            setModuleCriteriaWereChanged(false);
           },
           delete: (surveyID: number) => {
             setDeleteSavedSurveyModalOptions({ uuid: surveyID, isOpen: true });
@@ -454,6 +427,7 @@ function SurveyWizard() {
         next={next()}
         frontendContent={frontendContent}
         selectedSurveyToEdit={selectedSurveyToEdit}
+        onModuleCriteriaChange={handleModuleCriteriaChange}
       />
     ) : (
       tableContent
@@ -652,7 +626,9 @@ function SurveyWizard() {
                     setCollapseAllModules={setCollapseAllModules}
                     collapseAllIndicatorAreas={collapseAllIndicatorAreas}
                     setCollapseAllIndicatorAreas={setCollapseAllIndicatorAreas}
-                    selectedSurveyToEdit={selectedSurveyToEdit}
+                    selectedSurveyToEdit={
+                      moduleCriteriaWereChanged ? null : selectedSurveyToEdit
+                    }
                     {...{
                       prvsStep,
                       step,
@@ -668,7 +644,9 @@ function SurveyWizard() {
                     setSelectAll={setSelectAllReview}
                     collapseAll={collapseAllReview}
                     setCollapseAll={setCollapseAllReview}
-                    selectedSurveyToEdit={selectedSurveyToEdit}
+                    selectedSurveyToEdit={
+                      moduleCriteriaWereChanged ? null : selectedSurveyToEdit
+                    }
                     {...{
                       numberOfQuestionsToBeGenerated,
                       setNumberOfQuestionsToBeGenerated,
@@ -709,6 +687,7 @@ function SurveyWizard() {
                         onClick={() => {
                           setIsCreatingSurvey(true);
                           setSelectedSurveyToEdit(null);
+                          setModuleCriteriaWereChanged(false);
                           dispatch(surveyFormActions.resetSurveyData({}));
                           setModulesContextKey((value) => value + 1);
                           if (
