@@ -33,11 +33,16 @@ import { indicatorsActions } from "../../redux/reducers/indicatorsReducer";
 import { renderTooltipMarkdown } from "../../utils";
 import { SurveysProps } from "./Surveys.interface";
 import { SavedSurvey } from "../../types/api";
+import {
+  clearModuleDependentSurveyData,
+  haveModuleCriteriaChanged,
+} from "./moduleCriteria";
 
 function Surveys({
   next,
   frontendContent,
   selectedSurveyToEdit,
+  onModuleCriteriaChange,
 }: SurveysProps) {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
@@ -203,11 +208,23 @@ function Surveys({
   useEffect(() => {
     next((proceed) => {
       handleSubmit((data) => {
-        dispatch(surveyFormActions.setSurveyData(data));
+        const criteriaChanged = haveModuleCriteriaChanged(surveyForm, data);
+        const surveyData = criteriaChanged
+          ? clearModuleDependentSurveyData(data)
+          : data;
+
+        if (criteriaChanged) {
+          dispatch(modulesActions.clearModules());
+          dispatch(indicatorAreasActions.clearIndicatorAreas());
+          dispatch(indicatorsActions.clearIndicators());
+          onModuleCriteriaChange();
+        }
+
+        dispatch(surveyFormActions.setSurveyData(surveyData));
         proceed?.();
       })();
     });
-  }, [next]);
+  }, [next, onModuleCriteriaChange, surveyForm]);
 
   useEffect(() => {
     if (!organizations.data) {

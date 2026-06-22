@@ -5,4 +5,5 @@ export interface SurveysProps {
   next: PrevNextStepCallback;
   frontendContent: FrontendContent[] | null;
   selectedSurveyToEdit: SavedSurvey | null;
+  onModuleCriteriaChange: () => void;
 }
