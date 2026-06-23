@@ -100,6 +100,7 @@ class DocConversion:
             "end",
             "today",
             "deviceid",
+            "hidden",
         ):
             self.question_num += 1
 
@@ -191,7 +192,7 @@ class DocConversion:
 
         type_ = row["type"]
 
-        if type_ in ("start", "end", "today", "deviceid"):
+        if type_ in ("start", "end", "today", "deviceid", "hidden"):
             return
         elif type_ == "begin_repeat":
             self._add_repeat_section_start(row)
@@ -208,7 +209,7 @@ class DocConversion:
         survey_sheet = pd.read_excel(self.xlsx, sheet_name="survey")
         return survey_sheet.loc[
             ~survey_sheet["type"].isin(
-                ["end_group", "username", "simserial", "calculate"]
+                ["end_group", "username", "simserial", "calculate", "hidden"]
             )
         ]
 
