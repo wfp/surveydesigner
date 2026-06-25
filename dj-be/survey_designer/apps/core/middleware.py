@@ -11,15 +11,21 @@ class OrganizationMiddleware:
         self.get_response = get_response
 
     def __call__(self, request: Request):
-        organizations = request.headers.get("survey-designer-organizations", "")
+        organizations_header = request.headers.get("survey-designer-organizations", "")
 
         try:
-            organizations = [
-                int(organization_id_str)
-                for organization_id_str in set(organizations.split(","))
-            ]
+            organizations = list(
+                dict.fromkeys(
+                    int(organization_id_str)
+                    for organization_id_str in organizations_header.split(",")
+                    if organizations_header
+                )
+            )
         except ValueError:
             organizations = []
+            request.organization_ids_parse_error = True
+        else:
+            request.organization_ids_parse_error = False
         request.organization_ids = organizations
 
         return self.get_response(request)
