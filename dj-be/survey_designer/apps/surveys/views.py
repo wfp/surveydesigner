@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+from core.organization_scope import get_authorized_organization_ids
 from django.db.models import Count, Prefetch, Q
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework.permissions import IsAuthenticated
@@ -38,7 +39,11 @@ class SurveysAPIView(APIView):
 
     @extend_schema(responses={200: user_response})
     def get(self, request, *args, **kwargs):
-        organizations = request.organization_ids
+        organizations = get_authorized_organization_ids(request)
+
+        if not organizations:
+            return Response({"categories": [], "modes": []})
+
         related_objects = Prefetch(
             "survey_types",
             queryset=SurveyType.objects.annotate(

@@ -7,7 +7,9 @@ from rest_framework.permissions import IsAuthenticated
 class ListOrganizationsView(ListAPIView):
     model = Organization
     serializer_class = OrganizationSerializer
-    queryset = Organization.objects.all()
     permission_classes = [
         IsAuthenticated,
     ]
+
+    def get_queryset(self):
+        return Organization.objects.visible_for_user(self.request.user)

@@ -22,6 +22,7 @@ def test_organization_middleware(header_content, expected_ids):
     request = Request(request)
     middleware_instance(request)
     assert set(request.organization_ids) == set(expected_ids)
+    assert request.organization_ids_parse_error is False
 
 
 def test_organization_middleware_missing_header():
@@ -34,3 +35,19 @@ def test_organization_middleware_missing_header():
     request = Request(request)
     middleware_instance(request)
     assert set(request.organization_ids) == set()
+    assert request.organization_ids_parse_error is False
+
+
+def test_organization_middleware_malformed_header():
+    get_response = mock.MagicMock()
+    middleware_instance = OrganizationMiddleware(get_response)
+    request = HttpRequest()
+    request.META = {
+        "HTTP_SURVEY_DESIGNER_ORGANIZATIONS": "1,invalid",
+    }
+    request = Request(request)
+
+    middleware_instance(request)
+
+    assert request.organization_ids == []
+    assert request.organization_ids_parse_error is True
