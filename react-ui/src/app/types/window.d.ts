@@ -8,6 +8,8 @@ declare global {
     user_data?: UserDetail;
     env?: string;
     static_url?: string;
+    dataLayer?: unknown[];
+    gtag?: (...args: unknown[]) => void;
   }
 }
 

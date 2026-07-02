@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Link, Modal, Checkbox, Callout } from "@wfp/react";
 import { clarity } from "react-microsoft-clarity";
+import {
+  disableGoogleAnalytics,
+  enableGoogleAnalyticsForCurrentPage,
+} from "../../utils/googleAnalytics";
 
 // --- Types & defaults ---
 export type ConsentCategory = "essential" | "analytics";
@@ -59,22 +63,23 @@ function writeConsentCookie(
   document.cookie = `${cookieName}=${value}; Max-Age=${maxAge}; Path=/; SameSite=Lax${secure}`;
 }
 
-// Send the consent update to Clarity once its stub is available
-function sendClarity(consent: ConsentRecord) {
-  if (!CLARITY_PROJECT_ID) {
-    return;
-  }
-
+// Send the consent update to analytics providers once their stubs are available
+function sendAnalyticsConsent(consent: ConsentRecord) {
   if (consent.analytics) {
-    if (!clarity.hasStarted()) {
-      clarity.init(CLARITY_PROJECT_ID);
-    } else {
-      clarity.start();
+    enableGoogleAnalyticsForCurrentPage();
+
+    if (CLARITY_PROJECT_ID) {
+      if (!clarity.hasStarted()) {
+        clarity.init(CLARITY_PROJECT_ID);
+      } else {
+        clarity.start();
+      }
+      clarity.consent(true);
     }
-    clarity.consent(true);
     return;
   }
 
+  disableGoogleAnalytics();
   if (clarity.hasStarted()) {
     clarity.consent(false);
     clarity.stop();
@@ -112,12 +117,12 @@ const CookieConsentBanner: React.FC<CookieConsentProps> = ({
     };
   }, [consent]);
 
-  // Persist + notify + tell Clarity whenever consent changes
+  // Persist + notify + tell analytics providers whenever consent changes
   useEffect(() => {
     if (!consent) return;
     writeStoredConsent(storageKey, consent);
     writeConsentCookie(cookieName, consent, maxAgeDays);
-    sendClarity(consent);
+    sendAnalyticsConsent(consent);
     onConsentChange?.(consent);
   }, [consent, cookieName, maxAgeDays, onConsentChange, storageKey]);
 
@@ -207,9 +212,9 @@ const CookieConsentBanner: React.FC<CookieConsentProps> = ({
                   <div className="wfp--col-lg-9 wfp--col-md-8 wfp--col-sm-12">
                     We use <strong>essential</strong> cookies to make this site
                     work. We’d also like to use
-                    <strong> analytics</strong> cookies (Microsoft Clarity) to
-                    improve your experience. You can change your choices at any
-                    time. See our{" "}
+                    <strong> analytics</strong> cookies (Google Analytics and
+                    Microsoft Clarity) to improve your experience. You can
+                    change your choices at any time. See our{" "}
                     <Link
                       href={policyUrl}
                       target="_blank"
@@ -293,8 +298,8 @@ const CookieConsentBanner: React.FC<CookieConsentProps> = ({
             labelText="Analytics cookies"
           />
           <p className="wfp--label-description">
-            Help us understand how you use the site to improve it (Microsoft
-            Clarity).
+            Help us understand how you use the site to improve it (Google
+            Analytics and Microsoft Clarity).
           </p>
         </div>
       </Modal>

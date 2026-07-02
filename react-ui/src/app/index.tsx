@@ -27,6 +27,7 @@ import {
 import * as Sentry from "@sentry/react";
 import { BrowserTracing } from "@sentry/tracing";
 import CookieConsent from "./components/CookieConsent";
+import { trackGoogleAnalyticsPageView } from "./utils/googleAnalytics";
 
 import store, { useAppSelector, useAppDispatch } from "./redux/store";
 import ScrollToTop from "./utils/scrollToTop";
@@ -57,6 +58,16 @@ function PrivateRoute({ children }: PrivateRouteProps) {
   ) : (
     <Navigate to="/" state={{ from: location }} replace />
   );
+}
+
+function AnalyticsPageViews() {
+  const location = useLocation();
+
+  useEffect(() => {
+    trackGoogleAnalyticsPageView(`${location.pathname}${location.search}`);
+  }, [location.pathname, location.search]);
+
+  return null;
 }
 
 const { lazy } = React;
@@ -97,6 +108,7 @@ function App() {
     <Router>
       <ScrollToTop />
       <CookieConsent />
+      <AnalyticsPageViews />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route
