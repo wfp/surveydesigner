@@ -78,6 +78,11 @@ function App() {
   }, [i18n.language]);
 
   useEffect(() => {
+    const lang = i18n.language?.split("-")[0] || "en";
+    document.documentElement.lang = lang;
+  }, [i18n.language]);
+
+  useEffect(() => {
     const interceptor = API.interceptors.request.use((config) => {
       const { surveyForm } = store.getState();
       if (surveyForm.organizations?.length > 0) {

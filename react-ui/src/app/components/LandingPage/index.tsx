@@ -1,16 +1,18 @@
 import React, { useEffect } from "react";
-import { NavLink, useLocation } from "react-router-dom";
-import { Link, MainNavigation, MainNavigationItem } from "@wfp/react";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "react-router-dom";
 import Footer from "../Footer";
-import { languageSelect } from "../languageSelect";
 import { LandingPageLocation } from "./LandingPage.interface";
+import { LandingFeaturesSection } from "./UI/LandingFeaturesSection";
+import { LandingHeader } from "./UI/LandingHeader";
+import { LandingHero } from "./UI/LandingHero";
+import { LandingStats } from "./UI/LandingStats";
 import styles from "./styles.module.scss";
 
 function LandingPage() {
   const { t } = useTranslation();
-  const location = useLocation<LandingPageLocation>();
-  const { from } = location.state || {};
+  const location = useLocation();
+  const { from } = (location.state as LandingPageLocation | undefined) || {};
   if (from) {
     localStorage.setItem("from", JSON.stringify(from));
   }
@@ -19,58 +21,15 @@ function LandingPage() {
     document.title = `${t("landingPage.welcome")} | ${t("landingPage.wfp")} ${t(
       "landingPage.title",
     )}`;
-  }, []);
+  }, [t]);
 
   return (
     <>
-      <div id="landing-page">
-        <div
-          className="jumbotron"
-          style={{
-            backgroundImage: `url(${window.static_url || ""}img/background_1.jpg)`,
-          }}
-        >
-          <div className="text-layer content-block">
-            <MainNavigation
-              logo={
-                <NavLink to="/">
-                  {`${t("landingPage.wfp")} | ${t("landingPage.title")}`}
-                </NavLink>
-              }
-              className={styles.navbar}
-            >
-              <MainNavigationItem>
-                <Link
-                  href={`${import.meta.env.VITE_APP_API_ENDPOINT}/auth/login/`}
-                >
-                  {t("actions.login")}
-                </Link>
-              </MainNavigationItem>
-              {languageSelect()}
-            </MainNavigation>
-
-            <div className="page-intro">
-              <div className="content content-wrapper">
-                <h1>
-                  {t("landingPage.description")}
-                  <Link href="/auth/login/">{t("actions.login")}</Link>{" "}
-                  {t("landingPage.learnMore")}
-                </h1>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="main-content">
-          <div id="product-slideshow">
-            <div className="slider">
-              <img
-                className="responsive"
-                alt="Survey Designer Screenshot"
-                src={`${window.static_url || ""}img/home_page_screen.png`}
-              />
-            </div>
-          </div>
-        </div>
+      <div id="landing-page" className={styles.page}>
+        <LandingHeader />
+        <LandingHero />
+        <LandingStats />
+        <LandingFeaturesSection />
       </div>
       <Footer />
     </>
