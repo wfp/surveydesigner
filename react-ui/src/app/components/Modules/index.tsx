@@ -154,21 +154,23 @@ function Modules({
           submodules_order,
         ).then((result) => {
           if (result.ok) {
+            const orderedSubmodules = modules_order
+              .flatMap((modId) => submodules_order[modId])
+              .filter((subId) => data.submodules.includes(subId));
+            const selectedModulesOrder = modules_order.filter((modId) =>
+              submodules_order[modId].some((subId) =>
+                data.submodules.includes(subId),
+              ),
+            );
             const orderedData = {
               ...data,
-              modules_order: [...modules_order],
-              // eslint-disable-next-line camelcase
-              submodules: modules_order
-                // eslint-disable-next-line camelcase
-                .flatMap((modId) => submodules_order[modId])
-                .filter((subId) => data.submodules.includes(subId)),
+              modules_order: selectedModulesOrder,
+              submodules: orderedSubmodules,
               indicator_areas_order: [
                 ...modulesData.current.indicator_areas_order,
               ],
               indicators_order: { ...modulesData.current.indicators_order },
-              submodules_order: modules_order.flatMap(
-                (modId) => submodules_order[modId],
-              ),
+              submodules_order: orderedSubmodules,
             };
             dispatch(surveyFormActions.setSurveyData(orderedData));
             proceed?.();

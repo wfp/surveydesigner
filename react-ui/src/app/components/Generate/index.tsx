@@ -159,6 +159,7 @@ function Generate({ next }: GenerateProps) {
             >
               <Button
                 kind="primary"
+                data-testid="download-xlsx"
                 className="wfp--form-controls__next wfp--btn wfp--btn--primary"
                 onClick={() => {
                   setXlsLoading(true);
@@ -201,6 +202,7 @@ function Generate({ next }: GenerateProps) {
               </Button>
               <Button
                 kind="primary"
+                data-testid="download-docx"
                 className="wfp--form-controls__next wfp--btn wfp--btn--primary"
                 onClick={() => generateDoc(dispatch, surveyForm, modulesData)}
                 style={{ width: "230px" }}

@@ -16,6 +16,7 @@ export default defineConfig({
   envDir: ".",
   base:  "/",
   test: {
+    exclude: ["e2e/**", "node_modules/**", "dist/**"],
     globals: true,
     environment: "jsdom",
     reporters: ["default", "junit"],

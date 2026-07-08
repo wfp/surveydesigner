@@ -70,6 +70,7 @@ export function ShareSurveyModal({
       <div className="share-survey-text-input">
         <TextInput
           disabled
+          data-testid="share-survey-link"
           labelText={t("sharedLinkModal.description")}
           value={`${window.location.origin}/survey/copy/${uuid}`}
         />

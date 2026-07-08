@@ -131,6 +131,7 @@ function IndicatorAreaListItem({
       {(provided, snapshot) => (
         <div
           className={snapshot.isDragging ? "greyBackground" : "whiteBackground"}
+          data-testid={`indicator-area-draggable-${indicatorArea.id}`}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           ref={provided.innerRef}

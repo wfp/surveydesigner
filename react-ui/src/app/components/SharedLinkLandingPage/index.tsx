@@ -139,6 +139,7 @@ function SharedLinkLandingPage() {
             <Button
               key={id}
               kind="primary"
+              data-testid={`shared-survey-${id}`}
               className="wfp--form-controls__next wfp--btn wfp--btn--primary"
               onClick={actionButton.onClick}
               disabled={actionButton.disabled}
