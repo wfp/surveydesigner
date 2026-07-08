@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.urls import path
 
 from . import views
@@ -13,3 +14,8 @@ urlpatterns = [
         name="oidc-callback",
     ),
 ]
+
+if settings.ENABLE_E2E_AUTH:
+    urlpatterns.append(
+        path("e2e-login/", views.E2ELoginView.as_view(), name="e2e-login")
+    )

@@ -196,6 +196,7 @@ function ModuleListItem({
       {(provided, snapshot) => (
         <div
           className={snapshot.isDragging ? "greyBackground" : "whiteBackground"}
+          data-testid={`module-draggable-${module.id}`}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           ref={provided.innerRef}

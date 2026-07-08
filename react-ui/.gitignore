@@ -31,3 +31,7 @@ test-results.xml
 
 #os
 .DS_Store
+
+# Playwright
+playwright-report/
+test-results/

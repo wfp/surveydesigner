@@ -74,7 +74,12 @@ export const generateActions = (
     <div className="surveyActionsWrapper">
       {actionComponents.map(({ Component, text, id, ...props }) => (
         <div key={`action--wrapper--${id}`} className="survey-action">
-          <Component key={`${typeof Component}-${id}`} {...props} small>
+          <Component
+            key={`${typeof Component}-${id}`}
+            data-testid={`saved-survey-${id}`}
+            {...props}
+            small
+          >
             {text}
           </Component>
         </div>
@@ -204,7 +209,7 @@ const SurveyTable = React.forwardRef(
     return (
       <div>
         <Filters {...filtersProps} />
-        <div className="table">
+        <div className="table" data-testid="saved-surveys-table">
           <TableComponent
             columns={columns}
             data={data}
