@@ -1,6 +1,8 @@
 import React, { useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { Link, MainNavigation, MainNavigationItem } from "@wfp/react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCircleQuestion } from "@fortawesome/free-solid-svg-icons";
 import { useTranslation } from "react-i18next";
 import Footer from "../Footer";
 import { languageSelect } from "../languageSelect";
@@ -39,6 +41,15 @@ function LandingPage() {
               }
               className={styles.navbar}
             >
+              <MainNavigationItem>
+                <NavLink to="/help" className="d-flex align-items-center">
+                  <FontAwesomeIcon
+                    icon={faCircleQuestion}
+                    className="wfp--btn__icon nav-icon"
+                  />
+                  {t("actions.help")}
+                </NavLink>
+              </MainNavigationItem>
               <MainNavigationItem>
                 <Link
                   href={`${import.meta.env.VITE_APP_API_ENDPOINT}/auth/login/`}

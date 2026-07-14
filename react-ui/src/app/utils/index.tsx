@@ -3,7 +3,6 @@ import { Link, Text } from "@wfp/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import React, { PropsWithChildren, ReactElement } from "react";
-import { ReactMarkdownProps } from "react-markdown/lib/complex-types";
 import { FrontendContent, SavedSurvey } from "../types/api";
 
 /*
@@ -56,32 +55,11 @@ function LinkRenderer(props: LinkRendererProps) {
   );
 }
 
-type BlockquoteRendererProps = PropsWithChildren;
-
-function BlockquoteRenderer(props: BlockquoteRendererProps) {
-  // match style of Blockquote for rendered markdown
-  return <blockquote className="wfp-blockquote">{props.children}</blockquote>;
-}
-
 type TextRendererProps = PropsWithChildren;
 
 function TextRenderer(props: TextRendererProps) {
   // match style of Text for rendered markdown
   return <Text>{props.children}</Text>;
-}
-
-type ImgRendererProps = JSX.IntrinsicElements["img"] & ReactMarkdownProps;
-
-function ImgRenderer(props: ImgRendererProps) {
-  // use div "img-wrapper" and wrap props in <img>
-  return (
-    <div className="img-wrapper">
-      <img
-        alt={`${props.node.properties?.alt}`}
-        src={`${props.node.properties?.src}`}
-      />
-    </div>
-  );
 }
 
 interface RenderMarkdownFunction {
@@ -97,28 +75,6 @@ export const renderTooltipMarkdown: RenderMarkdownFunction = (data, key) => {
         components={{
           a: LinkRenderer,
           p: TextRenderer,
-        }}
-        remarkPlugins={[remarkGfm]}
-      >
-        {`${content}`}
-      </ReactMarkdown>
-    </Text>
-  );
-};
-
-export const renderTextWithImageMarkdown: RenderMarkdownFunction = (
-  data,
-  key,
-) => {
-  // fetch markdown from frontend-content endpoint based on key
-  const content = data?.find((data) => data?.key === key)?.message;
-  return (
-    <Text>
-      <ReactMarkdown
-        components={{
-          a: LinkRenderer,
-          h6: BlockquoteRenderer,
-          img: ImgRenderer,
         }}
         remarkPlugins={[remarkGfm]}
       >

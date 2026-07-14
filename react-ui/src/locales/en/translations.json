@@ -1,144 +1,247 @@
 {
-    "deleteSavedSurveyModal": {
-        "delete": "Are you sure you want to delete the survey.",
-        "actionCannotBeUndone": "This action cannot be undone.",
-        "modalHeading": "Delete Survey"
+  "deleteSavedSurveyModal": {
+    "delete": "Are you sure you want to delete the survey.",
+    "actionCannotBeUndone": "This action cannot be undone.",
+    "modalHeading": "Delete Survey"
+  },
+  "actions": {
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "login": "Log in",
+    "logout": "Log out",
+    "help": "Help",
+    "goToHome": "Go to home",
+    "copiedToClipboard": "Copied to clipboard",
+    "close": "Close",
+    "edit": "Edit",
+    "share": "Share",
+    "previous": "Previous",
+    "next": "Next",
+    "save": "Save"
+  },
+  "filters": {
+    "show": "Show Filters",
+    "hide": "Hide Filters",
+    "clear": "Clear All",
+    "apply": "Apply"
+  },
+  "footer": {
+    "address": "Via C. G. Viola 68 Parco dei Medici",
+    "code": "00148 Rome, Italy",
+    "privacy": "Privacy",
+    "terms": "Terms Of Use",
+    "link": "Wfp.org",
+    "version": "ver.",
+    "wfp": "World Food Programme",
+    "description": "The United Nations World Food Programme - saving lives in emergencies\nand changing lives for millions through sustainable development. WFP\nworks in more than 80 countries around the world, feeding people\ncaught in conflict and disasters, and laying the foundations for a\nbetter future."
+  },
+  "generate": {
+    "title": "GENERATE A SURVEY",
+    "download": {
+      "xls": "Download XLSForm",
+      "word": "Download Word Format"
     },
-    "actions": {
-        "delete": "Delete",
-        "cancel": "Cancel",
-        "login": "Log in",
-        "logout": "Log out",
-        "help": "Help",
-        "goToHome": "Go to home",
-        "copiedToClipboard": "Copied to clipboard",
-        "close": "Close",
-        "edit": "Edit",
-        "share": "Share",
-        "previous": "Previous",
-        "next": "Next",
-        "save": "Save"
-    },
-    "filters": {
-        "show": "Show Filters",
-        "hide": "Hide Filters",
-        "clear": "Clear All",
-        "apply": "Apply"
-    },
-    "footer": {
-        "address": "Via C. G. Viola 68 Parco dei Medici",
-        "code": "00148 Rome, Italy",
-        "privacy": "Privacy",
-        "terms": "Terms Of Use",
-        "link": "Wfp.org",
-        "version": "ver.",
-        "wfp": "World Food Programme",
-        "description": "The United Nations World Food Programme - saving lives in emergencies\nand changing lives for millions through sustainable development. WFP\nworks in more than 80 countries around the world, feeding people\ncaught in conflict and disasters, and laying the foundations for a\nbetter future."
-    },
-    "generate": {
-        "title": "GENERATE A SURVEY",
-        "download": {
-            "xls": "Download XLSForm",
-            "word": "Download Word Format"
-        },
-        "downloadingXls": "Downloading XLS...",
-        "generatingDoc": "Generating doc...",
-        "preview": "Preview Survey",
-        "publish": "Publish Survey",
-        "site": "Site",
-        "projects": "Projects",
-        "notification": {
-            "uploadError": "Error uploading file.",
-            "getProjectError": "Error getting projects",
-            "uploadLocation": "Uploading form to {{name}}…",
-            "uploadConfirmation": "Form has been uploaded to {{name}}"
-        }
-    },
-    "landingPage": {
-        "title": "Survey Designer",
-        "wfp": "WFP",
-        "description": "Welcome to Survey Designer! This tool allows you to build \n high-quality, multi-lingual, standardized surveys in a few \n simple steps. It follows the WFP standard naming conventions \n (Codebook) while giving you flexibility on what to include in \n your survey. It allows you to either generate the survey as an \n XLSForm or to push directly into ODK-based tools such as: MoDa \n and Kobo.",
-        "learnMore": "to learn more!",
-        "welcome": "Welcome"
-    },
-    "modules": {
-        "errors": {
-            "selectOneSubModule": "Please select at least one submodule.",
-            "mandatoryModule": "This is a required module for this type of survey, are you sure you want to delete it?",
-            "noModules": "Modules not found. Please change your selections on the first step.",
-            "mandatoryIndicator": "This is a required indicator for this type of survey, are you sure you want to delete it?"
-        },
-        "indicatorAreas": {
-            "title": "INDICATORS"
-        },
-        "title": "MODULES & SUBMODULES"
-    },
-    "nav": {
-        "codebook": "Codebook",
-        "cms": "CMS",
-        "manageApiKeys": "Manage API Keys",
-        "profile": "Profile"
-    },
-    "review": {
-        "languages": "Languages",
-        "previewSurvey": "Preview Survey"
-    },
-    "sharedLinkLandingPage": {
-        "SurveyNotFound": "Survey not found",
-        "createCopy": "Create a copy",
-        "generatingDocument": "Generating document"
-    },
-    "sharedLinkModal": {
-        "description": "Copy the link below and share it with others. Anyone with the link will be able to view the survey.",
-        "heading": "Share survey"
-    },
-    "submoduleList": {
-        "nothingToReview": "There is nothing to review.",
-        "deleteConfirmationSingular": "These are required questions",
-        "deleteConfirmationPlural": "These are required questions for this submodule, are you sure you want to delete it?"
-    },
-    "submoduleListItem": {
-        "noIndicatorsIncluded": "* No indicators included for this sub-module",
-        "partiallyIncluded": "* Partially included with {{indicatorsList}}",
-        "indicatorPlural": "* The {{indicatorsList}} indicators includes all the questions of this sub-module",
-        "indicatorSingular": "* The {{indicatorsList}} indicator includes all the questions of this sub-module"
-    },
-    "survey": {
-        "title": "Survey title",
-        "organizations": "Organizations",
-        "category": "Category",
-        "type": "Type",
-        "mode": "Mode",
-        "context": "Context"
-    },
-    "surveyTable": {
-        "name": "Name",
-        "organizations": "Organizations",
-        "category": "Category",
-        "type": "Type",
-        "mode": "Mode",
-        "context": "Context",
-        "lastSavedDate": "Last Saved"
-    },
-    "surveyWizard": {
-        "title": "Survey Wizard",
-        "subTitle": "Complete the steps to generate and publish a survey",
-        "steps": {
-            "defineSurvey": "DEFINE YOUR SURVEY",
-            "selectModules": "DESIGN YOUR SURVEY",
-            "selectAdditionQuestions": "CUSTOMIZE YOUR SURVEY",
-            "generatePublishSurvey": "GENERATE & PUBLISH SURVEY"
-        },
-        "stepTitle": "Step: {{currentStep}}/{{stepsCount}} {{currentStepTitle}}",
-        "modulesCount": "{{moduleCount}} modules, {{submoduleCount}} submodules selected",
-        "questionsGeneratedCount": "({{numberOfQuestionsToBeGenerated}} questions to be generated)",
-        "deselectAllSubmodules": "Deselect All Submodules",
-        "selectAllSubmodules": "Select All Submodules",
-        "expandAllSubmodules": "Expand All Submodules",
-        "collapseAllSubmodules": "Collapse All Submodules",
-        "expandAllIndicators": "Expand All Indicators",
-        "collapseAllIndicators": "Collapse All Indicators",
-        "savedSurveys": "Saved Surveys",
-        "createSurvey": "Create Survey"
+    "downloadingXls": "Downloading XLS...",
+    "generatingDoc": "Generating doc...",
+    "preview": "Preview Survey",
+    "publish": "Publish Survey",
+    "site": "Site",
+    "projects": "Projects",
+    "notification": {
+      "uploadError": "Error uploading file.",
+      "getProjectError": "Error getting projects",
+      "uploadLocation": "Uploading form to {{name}}…",
+      "uploadConfirmation": "Form has been uploaded to {{name}}"
     }
+  },
+  "landingPage": {
+    "title": "Survey Designer",
+    "wfp": "WFP",
+    "description": "Welcome to Survey Designer! This tool allows you to build \n high-quality, multi-lingual, standardized surveys in a few \n simple steps. It follows the WFP standard naming conventions \n (Codebook) while giving you flexibility on what to include in \n your survey. It allows you to either generate the survey as an \n XLSForm or to push directly into ODK-based tools such as: MoDa \n and Kobo.",
+    "learnMore": "to learn more!",
+    "welcome": "Welcome"
+  },
+  "helpPage": {
+    "title": "Help Center",
+    "subtitle": "Learn more about Survey Designer.",
+    "sections": {
+      "definitions": {
+        "title": "Definitions & Terminologies",
+        "items": {
+          "surveyDesigner": {
+            "question": "What is Survey Designer?",
+            "paragraph1": "Survey Designer is an application that allows users in the field to build surveys in a fast and easy way while giving them the flexibility to make necessary adjustments while also maintaining WFP standard labeling and naming conventions (based on the WFP Codebook and standard list of questions and answers). This is to improve the overall data quality when it comes to survey design, data collection, and analysis (saving time and resources) as well as allowing for reproducibility and sharing resources between users. This tool is targeted for users that are using XLSForm or ODK-based tools (such as: MoDa or Kobo)."
+          },
+          "codebook": {
+            "question": "What is the Codebook?",
+            "paragraph1": "The WFP <codebook>Codebook</codebook> is a dataset containing all possible standard questions and answers included in WFP surveys.",
+            "paragraph2": "It is linked to an XLSForm database that can be subject to integrations and revisions based on data collection needs.",
+            "paragraph3": "Questions are organized into <modules>Modules</modules> and <submodules>Submodules</submodules>.",
+            "paragraph4": "The <codebook>Codebook</codebook> in the Survey Designer cannot be directly modified, but there exists a <requestChangeProcedure>Request Change Procedure</requestChangeProcedure> that allows you to propose your modifications to the administrators."
+          },
+          "categoriesTypesModesContext": {
+            "question": "What are Survey Categories, Types, Modes and Context?",
+            "paragraph1": "These are filters that you can use to structure or define your survey.",
+            "paragraph2": "Based on your choices, different submodules of questions are included in your survey.",
+            "paragraph3": "<surveyCategories>Survey Categories</surveyCategories> are general macro-categories (currently: Monitoring, Market and Vulnerability Assessments) that define your survey.",
+            "paragraph4": "<surveyTypes>Survey Types</surveyTypes> are sub-categories specific to each category you select (e.g.: for Monitoring you have PDM, Baseline Monitoring... etc.).",
+            "paragraph5": "<surveyModes>Survey Modes</surveyModes> are the three data collection modes allowed for WFP surveys: Face-to-face, Remote/CATI, and Web Surveys.",
+            "paragraph6": "Finally, <context>Context</context> are additional sets of questions that can be optionally added to specific modules (for example, COVID-19-related questions or migration-related questions)."
+          },
+          "modulesSubmodules": {
+            "question": "What are Modules and Submodules?",
+            "paragraph1": "<modules>Modules</modules> and <submodules>Submodules</submodules> (sometimes also referred as sections) are a way to group questions based on thematic areas (eg: Nutrition, Food Security... etc.) and/or on how they are normally grouped in surveys.",
+            "paragraph2": "They are organized and labelled based on standard WFP Codebook conventions.",
+            "paragraph3": "<submodules>Submodules</submodules> are the basic unit that you will use to create a survey in Survey Designer."
+          },
+          "suffixesRecallPeriods": {
+            "question": "What are Suffixes and Recall Periods?",
+            "paragraph1": "In the Codebook, for every question there exists several variations that are considered optional.",
+            "paragraph2": "For every question, we identify a Root Question, which expresses the basic/corporate formulation of a question. To every Root Question, we may attach different <suffixes>Suffixes</suffixes> and <recallPeriods>Recall Periods</recallPeriods> that indicate the variations of the Root Question.",
+            "paragraph3": "<suffixes>Suffixes</suffixes> indicate logic variations of the Root Question (e.g.: Root Question <strong>HHExpFood</strong> is to be read \"What is your total food expenditure?\". If we add the suffix <strong>_Loc</strong> (which is related to locations), we obtain the Subquestion <strong>HHExpFood_Loc</strong> to be read \"Where do you purchase your food?\". The Codebook allows up to a maximum of two suffixes for a single subquestion. In this case, we call the second suffix a nested suffix.",
+            "paragraph4": "<recallPeriods>Recall Periods</recallPeriods> indicate the time reference for a questions (e.g.: If we add the recall period <strong>_7D</strong>, indicating a weekly time reference, we obtain the Subquestion <strong>HHExpFood_7D</strong> to be read \"What was your total food expenditure in the last 7 days?\").",
+            "paragraph5": "<suffixes>Suffixes</suffixes> and <recallPeriods>Recall Periods</recallPeriods> can also be combined to create Subquestions that are both logic and temporal variations of the Root Question (e.g.: <strong>HHExpFood_Loc_7D</strong> should be read \"Where did you purchase your food in the last 7 days?\")."
+          },
+          "calculationsRepeatSections": {
+            "question": "What are Calculations and Repeat Sections?",
+            "paragraph1": "<calculations>Calculations</calculations> and <repeatSections>Repeat Sections</repeatSections> are elements that will structure your survey but would not necessarily appear in the survey.",
+            "paragraph2": "<calculations>Calculations</calculations> are elements that produce standard calculations (aggregation, indicators scores...etc.) based on collected data. Those calculations might appear in the survey or not, based on your decision.",
+            "paragraph3": "<repeatSections>Repeat Sections</repeatSections> are sections that define how a set of questions are repeated in the survey based on specific information (e.g.: asking about the age and sex of each household member, based on the household size)."
+          }
+        }
+      },
+      "buildingSurveys": {
+        "title": "Building Surveys via Survey Designer",
+        "items": {
+          "buildSurvey": {
+            "question": "How do I build a survey using Survey Designer?",
+            "paragraph1": "We have a tailored step-by-step guide and an online recording that explain the process.",
+            "paragraph2": "If you have more questions, please email us at <supportEmail>global.surveydesigner@wfp.org</supportEmail>."
+          },
+          "surveyTypes": {
+            "question": "What kind of surveys can I build using Survey Designer?",
+            "paragraph1": "Survey Designer allows you to build any standard WFP survey that has been integrated into the Codebook.",
+            "paragraph2": "You may view the available standard WFP surveys by viewing <surveyCategories>Survey Categories</surveyCategories> and <surveyTypes>Types</surveyTypes>.",
+            "paragraph3": "If you want to access all available WFP questions and answers, do not select a specific Category, Type, Mode, or Attribute. You can then create any type of non-standard survey by combining the modules and submodules that you need.",
+            "paragraph4": "If the modules or submodules required by your business unit are not included in the Codebook, please email <supportEmail>global.surveydesigner@wfp.org</supportEmail> and we will guide you through the addition request process."
+          },
+          "exportPublish": {
+            "question": "What are the options for exporting or publishing surveys?",
+            "paragraph1": "Currently, Survey Designer allows you to export your survey as an XLSForm, or directly publish it into <moda>MoDa</moda> or <kobo>Kobo</kobo>.",
+            "paragraph2": "To publish into <moda>MoDa</moda> or <kobo>Kobo</kobo>, you need to enter your API key for each site <apiKeysPage>here</apiKeysPage>."
+          },
+          "selectionLimit": {
+            "question": "Is there a limit to the modules or questions that I can select?",
+            "paragraph1": "No, you can add as many modules or questions as you need in a survey."
+          }
+        }
+      },
+      "codebookAccess": {
+        "title": "Accessing & Contributing to the Codebook",
+        "items": {
+          "accessCodebook": {
+            "question": "How can I access the Codebook?",
+            "paragraph1": "You can access the <codebook>Codebook</codebook> by clicking the \"<codebook>Codebook</codebook>\" button at the top right next to your username.",
+            "paragraph2": "From there you should be able to access all the back-end content that contributes to building the surveys (Questions, Answers, Suffixes, Calculations, Survey Categories, Types, Modes...and others).",
+            "imageAlt": "Codebook Screenshot"
+          },
+          "exportExcel": {
+            "question": "Can I export the Codebook content in Excel format?",
+            "paragraph1": "Yes you can do that by selecting one or more <modules>Modules</modules>, <submodules>Submodules</submodules> or <questions>Questions</questions> and clicking the \"Export Questions\" action button.",
+            "imageAlt": "Export Action Screenshot"
+          },
+          "contributeChanges": {
+            "question": "How can I contribute to the Codebook (request addition or changes)?",
+            "paragraph1": "You can submit requests to add, edit and/or delete any list of questions or answers (choices) to the Codebook by accessing <submitChangeRequest>this link</submitChangeRequest>.",
+            "paragraph2": "Alternatively, you may send your request to <supportEmail>global.surveydesigner@wfp.org</supportEmail> by attaching an excel sheet with the required changes.",
+            "paragraph3": "Please use <changeRequestTemplate>this template</changeRequestTemplate>."
+          }
+        }
+      },
+      "contact": {
+        "title": "Contact Survey Designer Team",
+        "paragraph1": "If you have any queries or you would like to report any bugs, please email <supportEmail>global.surveydesigner@wfp.org</supportEmail>."
+      }
+    }
+  },
+  "modules": {
+    "errors": {
+      "selectOneSubModule": "Please select at least one submodule.",
+      "mandatoryModule": "This is a required module for this type of survey, are you sure you want to delete it?",
+      "noModules": "Modules not found. Please change your selections on the first step.",
+      "mandatoryIndicator": "This is a required indicator for this type of survey, are you sure you want to delete it?"
+    },
+    "indicatorAreas": {
+      "title": "INDICATORS"
+    },
+    "title": "MODULES & SUBMODULES"
+  },
+  "nav": {
+    "codebook": "Codebook",
+    "cms": "CMS",
+    "manageApiKeys": "Manage API Keys",
+    "profile": "Profile"
+  },
+  "review": {
+    "languages": "Languages",
+    "previewSurvey": "Preview Survey"
+  },
+  "sharedLinkLandingPage": {
+    "SurveyNotFound": "Survey not found",
+    "createCopy": "Create a copy",
+    "generatingDocument": "Generating document"
+  },
+  "sharedLinkModal": {
+    "description": "Copy the link below and share it with others. Anyone with the link will be able to view the survey.",
+    "heading": "Share survey"
+  },
+  "submoduleList": {
+    "nothingToReview": "There is nothing to review.",
+    "deleteConfirmationSingular": "These are required questions",
+    "deleteConfirmationPlural": "These are required questions for this submodule, are you sure you want to delete it?"
+  },
+  "submoduleListItem": {
+    "noIndicatorsIncluded": "* No indicators included for this sub-module",
+    "partiallyIncluded": "* Partially included with {{indicatorsList}}",
+    "indicatorPlural": "* The {{indicatorsList}} indicators includes all the questions of this sub-module",
+    "indicatorSingular": "* The {{indicatorsList}} indicator includes all the questions of this sub-module"
+  },
+  "survey": {
+    "title": "Survey title",
+    "organizations": "Organizations",
+    "category": "Category",
+    "type": "Type",
+    "mode": "Mode",
+    "context": "Context"
+  },
+  "surveyTable": {
+    "name": "Name",
+    "organizations": "Organizations",
+    "category": "Category",
+    "type": "Type",
+    "mode": "Mode",
+    "context": "Context",
+    "lastSavedDate": "Last Saved"
+  },
+  "surveyWizard": {
+    "title": "Survey Wizard",
+    "subTitle": "Complete the steps to generate and publish a survey",
+    "steps": {
+      "defineSurvey": "DEFINE YOUR SURVEY",
+      "selectModules": "DESIGN YOUR SURVEY",
+      "selectAdditionQuestions": "CUSTOMIZE YOUR SURVEY",
+      "generatePublishSurvey": "GENERATE & PUBLISH SURVEY"
+    },
+    "stepTitle": "Step: {{currentStep}}/{{stepsCount}} {{currentStepTitle}}",
+    "modulesCount": "{{moduleCount}} modules, {{submoduleCount}} submodules selected",
+    "questionsGeneratedCount": "({{numberOfQuestionsToBeGenerated}} questions to be generated)",
+    "deselectAllSubmodules": "Deselect All Submodules",
+    "selectAllSubmodules": "Select All Submodules",
+    "expandAllSubmodules": "Expand All Submodules",
+    "collapseAllSubmodules": "Collapse All Submodules",
+    "expandAllIndicators": "Expand All Indicators",
+    "collapseAllIndicators": "Collapse All Indicators",
+    "savedSurveys": "Saved Surveys",
+    "createSurvey": "Create Survey"
+  }
 }

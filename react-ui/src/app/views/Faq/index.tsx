@@ -1,27 +1,18 @@
-import React, { useEffect } from "react";
-import { Module, ModuleBody, Link } from "@wfp/react";
+import React from "react";
+import { Module, ModuleBody } from "@wfp/react";
+import { useTranslation } from "react-i18next";
 import MainLayout from "../../components/Layout";
-import { useAppDispatch, useAppSelector } from "../../redux/store";
-import { fetchFrontendContent } from "../../redux/actions/frontendContentActions";
-import { renderTextWithImageMarkdown } from "../../utils";
+import FaqContent from "./FaqContent";
 
 function Faq() {
-  const dispatch = useAppDispatch();
-  const frontendContent = useAppSelector((state) => state.frontendContent.data);
-  const FAQText = renderTextWithImageMarkdown(frontendContent, "FAQmain");
+  const { t } = useTranslation();
 
-  useEffect(() => {
-    if (!frontendContent) {
-      dispatch(fetchFrontendContent());
-    }
-  }, []);
   return (
-    <MainLayout
-      title="Help Center"
-      subTitle="Learn more about Survey Designer."
-    >
+    <MainLayout title={t("helpPage.title")} subTitle={t("helpPage.subtitle")}>
       <Module>
-        <ModuleBody className="faq-wrapper">{FAQText}</ModuleBody>
+        <ModuleBody className="faq-wrapper">
+          <FaqContent />
+        </ModuleBody>
       </Module>
     </MainLayout>
   );
