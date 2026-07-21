@@ -6,13 +6,29 @@ import styles from "../styles.module.scss";
 
 type LandingFeatureCardProps = {
   feature: LandingFeatureItem;
+  id: string;
+  isActive: boolean;
+  onSelect: () => void;
 };
 
-export function LandingFeatureCard({ feature }: LandingFeatureCardProps) {
+export function LandingFeatureCard({
+  feature,
+  id,
+  isActive,
+  onSelect,
+}: LandingFeatureCardProps) {
   const { t } = useTranslation();
 
   return (
-    <div className={styles.featureItem}>
+    <button
+      id={id}
+      type="button"
+      className={`${styles.featureItem} ${
+        isActive ? styles.featureItemActive : ""
+      }`}
+      aria-pressed={isActive}
+      onClick={onSelect}
+    >
       <div className={styles.featureHeader}>
         <span className={styles.featureIcon}>
           <FontAwesomeIcon icon={feature.icon} />
@@ -20,6 +36,6 @@ export function LandingFeatureCard({ feature }: LandingFeatureCardProps) {
         <h3 className={styles.featureTitle}>{t(feature.titleKey)}</h3>
       </div>
       <p className={styles.featureText}>{t(feature.textKey)}</p>
-    </div>
+    </button>
   );
 }
