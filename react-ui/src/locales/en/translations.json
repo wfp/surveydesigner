@@ -33,7 +33,19 @@
         "link": "Wfp.org",
         "version": "ver.",
         "wfp": "World Food Programme",
-        "description": "The United Nations World Food Programme - saving lives in emergencies\nand changing lives for millions through sustainable development. WFP\nworks in more than 80 countries around the world, feeding people\ncaught in conflict and disasters, and laying the foundations for a\nbetter future."
+        "description": "The United Nations World Food Programme - saving lives in emergencies and changing lives for millions through sustainable development. WFP works in more than 80 countries around the world, feeding people caught in conflict and disasters, and laying the foundations for a better future.",
+        "productHeading": "Product",
+        "overview": "Overview",
+        "documentation": "Documentation",
+        "releaseNotes": "Release notes",
+        "supportHeading": "Support",
+        "contactTeam": "Contact team",
+        "faq": "Frequently asked questions",
+        "serviceStatus": "Service status",
+        "wfpHeading": "World Food Programme",
+        "wfpOrg": "wfp.org",
+        "emergencies": "Emergencies",
+        "aboutWfp": "About WFP"
     },
     "generate": {
         "title": "GENERATE A SURVEY",

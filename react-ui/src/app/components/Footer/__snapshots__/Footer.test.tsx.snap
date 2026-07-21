@@ -2,12 +2,14 @@
 
 exports[`Footer > should match snapshot 1`] = `
 <div>
-  <div>
+  <div
+    class="_footer_9523f5"
+  >
     <footer
       class="wfp--footer"
     >
       <div
-        class="wfp--wrapper wfp--wrapper--width-lg"
+        class="wfp--wrapper wfp--wrapper--width-full"
       >
         <div
           class="wfp--footer__content"
@@ -15,9 +17,204 @@ exports[`Footer > should match snapshot 1`] = `
           <div
             class="wfp--footer__info"
           >
-            <div>
+            <div
+              class="_footerInner_9523f5"
+            >
+              <div>
+                <h3
+                  class="_footerHeading_9523f5"
+                >
+                  Survey Designer
+                </h3>
+                <p
+                  class="_footerText_9523f5"
+                >
+                  footer.description
+                </p>
+              </div>
+              <div>
+                <h3
+                  class="_footerHeading_9523f5"
+                >
+                  footer.productHeading
+                </h3>
+                <ul
+                  class="_footerList_9523f5"
+                >
+                  <li
+                    class="_footerListItem_9523f5"
+                  >
+                    <a
+                      class="wfp--link"
+                      href="#about"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        class="svg-inline--fa fa-book "
+                        data-icon="book"
+                        data-prefix="fas"
+                        focusable="false"
+                        role="img"
+                        viewBox="0 0 448 512"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M96 0C43 0 0 43 0 96L0 416c0 53 43 96 96 96l288 0 32 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l0-64c17.7 0 32-14.3 32-32l0-320c0-17.7-14.3-32-32-32L384 0 96 0zm0 384l256 0 0 64L96 448c-17.7 0-32-14.3-32-32s14.3-32 32-32zm32-240c0-8.8 7.2-16 16-16l192 0c8.8 0 16 7.2 16 16s-7.2 16-16 16l-192 0c-8.8 0-16-7.2-16-16zm16 48l192 0c8.8 0 16 7.2 16 16s-7.2 16-16 16l-192 0c-8.8 0-16-7.2-16-16s7.2-16 16-16z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                       
+                      footer.overview
+                    </a>
+                  </li>
+                  <li
+                    class="_footerListItem_9523f5"
+                  >
+                    <a
+                      class="wfp--link"
+                      href="#"
+                    >
+                      footer.documentation
+                    </a>
+                  </li>
+                  <li
+                    class="_footerListItem_9523f5"
+                  >
+                    <a
+                      class="wfp--link"
+                      href="#"
+                    >
+                      footer.releaseNotes
+                    </a>
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h3
+                  class="_footerHeading_9523f5"
+                >
+                  footer.supportHeading
+                </h3>
+                <ul
+                  class="_footerList_9523f5"
+                >
+                  <li
+                    class="_footerListItem_9523f5"
+                  >
+                    <a
+                      class="wfp--link"
+                      href="#"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        class="svg-inline--fa fa-envelope "
+                        data-icon="envelope"
+                        data-prefix="fas"
+                        focusable="false"
+                        role="img"
+                        viewBox="0 0 512 512"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M48 64C21.5 64 0 85.5 0 112c0 15.1 7.1 29.3 19.2 38.4L236.8 313.6c11.4 8.5 27 8.5 38.4 0L492.8 150.4c12.1-9.1 19.2-23.3 19.2-38.4c0-26.5-21.5-48-48-48L48 64zM0 176L0 384c0 35.3 28.7 64 64 64l384 0c35.3 0 64-28.7 64-64l0-208L294.4 339.2c-22.8 17.1-54 17.1-76.8 0L0 176z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                       
+                      footer.contactTeam
+                    </a>
+                  </li>
+                  <li
+                    class="_footerListItem_9523f5"
+                  >
+                    <a
+                      class="wfp--link"
+                      href="#"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        class="svg-inline--fa fa-circle-question "
+                        data-icon="circle-question"
+                        data-prefix="fas"
+                        focusable="false"
+                        role="img"
+                        viewBox="0 0 512 512"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM169.8 165.3c7.9-22.3 29.1-37.3 52.8-37.3l58.3 0c34.9 0 63.1 28.3 63.1 63.1c0 22.6-12.1 43.5-31.7 54.8L280 264.4c-.2 13-10.9 23.6-24 23.6c-13.3 0-24-10.7-24-24l0-13.5c0-8.6 4.6-16.5 12.1-20.8l44.3-25.4c4.7-2.7 7.6-7.7 7.6-13.1c0-8.4-6.8-15.1-15.1-15.1l-58.3 0c-3.4 0-6.4 2.1-7.5 5.3l-.4 1.2c-4.4 12.5-18.2 19-30.6 14.6s-19-18.2-14.6-30.6l.4-1.2zM224 352a32 32 0 1 1 64 0 32 32 0 1 1 -64 0z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                       
+                      footer.faq
+                    </a>
+                  </li>
+                  <li
+                    class="_footerListItem_9523f5"
+                  >
+                    <a
+                      class="wfp--link"
+                      href="#"
+                    >
+                      footer.serviceStatus
+                    </a>
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h3
+                  class="_footerHeading_9523f5"
+                >
+                  footer.wfpHeading
+                </h3>
+                <ul
+                  class="_footerList_9523f5"
+                >
+                  <li
+                    class="_footerListItem_9523f5"
+                  >
+                    <a
+                      class="wfp--link"
+                      href="https://www.wfp.org"
+                      rel="noopener"
+                      target="_blank"
+                    >
+                      footer.wfpOrg
+                    </a>
+                  </li>
+                  <li
+                    class="_footerListItem_9523f5"
+                  >
+                    <a
+                      class="wfp--link"
+                      href="https://www.wfp.org/emergencies"
+                      rel="noopener"
+                      target="_blank"
+                    >
+                      footer.emergencies
+                    </a>
+                  </li>
+                  <li
+                    class="_footerListItem_9523f5"
+                  >
+                    <a
+                      class="wfp--link"
+                      href="https://www.wfp.org/about"
+                      rel="noopener"
+                      target="_blank"
+                    >
+                      footer.aboutWfp
+                    </a>
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <div
+              class="_footerMeta_9523f5"
+            >
               <ul
-                class="wfp--footer__list"
+                class="_footerLinks_9523f5"
               >
                 <li>
                   <a
@@ -28,9 +225,8 @@ exports[`Footer > should match snapshot 1`] = `
                   >
                     footer.privacy
                   </a>
-                   
-                  |
-                   
+                </li>
+                <li>
                   <a
                     class="wfp--link"
                     href="https://cdn.wfp.org/legal/terms/"
@@ -39,20 +235,28 @@ exports[`Footer > should match snapshot 1`] = `
                   >
                     footer.terms
                   </a>
-                   
-                  | 
+                </li>
+                <li>
                   <a
                     class="wfp--link"
                     href="https://www.wfp.org"
+                    rel="noopener"
+                    target="_blank"
                   >
                     footer.link
                   </a>
                 </li>
               </ul>
-              <small>
+              <div
+                class="_footerVersion_9523f5"
+              >
+                2026
+                 ©
+                footer.wfp
+                 · 
                 footer.version
-                dev
-              </small>
+                local
+              </div>
             </div>
           </div>
           <div
@@ -88,14 +292,8 @@ exports[`Footer > should match snapshot 1`] = `
         </div>
       </div>
       <div
-        class="wfp--wrapper wfp--wrapper--width-lg wfp--footer__meta"
-      >
-        <div
-          class="wfp--footer__meta__content"
-        >
-          2026 ©footer.wfp
-        </div>
-      </div>
+        class="wfp--wrapper wfp--wrapper--width-full wfp--footer__meta"
+      />
     </footer>
   </div>
 </div>

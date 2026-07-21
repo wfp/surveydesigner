@@ -611,14 +611,14 @@ exports[`LandingPage > should match snapshot 1`] = `
                 <p
                   class="_footerText_9523f5"
                 >
-                  Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla facilisi. Vestibulum non orci risus, sit amet tincidunt dui.
+                  footer.description
                 </p>
               </div>
               <div>
                 <h3
                   class="_footerHeading_9523f5"
                 >
-                  Product
+                  footer.productHeading
                 </h3>
                 <ul
                   class="_footerList_9523f5"
@@ -645,7 +645,8 @@ exports[`LandingPage > should match snapshot 1`] = `
                           fill="currentColor"
                         />
                       </svg>
-                       Overview
+                       
+                      footer.overview
                     </a>
                   </li>
                   <li
@@ -655,7 +656,7 @@ exports[`LandingPage > should match snapshot 1`] = `
                       class="wfp--link"
                       href="#"
                     >
-                      Documentation
+                      footer.documentation
                     </a>
                   </li>
                   <li
@@ -665,7 +666,7 @@ exports[`LandingPage > should match snapshot 1`] = `
                       class="wfp--link"
                       href="#"
                     >
-                      Release notes
+                      footer.releaseNotes
                     </a>
                   </li>
                 </ul>
@@ -674,7 +675,7 @@ exports[`LandingPage > should match snapshot 1`] = `
                 <h3
                   class="_footerHeading_9523f5"
                 >
-                  Support
+                  footer.supportHeading
                 </h3>
                 <ul
                   class="_footerList_9523f5"
@@ -701,7 +702,8 @@ exports[`LandingPage > should match snapshot 1`] = `
                           fill="currentColor"
                         />
                       </svg>
-                       Contact team
+                       
+                      footer.contactTeam
                     </a>
                   </li>
                   <li
@@ -726,7 +728,8 @@ exports[`LandingPage > should match snapshot 1`] = `
                           fill="currentColor"
                         />
                       </svg>
-                       Frequently asked questions
+                       
+                      footer.faq
                     </a>
                   </li>
                   <li
@@ -736,7 +739,7 @@ exports[`LandingPage > should match snapshot 1`] = `
                       class="wfp--link"
                       href="#"
                     >
-                      Service status
+                      footer.serviceStatus
                     </a>
                   </li>
                 </ul>
@@ -745,7 +748,7 @@ exports[`LandingPage > should match snapshot 1`] = `
                 <h3
                   class="_footerHeading_9523f5"
                 >
-                  World Food Programme
+                  footer.wfpHeading
                 </h3>
                 <ul
                   class="_footerList_9523f5"
@@ -759,7 +762,7 @@ exports[`LandingPage > should match snapshot 1`] = `
                       rel="noopener"
                       target="_blank"
                     >
-                      wfp.org
+                      footer.wfpOrg
                     </a>
                   </li>
                   <li
@@ -771,7 +774,7 @@ exports[`LandingPage > should match snapshot 1`] = `
                       rel="noopener"
                       target="_blank"
                     >
-                      Emergencies
+                      footer.emergencies
                     </a>
                   </li>
                   <li
@@ -783,7 +786,7 @@ exports[`LandingPage > should match snapshot 1`] = `
                       rel="noopener"
                       target="_blank"
                     >
-                      About WFP
+                      footer.aboutWfp
                     </a>
                   </li>
                 </ul>

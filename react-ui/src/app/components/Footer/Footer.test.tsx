@@ -8,7 +8,12 @@ describe("Footer", async () => {
     render(<Footer />, {});
     const year = new Date().getFullYear();
     expect(
-      screen.getByText(`${year} ©footer.wfp`)
+      screen.getByText(
+        (content) =>
+          content.includes(String(year)) &&
+          content.includes("footer.wfp") &&
+          content.includes("footer.version"),
+      ),
     ).toBeInTheDocument();
   });
 
