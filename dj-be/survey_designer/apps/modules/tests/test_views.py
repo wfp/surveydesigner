@@ -62,6 +62,17 @@ def build_stub_xls_form(external_files):
     return StubXLSForm(external_files)
 
 
+@pytest.fixture(autouse=True)
+def selected_organization_header(
+    logged_admin_client, api_client_authenticated_admin, organization_1
+):
+    header_value = str(organization_1.pk)
+    logged_admin_client.defaults["HTTP_SURVEY_DESIGNER_ORGANIZATIONS"] = header_value
+    api_client_authenticated_admin.credentials(
+        HTTP_SURVEY_DESIGNER_ORGANIZATIONS=header_value
+    )
+
+
 @pytest.fixture()
 def moda_api_key(admin):
     site, created = UserAPISite.objects.get_or_create(
@@ -778,7 +789,17 @@ def test_generate_docx(mocker, user):
 
 @pytest.mark.django_db
 class TestGenerateDocForm:
-    def test_generate_doc_form_post(self, mocker, logged_admin_client, user):
+    def test_generate_doc_form_post(
+        self,
+        mocker,
+        logged_admin_client,
+        user,
+        submodule_1,
+        sub_question_1,
+        sub_question_2,
+        sub_question_3,
+        sub_question_4,
+    ):
         logged_admin_client.force_login(user)
         mocker.patch("django_rq.get_queue", return_value=get_queue("generate-doc"))
         mock_enqueue = mocker.patch("rq.Queue.enqueue")
@@ -790,9 +811,14 @@ class TestGenerateDocForm:
 
         data = {
             "name": "test",
-            "submodules": [1],
-            "sub_questions": [1, 2, 3, 4],
-            "submodules_order": [1],
+            "submodules": [submodule_1.pk],
+            "sub_questions": [
+                sub_question_1.pk,
+                sub_question_2.pk,
+                sub_question_3.pk,
+                sub_question_4.pk,
+            ],
+            "submodules_order": [submodule_1.pk],
             "languages": ["en", "fr"],
             "survey_type": "",
         }
@@ -1037,19 +1063,29 @@ class TestSubmodulesOrderValidationView:
         assert response.json() == []
 
     def test_submodules_order_validation_view_with_submodule_ids(
-        self, logged_admin_client
+        self, logged_admin_client, submodule_1, submodule_2, submodule_3
     ):
         url = "/api/order-validation/"
 
-        query_params = {"submodule_ids": "1 2 3", "all_submodule_ids": "1 2 3 4 5"}
+        submodule_ids = [submodule_1.pk, submodule_2.pk, submodule_3.pk]
+        query_params = {
+            "submodule_ids": " ".join(map(str, submodule_ids)),
+            "all_submodule_ids": " ".join(map(str, submodule_ids)),
+        }
         response = logged_admin_client.get(url, query_params)
 
         assert response.status_code == status.HTTP_200_OK
 
-    def test_submodules_order_validation_view_invalid_order(self, logged_admin_client):
+    def test_submodules_order_validation_view_invalid_order(
+        self, logged_admin_client, submodule_1, submodule_2, submodule_3
+    ):
         url = "/api/order-validation/"
 
-        query_params = {"submodule_ids": "2 1 3", "all_submodule_ids": "1 2 3 4 5"}
+        submodule_ids = [submodule_2.pk, submodule_1.pk, submodule_3.pk]
+        query_params = {
+            "submodule_ids": " ".join(map(str, submodule_ids)),
+            "all_submodule_ids": " ".join(map(str, submodule_ids)),
+        }
         response = logged_admin_client.get(url, query_params)
 
         assert response.status_code == status.HTTP_200_OK

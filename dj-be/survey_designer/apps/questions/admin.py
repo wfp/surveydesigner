@@ -28,15 +28,16 @@ from django.views.generic import RedirectView
 from modules.models import Indicator, Module, Submodule
 from organization.mixins import (
     ChangeFormOrganizationsDisplayMixin,
+    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
     RequestUserFormMixin,
-    RestrictedVisibilityFieldMixin,
 )
+from organization.permissions import mutation_safe_related_queryset
 from questions.admin_filters import (
     ChoiceListFilter,
     ParentSuffixListFilter,
-    QuestionChoiceFilter,
     QuestionChoiceFileFilter,
+    QuestionChoiceFilter,
     QuestionIndicatorFilter,
     QuestionLevelFilter,
     QuestionModuleFilter,
@@ -242,12 +243,14 @@ class SubQuestionInline(
 @admin.register(ChoiceGroup)
 class ChoiceGroupAdmin(
     CollationSafeSearchAdminMixin,
+    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,
     FormFieldOverridesMixin,
     nested_admin.NestedModelAdmin,
 ):
+    mutation_safe_related_fields = ["choice_filter_list"]
     exclude = ("created_by", "updated_by")
     list_display = (
         "name",
@@ -399,7 +402,7 @@ class ChoiceGroupFileAdmin(
 @admin.register(RootQuestion)
 class RootQuestionAdmin(
     CollationSafeSearchAdminMixin,
-    RestrictedVisibilityFieldMixin,
+    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     RequestUserFormMixin,
@@ -419,7 +422,14 @@ class RootQuestionAdmin(
         "modified_by",
         "modified_on",
     )
-    restricted_visibility_fields = ["submodule"]
+    mutation_safe_related_fields = [
+        "submodule",
+        "choices",
+        "choices_file",
+        "calculation",
+        "repeat_sections",
+        "indicators",
+    ]
     dynamic_raw_id_fields = ("submodule",)
     # autocomplete_fields = ("choices",)
     inlines = (
@@ -665,12 +675,14 @@ class RecallPeriodAdmin(
 @admin.register(Suffix)
 class SuffixAdmin(
     CollationSafeSearchAdminMixin,
+    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,
     FormFieldOverridesMixin,
     admin.ModelAdmin,
 ):
+    mutation_safe_related_fields = ["choices", "choices_file", "nested_suffixes"]
     exclude = ("created_by", "updated_by")
     form = SuffixAdminForm
     list_display = (
@@ -759,6 +771,7 @@ class SuffixAdmin(
 @admin.register(SubQuestion)
 class SubQuestionAdmin(
     CollationSafeSearchAdminMixin,
+    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,
@@ -766,6 +779,13 @@ class SubQuestionAdmin(
     FormFieldOverridesMixin,
     nested_admin.NestedModelAdmin,
 ):
+    mutation_safe_related_fields = [
+        "root_question",
+        "suffix",
+        "suffix_2",
+        "repeat_sections",
+        "indicators",
+    ]
     exclude = (
         "created_by",
         "updated_by",
@@ -1108,7 +1128,9 @@ class BaseQuestionAdmin(
                 "repeat_section__updated_by",
             )
             .prefetch_related(
-                models.Prefetch("root_question__submodule", queryset=submodule_prefetch.queryset),
+                models.Prefetch(
+                    "root_question__submodule", queryset=submodule_prefetch.queryset
+                ),
                 models.Prefetch(
                     "sub_question__root_question__submodule",
                     queryset=submodule_prefetch.queryset,
@@ -1381,7 +1403,7 @@ class BaseQuestionAdmin(
         url = f"{reverse('relevant')}?ids={','.join(str(id_) for id_ in ids)}"
         return HttpResponseRedirect(url)
 
-    @admin.action(description="Export as XLS")
+    @admin.action(description="Export as XLS", permissions=("view",))
     def export_action(self, request, queryset):
         q_export = QuestionsExport()
         queryset = q_export.get_optimized_base_question_qs(queryset)
@@ -1492,7 +1514,9 @@ class SubQuestionProxyTranslationInline(FormFieldOverridesMixin, admin.TabularIn
 
 
 @admin.register(SubQuestionProxy)
-class SubQuestionProxyAdmin(RequestUserFormMixin, admin.ModelAdmin):
+class SubQuestionProxyAdmin(
+    RequestUserFormMixin, ObjectPermissionMixin, admin.ModelAdmin
+):
     form = SubQuestionProxyForm
     exclude = (
         "created_by",
@@ -1596,6 +1620,7 @@ class SubQuestionProxyAdmin(RequestUserFormMixin, admin.ModelAdmin):
 @admin.register(RepeatSection)
 class RepeatSectionAdmin(
     CollationSafeSearchAdminMixin,
+    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,
@@ -1603,6 +1628,7 @@ class RepeatSectionAdmin(
     FormFieldOverridesMixin,
     nested_admin.NestedModelAdmin,
 ):
+    mutation_safe_related_fields = ["submodule", "questions"]
     exclude = (
         "created_by",
         "updated_by",
@@ -1638,11 +1664,14 @@ class RepeatSectionAdmin(
         )
 
     def formfield_for_manytomany(self, db_field, request=None, **kwargs):
-        if db_field.name == "questions":
-            kwargs["queryset"] = BaseQuestion.objects.select_related(
-                "root_question",
-                "sub_question",
-                "repeat_section",
+        if db_field.name == "questions" and getattr(request, "user", None) is not None:
+            kwargs["queryset"] = mutation_safe_related_queryset(
+                BaseQuestion.objects.select_related(
+                    "root_question",
+                    "sub_question",
+                    "repeat_section",
+                ),
+                request.user,
             )
         return super().formfield_for_manytomany(db_field, request, **kwargs)
 

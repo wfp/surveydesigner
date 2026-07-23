@@ -12,4 +12,4 @@ class ListOrganizationsView(ListAPIView):
     ]
 
     def get_queryset(self):
-        return Organization.objects.visible_for_user(self.request.user)
+        return Organization.objects.readable_by(self.request.user)

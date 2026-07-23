@@ -1,7 +1,10 @@
 import pytest
 from core.utils import get_model_admin_base_url
 from django.contrib.admin import AdminSite
-from django.contrib.admin.widgets import AutocompleteSelectMultiple
+from django.contrib.admin.widgets import (
+    AutocompleteSelectMultiple,
+    RelatedFieldWidgetWrapper,
+)
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.templatetags.static import static
 from django.urls import reverse
@@ -161,10 +164,14 @@ class TestIndicatorAdmin:
         _assert_admin_search_works(logged_admin_client, Indicator, indicator_1.name)
 
     def test_indicator_questions_field_uses_autocomplete_widget(
-        self, request_factory, indicator_admin
+        self, request_factory, indicator_admin, admin
     ):
         request = request_factory.get(reverse("admin:modules_indicator_add"))
+        request.user = admin
         form = indicator_admin.get_form(request)()
 
         assert indicator_admin.autocomplete_fields == ("questions",)
-        assert isinstance(form.fields["questions"].widget, AutocompleteSelectMultiple)
+        widget = form.fields["questions"].widget
+        if isinstance(widget, RelatedFieldWidgetWrapper):
+            widget = widget.widget
+        assert isinstance(widget, AutocompleteSelectMultiple)

@@ -11,8 +11,8 @@ from django.contrib.postgres.aggregates import ArrayAgg
 from django.utils.html import format_html
 from organization.mixins import (
     ChangeFormOrganizationsDisplayMixin,
+    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
-    RestrictedVisibilityFieldMixin,
 )
 from surveys.forms import SurveyAttributesAdminModelForm
 from surveys.models import (
@@ -27,28 +27,36 @@ from surveys.models import (
 )
 
 
-class SurveyCategoryTranslationInline(FormFieldOverridesMixin, admin.TabularInline):
+class SurveyCategoryTranslationInline(
+    ObjectPermissionMixin, FormFieldOverridesMixin, admin.TabularInline
+):
     model = SurveyCategoryTranslation
     extra = 0
     exclude = ("created_by", "updated_by")
     form = TranslationForm
 
 
-class SurveyModeTranslationInline(FormFieldOverridesMixin, admin.TabularInline):
+class SurveyModeTranslationInline(
+    ObjectPermissionMixin, FormFieldOverridesMixin, admin.TabularInline
+):
     model = SurveyModeTranslation
     extra = 0
     exclude = ("created_by", "updated_by")
     form = TranslationForm
 
 
-class SurveyTypeTranslationInline(FormFieldOverridesMixin, admin.TabularInline):
+class SurveyTypeTranslationInline(
+    ObjectPermissionMixin, FormFieldOverridesMixin, admin.TabularInline
+):
     model = SurveyTypeTranslation
     extra = 0
     exclude = ("created_by", "updated_by")
     form = TranslationForm
 
 
-class SurveyAttributeTranslationInline(FormFieldOverridesMixin, admin.TabularInline):
+class SurveyAttributeTranslationInline(
+    ObjectPermissionMixin, FormFieldOverridesMixin, admin.TabularInline
+):
     model = SurveyAttributeTranslation
     extra = 0
     exclude = ("created_by", "updated_by")
@@ -58,7 +66,7 @@ class SurveyAttributeTranslationInline(FormFieldOverridesMixin, admin.TabularInl
 @admin.register(SurveyCategory)
 class SurveyCategoryAdmin(
     CollationSafeSearchAdminMixin,
-    RestrictedVisibilityFieldMixin,
+    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,
@@ -78,7 +86,7 @@ class SurveyCategoryAdmin(
     search_fields = ("name", "label", "description")
     inlines = (SurveyCategoryTranslationInline,)
     list_filter = ("organizations",)
-    restricted_visibility_fields = ["organizations"]
+    mutation_safe_related_fields = ["organizations"]
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -94,7 +102,7 @@ class SurveyCategoryAdmin(
 @admin.register(SurveyMode)
 class SurveyModeAdmin(
     CollationSafeSearchAdminMixin,
-    RestrictedVisibilityFieldMixin,
+    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,
@@ -114,7 +122,7 @@ class SurveyModeAdmin(
     search_fields = ("name", "label", "description")
     inlines = (SurveyModeTranslationInline,)
     list_filter = ("organizations",)
-    restricted_visibility_fields = ["organizations"]
+    mutation_safe_related_fields = ["organizations"]
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -130,7 +138,7 @@ class SurveyModeAdmin(
 @admin.register(SurveyType)
 class SurveyTypeAdmin(
     CollationSafeSearchAdminMixin,
-    RestrictedVisibilityFieldMixin,
+    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,
@@ -155,7 +163,7 @@ class SurveyTypeAdmin(
     search_fields = ("name", "label", "description")
     inlines = (SurveyTypeTranslationInline,)
     list_filter = ("organizations",)
-    restricted_visibility_fields = ["organizations", "category", "attributes"]
+    mutation_safe_related_fields = ["organizations", "category", "attributes"]
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -190,7 +198,7 @@ class SurveyTypeAdmin(
 @admin.register(SurveyAttribute)
 class SurveyAttributeAdmin(
     CollationSafeSearchAdminMixin,
-    RestrictedVisibilityFieldMixin,
+    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,
@@ -211,7 +219,7 @@ class SurveyAttributeAdmin(
     search_fields = ("name", "label", "description")
     inlines = (SurveyAttributeTranslationInline,)
     list_filter = ("organizations",)
-    restricted_visibility_fields = ["organizations"]
+    mutation_safe_related_fields = ["organizations", "survey_types", "survey_modes"]
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)

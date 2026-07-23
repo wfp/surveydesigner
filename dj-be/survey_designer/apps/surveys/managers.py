@@ -1,27 +1,21 @@
 from django.db import models
 
 
-class SurveyOrganizationVisibilityQuerySetMixin(models.QuerySet):
-    def visible_for_user(self, user):
-        if user.is_global_admins_member or user.is_superuser:
-            return self
-        return self.filter(organizations=user.organization)
-
-    def invisible_for_user(self, user):
-        return self.exclude(id__in=self.visible_for_user(user))
-
-
-class SurveyCategoryQuerySet(SurveyOrganizationVisibilityQuerySetMixin):
+class SurveyQuerySet(models.QuerySet):
     pass
 
 
-class SurveyModeQuerySet(SurveyOrganizationVisibilityQuerySetMixin):
+class SurveyCategoryQuerySet(SurveyQuerySet):
     pass
 
 
-class SurveyAttributeQuerySet(SurveyOrganizationVisibilityQuerySetMixin):
+class SurveyModeQuerySet(SurveyQuerySet):
     pass
 
 
-class SurveyTypeQuerySet(SurveyOrganizationVisibilityQuerySetMixin):
+class SurveyAttributeQuerySet(SurveyQuerySet):
+    pass
+
+
+class SurveyTypeQuerySet(SurveyQuerySet):
     pass

@@ -1,15 +1,15 @@
 import pytest
+from accounts.const import PermissionGroups
+from django.contrib.auth.models import Group
+from organization.permissions import mutation_safe_related_queryset
 from surveys.models import SurveyMode
 
 
 @pytest.mark.django_db
-def test_visible_for_user_survey_mode(
+def test_mutation_safe_survey_mode_queryset_excludes_shared_content(
     user, survey_mode_1, survey_mode_2, organization_1
 ):
-    # Query the visible survey modes for the not global admin user
     user.organization = organization_1
-    visible_modes = SurveyMode.objects.visible_for_user(user)
-    # Check that both survey_mode_1 and survey_mode_2 are visible
-    assert survey_mode_1 in visible_modes
-    assert survey_mode_2 in visible_modes
-    assert visible_modes.count() == 2
+    user.groups.add(Group.objects.get_or_create(name=PermissionGroups.ADMINS)[0])
+    writable_modes = mutation_safe_related_queryset(SurveyMode.objects.all(), user)
+    assert list(writable_modes) == [survey_mode_1]

@@ -10,10 +10,9 @@ from survey_designer.apps.core.models import (
 
 
 class OrganizationQuerySet(models.QuerySet):
-    def visible_for_user(self, user):
-        if user.is_global_admins_member or user.is_superuser:
-            return self
-        return self.filter(id=user.organization_id)
+    def readable_by(self, user):
+        """All authenticated users may read every organization."""
+        return self
 
 
 class Organization(UserTrackingMixin, TimestampMixin, SoftDeleteMixin, models.Model):

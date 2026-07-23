@@ -1,4 +1,6 @@
 import pytest
+from accounts.const import PermissionGroups
+from django.contrib.auth.models import Group
 from modules.models import (
     Module,
     Submodule,
@@ -6,28 +8,27 @@ from modules.models import (
     SubmoduleMappingSurveyMode,
     SubmoduleMappingSurveyType,
 )
+from organization.permissions import mutation_safe_related_queryset
 
 
 @pytest.mark.django_db
-def test_visible_for_user_module(user, module_1, module_2, organization_1):
-    # Query the visible modules for the not global admin user
+def test_mutation_safe_module_queryset_excludes_shared_content(
+    user, module_1, module_2, organization_1
+):
     user.organization = organization_1
-    visible_modules = Module.objects.visible_for_user(user)
-    # Check that both module_1 and module_2 are visible
-    assert module_1 in visible_modules
-    assert module_2 in visible_modules
-    assert visible_modules.count() == 2
+    user.groups.add(Group.objects.get_or_create(name=PermissionGroups.ADMINS)[0])
+    writable_modules = mutation_safe_related_queryset(Module.objects.all(), user)
+    assert list(writable_modules) == [module_1]
 
 
 @pytest.mark.django_db
-def test_visible_for_user_submodule(user, submodule_1, submodule_2, organization_1):
-    # Query the visible submodules for the not global admin user
+def test_mutation_safe_submodule_queryset_excludes_shared_content(
+    user, submodule_1, submodule_2, organization_1
+):
     user.organization = organization_1
-    visible_submodules = Submodule.objects.visible_for_user(user)
-    # Check that both submodule_1 and submodule_2 are visible
-    assert submodule_1 in visible_submodules
-    assert submodule_2 in visible_submodules
-    assert visible_submodules.count() == 2
+    user.groups.add(Group.objects.get_or_create(name=PermissionGroups.ADMINS)[0])
+    writable_submodules = mutation_safe_related_queryset(Submodule.objects.all(), user)
+    assert list(writable_submodules) == [submodule_1]
 
 
 @pytest.mark.django_db
