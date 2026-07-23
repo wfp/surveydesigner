@@ -14,13 +14,16 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from core.organization_scope import get_authorized_organization_ids
-from django.db.models import Count, Prefetch, Q
+from core.organization_scope import (
+    filter_for_selected_organizations,
+    get_selected_organization_ids,
+)
+from django.db.models import Prefetch
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from surveys.models import SurveyCategory, SurveyMode, SurveyType
+from surveys.models import SurveyAttribute, SurveyCategory, SurveyMode, SurveyType
 from surveys.serializers import (
     SurveyCategorySerializer,
     SurveyModeSerializer,
@@ -39,43 +42,33 @@ class SurveysAPIView(APIView):
 
     @extend_schema(responses={200: user_response})
     def get(self, request, *args, **kwargs):
-        organizations = get_authorized_organization_ids(request)
+        organizations = get_selected_organization_ids(request)
 
         if not organizations:
             return Response({"categories": [], "modes": []})
 
+        scoped_attributes = filter_for_selected_organizations(
+            SurveyAttribute.objects.all(), organizations
+        )
         related_objects = Prefetch(
             "survey_types",
-            queryset=SurveyType.objects.annotate(
-                organization_match_count=Count(
-                    "organizations", filter=Q(organizations__id__in=organizations)
-                )
-            )
-            .filter(organization_match_count__gte=len(organizations))
-            .prefetch_related("attributes", "indicator_mappings__indicator"),
+            queryset=filter_for_selected_organizations(
+                SurveyType.objects.all(), organizations
+            ).prefetch_related(
+                Prefetch("attributes", queryset=scoped_attributes),
+                "indicator_mappings__indicator",
+            ),
         )
         categories = SurveyCategorySerializer(
-            SurveyCategory.objects.annotate(
-                organization_match_count=Count(
-                    "organizations", filter=Q(organizations__id__in=organizations)
-                ),
-                organization_total_count=Count("organizations"),
-            )
-            .filter(
-                organization_match_count=len(organizations),
-                organization_total_count=len(organizations),
-            )
-            .prefetch_related(related_objects),
+            filter_for_selected_organizations(
+                SurveyCategory.objects.all(), organizations
+            ).prefetch_related(related_objects),
             many=True,
         ).data
         modes = SurveyModeSerializer(
-            SurveyMode.objects.annotate(
-                organization_match_count=Count(
-                    "organizations", filter=Q(organizations__id__in=organizations)
-                )
-            )
-            .filter(organization_match_count__gte=len(organizations))
-            .prefetch_related("attributes"),
+            filter_for_selected_organizations(
+                SurveyMode.objects.all(), organizations
+            ).prefetch_related(Prefetch("attributes", queryset=scoped_attributes)),
             many=True,
         ).data
 

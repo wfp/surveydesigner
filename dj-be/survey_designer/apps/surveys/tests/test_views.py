@@ -73,7 +73,7 @@ def _authenticate_for_organization(api_client, user, organization):
     api_client.force_authenticate(user)
 
 
-def test_survey_api_uses_authorized_user_organization_scope(
+def test_survey_api_uses_selected_organization_scope(
     api_client, user, organization_1, scoped_survey_data
 ):
     _authenticate_for_organization(api_client, user, organization_1)
@@ -82,20 +82,25 @@ def test_survey_api_uses_authorized_user_organization_scope(
     response = api_client.get("/api/surveys/")
 
     assert response.status_code == status.HTTP_200_OK
-    assert [category["id"] for category in response.data["categories"]] == [
-        scoped_survey_data["category_org_1"].id
+    assert {category["id"] for category in response.data["categories"]} == {
+        scoped_survey_data["category_org_1"].id,
+        scoped_survey_data["category_shared"].id,
+    }
+    org_1_category = next(
+        category
+        for category in response.data["categories"]
+        if category["id"] == scoped_survey_data["category_org_1"].id
+    )
+    assert [survey_type["id"] for survey_type in org_1_category["survey_types"]] == [
+        scoped_survey_data["type_org_1"].id
     ]
-    assert [
-        survey_type["id"]
-        for survey_type in response.data["categories"][0]["survey_types"]
-    ] == [scoped_survey_data["type_org_1"].id]
     assert {mode["id"] for mode in response.data["modes"]} == {
         scoped_survey_data["mode_org_1"].id,
         scoped_survey_data["mode_shared"].id,
     }
 
 
-def test_survey_api_rejects_organization_outside_user_scope(
+def test_survey_api_allows_organization_outside_user_assignment(
     api_client, user, organization_1, organization_2, scoped_survey_data
 ):
     _authenticate_for_organization(api_client, user, organization_1)
@@ -103,10 +108,14 @@ def test_survey_api_rejects_organization_outside_user_scope(
 
     response = api_client.get("/api/surveys/")
 
-    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.status_code == status.HTTP_200_OK
+    assert {category["id"] for category in response.data["categories"]} == {
+        scoped_survey_data["category_org_2"].id,
+        scoped_survey_data["category_shared"].id,
+    }
 
 
-def test_survey_api_rejects_mixed_authorized_and_unauthorized_scope(
+def test_survey_api_multiple_selected_organizations_use_intersection_scope(
     api_client, user, organization_1, organization_2, scoped_survey_data
 ):
     _authenticate_for_organization(api_client, user, organization_1)
@@ -116,10 +125,13 @@ def test_survey_api_rejects_mixed_authorized_and_unauthorized_scope(
 
     response = api_client.get("/api/surveys/")
 
-    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.status_code == status.HTTP_200_OK
+    assert [category["id"] for category in response.data["categories"]] == [
+        scoped_survey_data["category_shared"].id
+    ]
 
 
-def test_survey_api_rejects_orgless_user_non_empty_organization_header(
+def test_survey_api_allows_orgless_user_non_empty_organization_header(
     api_client_authenticated, organization_1, scoped_survey_data
 ):
     api_client_authenticated.credentials(
@@ -128,7 +140,11 @@ def test_survey_api_rejects_orgless_user_non_empty_organization_header(
 
     response = api_client_authenticated.get("/api/surveys/")
 
-    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.status_code == status.HTTP_200_OK
+    assert {category["id"] for category in response.data["categories"]} == {
+        scoped_survey_data["category_org_1"].id,
+        scoped_survey_data["category_shared"].id,
+    }
 
 
 def test_survey_api_orgless_user_empty_scope_returns_no_survey_data(
@@ -149,6 +165,16 @@ def test_survey_api_rejects_malformed_organization_header(
     )
 
     response = api_client.get("/api/surveys/")
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+def test_survey_api_rejects_nonexistent_organization(
+    api_client_authenticated, scoped_survey_data
+):
+    api_client_authenticated.credentials(HTTP_SURVEY_DESIGNER_ORGANIZATIONS="999999")
+
+    response = api_client_authenticated.get("/api/surveys/")
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 

@@ -12,14 +12,6 @@ from questions.models import BaseQuestion
 
 
 class ModuleQueryset(models.QuerySet):
-    def visible_for_user(self, user):
-        if user.is_global_admins_member or user.is_superuser:
-            return self
-        return self.filter(organizations=user.organization)
-
-    def invisible_for_user(self, user):
-        return self.exclude(id__in=self.visible_for_user(user))
-
     def _annotate_organization_ids(self):
         return self.annotate(organization_ids=ArrayAgg("organizations__id"))
 
@@ -54,10 +46,7 @@ class Module(BaseWFPModelMixin, OrganizationsModelMixin, OrderFieldMixin):
 
 
 class SubmoduleQueryset(models.QuerySet):
-    def visible_for_user(self, user):
-        if user.is_global_admins_member or user.is_superuser:
-            return self
-        return self.filter(module__organizations=user.organization)
+    pass
 
 
 class Submodule(BaseWFPModelMixin, OrderFieldMixin):

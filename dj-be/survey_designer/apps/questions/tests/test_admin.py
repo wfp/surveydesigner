@@ -4,11 +4,14 @@ from accounts.const import PermissionGroups
 from core.permissions import AdminPermissions
 from core.utils import get_model_admin_base_url
 from django.contrib import admin as django_admin
+from django.contrib.admin import AdminSite
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
+from django.contrib.admin.widgets import (
+    AutocompleteSelectMultiple,
+    RelatedFieldWidgetWrapper,
+)
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.contrib.admin import AdminSite
-from django.contrib.admin.widgets import AutocompleteSelectMultiple
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from lxml import html
@@ -476,10 +479,17 @@ def test_root_question_admin_add_view_uses_single_jquery_for_dal_widgets(
 
     content = response.content.decode()
 
-    assert "/static/admin/js/vendor/jquery/jquery.js" in content
-    assert "/static/admin/js/vendor/jquery/jquery.min.js" not in content
+    jquery_assets = (
+        "/static/admin/js/vendor/jquery/jquery.js",
+        "/static/admin/js/vendor/jquery/jquery.min.js",
+    )
+    assert sum(content.count(asset) for asset in jquery_assets) == 1
     assert "/static/js/admin/jquery-bridge.js" in content
-    assert "/static/autocomplete_light/autocomplete_light.js" in content
+    autocomplete_light_assets = (
+        "/static/autocomplete_light/autocomplete_light.js",
+        "/static/autocomplete_light/autocomplete_light.min.js",
+    )
+    assert sum(content.count(asset) for asset in autocomplete_light_assets) == 1
     assert "data-autocomplete-light-function=select2" in content
     assert "id=id_repeat_sections" in content
     assert "id=id_indicators" in content
@@ -618,13 +628,19 @@ def test_repeat_section_search_view(logged_admin_client, repeat_section_1):
     )
 
 
-def test_repeat_section_questions_field_uses_autocomplete_widget(request_factory):
+def test_repeat_section_questions_field_uses_autocomplete_widget(
+    request_factory, admin
+):
     repeat_section_admin = _build_repeat_section_admin()
     request = request_factory.get(reverse("admin:questions_repeatsection_add"))
+    request.user = admin
     form = repeat_section_admin.get_form(request)()
 
     assert repeat_section_admin.autocomplete_fields == ("questions",)
-    assert isinstance(form.fields["questions"].widget, AutocompleteSelectMultiple)
+    widget = form.fields["questions"].widget
+    if isinstance(widget, RelatedFieldWidgetWrapper):
+        widget = widget.widget
+    assert isinstance(widget, AutocompleteSelectMultiple)
 
 
 def test_sub_question_list_view(

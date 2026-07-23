@@ -11,7 +11,7 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 from django.db.models import Q
 from organization.models import Organization
-from organization.utils import get_organizations
+from organization.permissions import can_mutate_object, get_object_organizations
 
 from .const import PermissionGroups, UserAPISiteAPITypes
 from .managers import UserManager
@@ -101,15 +101,11 @@ class User(SoftDeleteMixin, TimestampMixin, PermissionsMixin, AbstractBaseUser):
         ):
             return True
         try:
-            obj_organization = get_organizations(obj)
+            get_object_organizations(obj)
         except NotImplementedError:
-            # Object organization check not implemented on this object, so not required.
+            # Non-organization-scoped models retain their existing permission rules.
             return True
-
-        return (
-            obj_organization.count() == 1
-            and obj_organization.first() == self.organization
-        )
+        return can_mutate_object(self, obj)
 
 
 class UserAPISite(TimestampMixin):

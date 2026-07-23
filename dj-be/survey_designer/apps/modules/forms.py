@@ -9,6 +9,7 @@ from modules.models import (
     SubmoduleMappingSurveyType,
     SubmoduleRequiredGroup,
 )
+from organization.permissions import mutation_safe_related_queryset
 from questions.models import RecallPeriod, Suffix
 from surveys.models import SurveyAttribute, SurveyCategory, SurveyMode, SurveyType
 from surveys.serializers import SurveyCategoryWithoutIndicatorsSerializer
@@ -88,11 +89,11 @@ class SurveyCategoryForm(BaseMappingForm):
         _set_cached_model_choices(
             self.fields["survey_category"],
             request,
-            "_visible_survey_categories",
-            "_visible_survey_category_choices",
-            lambda: SurveyCategory.objects.visible_for_user(user).prefetch_related(
-                "organizations"
-            ),
+            "_mutation_safe_survey_categories",
+            "_mutation_safe_survey_category_choices",
+            lambda: mutation_safe_related_queryset(
+                SurveyCategory.objects.all(), user
+            ).prefetch_related("organizations"),
         )
 
 
@@ -102,17 +103,17 @@ class SurveyTypeForm(BaseMappingForm):
         fields = ["include", "is_mandatory", "survey_type"]
 
     def __init__(self, *args, **kwargs):
-        user = kwargs.pop("user", None)
+        user = kwargs.pop("user", None) or getattr(self, "user", None)
         request = kwargs.pop("request", None) or getattr(self, "request", None)
         super().__init__(*args, **kwargs)
         _set_cached_model_choices(
             self.fields["survey_type"],
             request,
-            "_visible_survey_types",
-            "_visible_survey_type_choices",
-            lambda: SurveyType.objects.visible_for_user(user).prefetch_related(
-                "organizations"
-            ),
+            "_mutation_safe_survey_types",
+            "_mutation_safe_survey_type_choices",
+            lambda: mutation_safe_related_queryset(
+                SurveyType.objects.all(), user
+            ).prefetch_related("organizations"),
         )
 
 
@@ -122,17 +123,17 @@ class SurveyModeForm(BaseMappingForm):
         fields = ["include", "is_mandatory", "survey_mode"]
 
     def __init__(self, *args, **kwargs):
-        self.user = kwargs.pop("user", None)
+        self.user = kwargs.pop("user", None) or getattr(self, "user", None)
         request = kwargs.pop("request", None) or getattr(self, "request", None)
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.survey_type:
             _set_cached_model_choices(
                 self.fields["survey_mode"],
                 request,
-                "_visible_survey_modes",
-                "_visible_survey_mode_choices",
-                lambda: SurveyMode.objects.visible_for_user(
-                    self.user
+                "_mutation_safe_survey_modes",
+                "_mutation_safe_survey_mode_choices",
+                lambda: mutation_safe_related_queryset(
+                    SurveyMode.objects.all(), self.user
                 ).prefetch_related("organizations"),
             )
 
@@ -149,11 +150,11 @@ class SurveyAttributeForm(BaseMappingForm):
         _set_cached_model_choices(
             self.fields["survey_attribute"],
             request,
-            "_visible_survey_attributes",
-            "_visible_survey_attribute_choices",
-            lambda: SurveyAttribute.objects.visible_for_user(user).prefetch_related(
-                "organizations"
-            ),
+            "_mutation_safe_survey_attributes",
+            "_mutation_safe_survey_attribute_choices",
+            lambda: mutation_safe_related_queryset(
+                SurveyAttribute.objects.all(), user
+            ).prefetch_related("organizations"),
         )
 
 
@@ -163,16 +164,16 @@ class IndicatorSurveyTypeForm(BaseMappingForm):
         fields = ["include", "is_mandatory", "survey_type"]
 
     def __init__(self, *args, **kwargs):
-        self.user = kwargs.pop("user", None)
+        self.user = kwargs.pop("user", None) or getattr(self, "user", None)
         request = kwargs.pop("request", None) or getattr(self, "request", None)
         super().__init__(*args, **kwargs)
         _set_cached_model_choices(
             self.fields["survey_type"],
             request,
-            "_visible_survey_types",
-            "_visible_survey_type_choices",
-            lambda: SurveyType.objects.visible_for_user(
-                self.user
+            "_mutation_safe_survey_types",
+            "_mutation_safe_survey_type_choices",
+            lambda: mutation_safe_related_queryset(
+                SurveyType.objects.all(), self.user
             ).prefetch_related("organizations"),
         )
 
@@ -183,16 +184,16 @@ class IndicatorSurveyModeForm(BaseMappingForm):
         fields = ["include", "is_mandatory", "survey_mode"]
 
     def __init__(self, *args, **kwargs):
-        self.user = kwargs.pop("user", None)
+        self.user = kwargs.pop("user", None) or getattr(self, "user", None)
         request = kwargs.pop("request", None) or getattr(self, "request", None)
         super().__init__(*args, **kwargs)
         _set_cached_model_choices(
             self.fields["survey_mode"],
             request,
-            "_visible_survey_modes",
-            "_visible_survey_mode_choices",
-            lambda: SurveyMode.objects.visible_for_user(
-                self.user
+            "_mutation_safe_survey_modes",
+            "_mutation_safe_survey_mode_choices",
+            lambda: mutation_safe_related_queryset(
+                SurveyMode.objects.all(), self.user
             ).prefetch_related("organizations"),
         )
 
@@ -240,10 +241,10 @@ class SubmoduleMappingSurveyCategoryInlineFormSet(BaseInlineFormSet):
         user = self.request.user
         categories = _get_request_cached_value(
             self.request,
-            "_visible_survey_categories",
-            lambda: SurveyCategory.objects.visible_for_user(user).prefetch_related(
-                "organizations"
-            ),
+            "_mutation_safe_survey_categories",
+            lambda: mutation_safe_related_queryset(
+                SurveyCategory.objects.all(), user
+            ).prefetch_related("organizations"),
         )
 
         if instance and instance.id:
@@ -270,10 +271,10 @@ class MappingSurveyTypeInlineFormSet(BaseInlineFormSet):
         self.user = user
         types = _get_request_cached_value(
             self.request,
-            "_visible_survey_types",
-            lambda: SurveyType.objects.visible_for_user(user).prefetch_related(
-                "organizations"
-            ),
+            "_mutation_safe_survey_types",
+            lambda: mutation_safe_related_queryset(
+                SurveyType.objects.all(), user
+            ).prefetch_related("organizations"),
         )
         if instance and instance.id:
             ids = instance.survey_types.values_list("id", flat=True)
@@ -300,10 +301,10 @@ class MappingSurveyModeInlineFormSet(BaseInlineFormSet):
         self.user = user
         modes = _get_request_cached_value(
             self.request,
-            "_visible_survey_modes",
-            lambda: SurveyMode.objects.visible_for_user(user).prefetch_related(
-                "organizations"
-            ),
+            "_mutation_safe_survey_modes",
+            lambda: mutation_safe_related_queryset(
+                SurveyMode.objects.all(), user
+            ).prefetch_related("organizations"),
         )
         if instance and instance.id:
             ids = instance.modes.values_list("survey_mode__id", flat=True)
@@ -329,10 +330,10 @@ class MappingSurveyAttributeInlineFormSet(BaseInlineFormSet):
         user = self.request.user
         attrs = _get_request_cached_value(
             self.request,
-            "_visible_survey_attributes",
-            lambda: SurveyAttribute.objects.visible_for_user(user).prefetch_related(
-                "organizations"
-            ),
+            "_mutation_safe_survey_attributes",
+            lambda: mutation_safe_related_queryset(
+                SurveyAttribute.objects.all(), user
+            ).prefetch_related("organizations"),
         )
 
         if instance and instance.id:

@@ -10,6 +10,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.urls import reverse
 from modules.factories import ModuleFactory, SubmoduleFactory
+from organization.models import Organization
 from questions.const import QuestionType
 from questions.factories import RootQuestionFactory
 from questions.models import ChoiceGroup, ChoiceGroupFile
@@ -53,8 +54,13 @@ class GenerateXLSZipTestCase(APITestCase):
         self.user = UserFactory()
         self.client.force_authenticate(user=self.user)
         self.url = reverse("v1:generate_xls_form")
+        self.organization = Organization.objects.create(name="Zip test organization")
+        self.client.credentials(
+            HTTP_SURVEY_DESIGNER_ORGANIZATIONS=str(self.organization.pk)
+        )
 
         self.module = ModuleFactory()
+        self.module.organizations.add(self.organization)
         self.submodule = SubmoduleFactory(module=self.module)
 
         # Create a standard select_one question (no file)
@@ -85,6 +91,7 @@ class GenerateXLSZipTestCase(APITestCase):
         # Override setup for clean separation
         # Create clean module/submodule with only standard question
         module_clean = ModuleFactory()
+        module_clean.organizations.add(self.organization)
         submodule_clean = SubmoduleFactory(module=module_clean)
         RootQuestionFactory(
             submodules=[{"submodule_id": submodule_clean.id}],

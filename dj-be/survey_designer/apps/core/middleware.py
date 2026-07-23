@@ -27,5 +27,9 @@ class OrganizationMiddleware:
         else:
             request.organization_ids_parse_error = False
         request.organization_ids = organizations
+        if not request.organization_ids_parse_error:
+            request.META["HTTP_SURVEY_DESIGNER_ORGANIZATIONS"] = ",".join(
+                str(organization_id) for organization_id in sorted(organizations)
+            )
 
         return self.get_response(request)

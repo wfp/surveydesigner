@@ -8,13 +8,18 @@ from xml.etree import ElementTree as ET
 import django_rq
 import requests
 from accounts.models import UserAPISiteAPITypes
+from core.organization_scope import (
+    filter_for_selected_organizations,
+    get_selected_organization_ids,
+    validate_scoped_ids,
+)
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.files.base import ContentFile
 from django.db.models import BooleanField, Count, OuterRef, Prefetch, Q, Subquery, Value
 from django.http import HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
-from django.views.decorators.vary import vary_on_cookie
+from django.views.decorators.vary import vary_on_cookie, vary_on_headers
 from django_rq import job
 from documents.models import Document
 from drf_spectacular.utils import (
@@ -32,10 +37,10 @@ from modules.models import (
     IndicatorMappingSurveyType,
     Module,
     Submodule,
-    SubmoduleRequiredGroup,
     SubmoduleMappingSurveyAttribute,
     SubmoduleMappingSurveyMode,
     SubmoduleMappingSurveyType,
+    SubmoduleRequiredGroup,
 )
 from modules.serializers import (
     GenerateXLSFormSerializer,
@@ -63,7 +68,7 @@ from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 from rq.exceptions import NoSuchJobError
 from rq.job import Job
-from surveys.models import Survey
+from surveys.models import Survey, SurveyType
 
 
 @job("generate-doc")
@@ -85,7 +90,53 @@ def get_xlsx_from_request(get_serializer, request, as_wb=False):
     serializer = get_serializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
+    validate_generation_scope(request, data)
     return get_xlsx_from_data(data, as_wb=as_wb)
+
+
+INDICATOR_ORGANIZATION_RELATIONS = (
+    "questions__root_question__submodule__module__organizations",
+    "questions__sub_question__root_question__submodule__module__organizations",
+    "questions__repeat_section__submodule__module__organizations",
+    "mapping__survey_types__organizations",
+    "mapping__survey_attributes__organizations",
+)
+
+
+def validate_generation_scope(request, data):
+    """Validate all submitted content before generation or other side effects."""
+    organization_ids = get_selected_organization_ids(request)
+    submodule_ids = set(data.get("submodules", [])) | set(
+        data.get("submodules_order", [])
+    )
+    validate_scoped_ids(
+        Submodule.objects.all(),
+        submodule_ids,
+        organization_ids,
+        relations="module__organizations",
+        field_name="submodules",
+    )
+    validate_scoped_ids(
+        SubQuestion.objects.all(),
+        data.get("sub_questions", []),
+        organization_ids,
+        relations="root_question__submodule__module__organizations",
+        field_name="sub_questions",
+    )
+    validate_scoped_ids(
+        Indicator.objects.all(),
+        data.get("indicators", []),
+        organization_ids,
+        relations=INDICATOR_ORGANIZATION_RELATIONS,
+        field_name="indicators",
+    )
+    survey_type = data.get("survey_type_id")
+    validate_scoped_ids(
+        SurveyType.objects.all(),
+        [survey_type.pk] if survey_type else [],
+        organization_ids,
+        field_name="survey_type",
+    )
 
 
 def get_xlsx_from_data(data, as_wb=False):
@@ -292,6 +343,7 @@ class UploadXLSForm(GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        validate_generation_scope(request, data)
         xlsx_form = get_xlsx_from_data(data, as_wb=True)
         xlsx_file = xlsx_form.generate()
 
@@ -342,6 +394,7 @@ class GenerateDocForm(GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        validate_generation_scope(request, data)
         user = request.user
         queue = django_rq.get_queue("generate-doc")
         job = queue.enqueue(generate_docx, data=data, user=user)
@@ -607,13 +660,15 @@ class ModuleViewSet(ModelViewSet):
     serializer_class = ModuleSerializer
     permission_classes = [IsAuthenticated]
 
-    @method_decorator(vary_on_cookie)
     @method_decorator(cache_page(60 * 60, key_prefix="modules_"))  # Cache for 1 hour
+    @method_decorator(vary_on_cookie)
+    @method_decorator(vary_on_headers("Survey-Designer-Organizations", "Authorization"))
     def dispatch(self, *args, **kwargs):
         return super(ModelViewSet, self).dispatch(*args, **kwargs)
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        organizations = get_selected_organization_ids(self.request)
+        qs = filter_for_selected_organizations(super().get_queryset(), organizations)
 
         # Extract query parameters
         type_ = self.request.query_params.get("type")
@@ -785,8 +840,9 @@ class SubmoduleViewSet(ModelViewSet):
     serializer_class = SubmoduleWithQuestionsSerializer
     permission_classes = [IsAuthenticated]
 
-    @method_decorator(vary_on_cookie)
     @method_decorator(cache_page(60 * 60))  # Cache for 1 hour
+    @method_decorator(vary_on_cookie)
+    @method_decorator(vary_on_headers("Survey-Designer-Organizations", "Authorization"))
     def dispatch(self, *args, **kwargs):
         return super().dispatch(*args, **kwargs)
 
@@ -817,7 +873,10 @@ class SubmoduleViewSet(ModelViewSet):
         return qs
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        organizations = get_selected_organization_ids(self.request)
+        qs = filter_for_selected_organizations(
+            super().get_queryset(), organizations, relations="module__organizations"
+        )
 
         sub_questions_prefetch = Prefetch(
             "sub_questions",
@@ -925,9 +984,11 @@ def parse_int_list_param(raw_value, param_name):
 class SubmodulesOrderValidationView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @method_decorator(vary_on_cookie)
     @method_decorator(cache_page(60 * 60))
+    @method_decorator(vary_on_cookie)
+    @method_decorator(vary_on_headers("Survey-Designer-Organizations", "Authorization"))
     def get(self, request, *args, **kwargs):
+        organization_ids = get_selected_organization_ids(request)
         submodule_ids = parse_int_list_param(
             self.request.query_params.get("submodule_ids", ""),
             "submodule_ids",
@@ -939,6 +1000,20 @@ class SubmodulesOrderValidationView(APIView):
         all_submodule_ids = parse_int_list_param(
             self.request.query_params.get("all_submodule_ids", ""),
             "all_submodule_ids",
+        )
+        validate_scoped_ids(
+            Submodule.objects.all(),
+            set(submodule_ids) | set(all_submodule_ids),
+            organization_ids,
+            relations="module__organizations",
+            field_name="submodule_ids",
+        )
+        validate_scoped_ids(
+            Indicator.objects.all(),
+            indicator_ids,
+            organization_ids,
+            relations=INDICATOR_ORGANIZATION_RELATIONS,
+            field_name="indicator_ids",
         )
         result = []
 
@@ -968,16 +1043,21 @@ class IndicatorViewSet(ModelViewSet):
     serializer_class = IndicatorSerializer
     permission_classes = [IsAuthenticated]
 
-    @method_decorator(vary_on_cookie)
     @method_decorator(cache_page(60 * 60))  # Cache for 1 hour
+    @method_decorator(vary_on_cookie)
+    @method_decorator(vary_on_headers("Survey-Designer-Organizations", "Authorization"))
     def dispatch(self, *args, **kwargs):
         return super().dispatch(*args, **kwargs)
 
     def get_queryset(self):
         # 1) Build a “base” QuerySet with common annotations/prefetch
+        organizations = get_selected_organization_ids(self.request)
         qs = (
-            super()
-            .get_queryset()
+            filter_for_selected_organizations(
+                super().get_queryset(),
+                organizations,
+                relations=INDICATOR_ORGANIZATION_RELATIONS,
+            )
             .annotate(
                 question_count=Count("questions", distinct=True),
                 root_question_ids=ArrayAgg(

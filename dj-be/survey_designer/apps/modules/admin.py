@@ -61,10 +61,11 @@ from modules.models import (
 from organization.mixins import (
     ChangeFormOrganizationsDisplayMixin,
     FormsetRequestMixin,
+    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
-    RestrictedVisibilityFieldMixin,
 )
 from organization.models import Organization
+from organization.permissions import mutation_safe_related_queryset
 from questions.models import BaseQuestion, RootQuestion
 from questions.services import QuestionsExport
 from surveys.models import SurveyAttribute, SurveyCategory, SurveyMode, SurveyType
@@ -167,10 +168,10 @@ class ModuleAdmin(
     AdminUserTrackingMixin,
     FormFieldOverridesMixin,
     SafeDynamicRawIDMixin,
-    RestrictedVisibilityFieldMixin,
+    MutationSafeRelatedFieldsMixin,
     nested_admin.NestedModelAdmin,
 ):
-    restricted_visibility_fields = ["organizations"]
+    mutation_safe_related_fields = ["organizations", "default_submodule_mapping"]
     exclude = ("created_by", "updated_by", "relevant_dependencies")
     list_display = (
         "name",
@@ -224,7 +225,7 @@ class ModuleAdmin(
 
     @admin.action(
         description="Export Questions as XLS",
-        permissions=("add", "change", "delete"),
+        permissions=("view",),
     )
     def export_action(self, request, queryset):
         q_export = QuestionsExport()
@@ -247,7 +248,7 @@ class ModuleAdmin(
         permissions=("add", "change"),
     )
     def add_submodule_mapping(self, request, queryset):
-        queryset = queryset.visible_for_user(request.user)
+        queryset = mutation_safe_related_queryset(queryset, request.user)
         ids = ",".join([str(id_) for id_ in queryset.values_list("id", flat=True)])
         url = f"{get_model_admin_base_url(SubmoduleMapping, '_add')}?module_ids={ids}"
         return redirect(url)
@@ -265,7 +266,7 @@ class SubmoduleRequiredGroupInline(
 @admin.register(Submodule)
 class SubmoduleAdmin(
     CollationSafeSearchAdminMixin,
-    RestrictedVisibilityFieldMixin,
+    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     SortableAdminMixin,
@@ -294,7 +295,7 @@ class SubmoduleAdmin(
         SubmoduleSurveyModeFilter,
         ModuleListFilter,
     )
-    restricted_visibility_fields = ["module"]
+    mutation_safe_related_fields = ["module", "mapping"]
     list_select_related = ("module", "updated_by")
     search_fields = ("label", "name", "description")
     inlines = (SubmoduleRequiredGroupInline, SubmoduleTranslationInline)
@@ -353,9 +354,6 @@ class SubmoduleAdmin(
             organizations=ArrayAgg("module__organizations__name", distinct=True),
         )
 
-        if admin.options.TO_FIELD_VAR in request.GET:
-            queryset = queryset.visible_for_user(request.user)
-
         return queryset.order_by("order", "pk")
 
     @admin.display(description="Module")
@@ -385,7 +383,7 @@ class SubmoduleAdmin(
 
     @admin.action(
         description="Export Questions as XLS",
-        permissions=("add", "change", "delete"),
+        permissions=("view",),
     )
     def export_action(self, request, queryset):
         q_export = QuestionsExport()
@@ -402,6 +400,7 @@ class SubmoduleAdmin(
 
 class SubmoduleMappingSurveyCategoryInline(
     FormsetRequestMixin,
+    ObjectPermissionMixin,
     nested_admin.NestedTabularInline,
 ):
     form = SurveyCategoryForm
@@ -410,60 +409,58 @@ class SubmoduleMappingSurveyCategoryInline(
     formset = SubmoduleMappingSurveyCategoryInlineFormSet
 
     def get_queryset(self, request):
-        queryset = SubmoduleMappingSurveyCategory.objects.prefetch_related(
+        return SubmoduleMappingSurveyCategory.objects.prefetch_related(
             "survey_category__organizations"
-        )
-        if request.user.is_global_admins_member or request.user.is_superuser:
-            return queryset
-        return queryset.filter(
-            survey_category__in=SurveyCategory.objects.visible_for_user(request.user)
         )
 
     def get_extra(self, request, obj=None, **kwargs):
         total_categories = get_request_cached_value(
             request,
-            "_visible_survey_category_count",
-            lambda: SurveyCategory.objects.visible_for_user(request.user).count(),
+            "_mutation_safe_survey_category_count",
+            lambda: mutation_safe_related_queryset(
+                SurveyCategory.objects.all(), request.user
+            ).count(),
         )
         if obj and obj.pk:
             existing_categories_count = get_request_cached_value(
                 request,
                 f"_submodule_mapping_categories_count_{obj.pk}",
-                lambda: obj.survey_categories.visible_for_user(request.user).count(),
+                lambda: mutation_safe_related_queryset(
+                    obj.survey_categories.all(), request.user
+                ).count(),
             )
             return max(total_categories - existing_categories_count, 0)
         return total_categories
 
 
 class SubmoduleMappingSurveyModeInline(
-    FormsetRequestMixin, nested_admin.NestedTabularInline
+    FormsetRequestMixin, ObjectPermissionMixin, nested_admin.NestedTabularInline
 ):
     form = SurveyModeForm
     model = SubmoduleMappingSurveyMode
     formset = MappingSurveyModeInlineFormSet
 
     def get_queryset(self, request):
-        queryset = SubmoduleMappingSurveyMode.objects.prefetch_related(
+        return SubmoduleMappingSurveyMode.objects.prefetch_related(
             "survey_mode__organizations"
-        )
-        if request.user.is_global_admins_member or request.user.is_superuser:
-            return queryset
-        return queryset.filter(
-            survey_mode__in=SurveyMode.objects.visible_for_user(request.user)
         )
 
     def get_extra(self, request, obj=None, **kwargs):
         total_modes = get_request_cached_value(
             request,
-            "_visible_survey_mode_count",
-            lambda: SurveyMode.objects.visible_for_user(request.user).count(),
+            "_mutation_safe_survey_mode_count",
+            lambda: mutation_safe_related_queryset(
+                SurveyMode.objects.all(), request.user
+            ).count(),
         )
         if obj and obj.pk:
             existing_modes_count = get_request_cached_value(
                 request,
                 f"_submodule_mapping_modes_count_{obj.pk}",
                 lambda: obj.modes.filter(
-                    survey_mode__in=SurveyMode.objects.visible_for_user(request.user)
+                    survey_mode__in=mutation_safe_related_queryset(
+                        SurveyMode.objects.all(), request.user
+                    )
                 ).count(),
             )
             return max(total_modes - existing_modes_count, 0)
@@ -471,7 +468,7 @@ class SubmoduleMappingSurveyModeInline(
 
 
 class SubmoduleMappingSurveyTypeInline(
-    FormsetRequestMixin, nested_admin.NestedTabularInline
+    FormsetRequestMixin, ObjectPermissionMixin, nested_admin.NestedTabularInline
 ):
     model = SubmoduleMappingSurveyType
     form = SurveyTypeForm
@@ -480,33 +477,32 @@ class SubmoduleMappingSurveyTypeInline(
     inlines = [SubmoduleMappingSurveyModeInline]
 
     def get_queryset(self, request):
-        queryset = SubmoduleMappingSurveyType.objects.prefetch_related(
+        return SubmoduleMappingSurveyType.objects.prefetch_related(
             "survey_type__organizations"
-        )
-        if request.user.is_global_admins_member or request.user.is_superuser:
-            return queryset
-        return queryset.filter(
-            survey_type__in=SurveyType.objects.visible_for_user(request.user)
         )
 
     def get_extra(self, request, obj=None, **kwargs):
         total_types = get_request_cached_value(
             request,
-            "_visible_survey_type_count",
-            lambda: SurveyType.objects.visible_for_user(request.user).count(),
+            "_mutation_safe_survey_type_count",
+            lambda: mutation_safe_related_queryset(
+                SurveyType.objects.all(), request.user
+            ).count(),
         )
         if obj and obj.pk:
             existing_types_count = get_request_cached_value(
                 request,
                 f"_submodule_mapping_types_count_{obj.pk}",
-                lambda: obj.survey_types.visible_for_user(request.user).count(),
+                lambda: mutation_safe_related_queryset(
+                    obj.survey_types.all(), request.user
+                ).count(),
             )
             return max(total_types - existing_types_count, 0)
         return total_types
 
 
 class SubmoduleMappingSurveyAttributeInline(
-    FormsetRequestMixin, nested_admin.NestedTabularInline
+    FormsetRequestMixin, ObjectPermissionMixin, nested_admin.NestedTabularInline
 ):
     form = SurveyAttributeForm
     template = "modules/mapping_attribute.html"
@@ -514,33 +510,34 @@ class SubmoduleMappingSurveyAttributeInline(
     formset = MappingSurveyAttributeInlineFormSet
 
     def get_queryset(self, request):
-        queryset = SubmoduleMappingSurveyAttribute.objects.prefetch_related(
+        return SubmoduleMappingSurveyAttribute.objects.prefetch_related(
             "survey_attribute__organizations"
-        )
-        if request.user.is_global_admins_member or request.user.is_superuser:
-            return queryset
-        return queryset.filter(
-            survey_attribute__in=SurveyAttribute.objects.visible_for_user(request.user)
         )
 
     def get_extra(self, request, obj=None, **kwargs):
         total_attributes = get_request_cached_value(
             request,
-            "_visible_survey_attribute_count",
-            lambda: SurveyAttribute.objects.visible_for_user(request.user).count(),
+            "_mutation_safe_survey_attribute_count",
+            lambda: mutation_safe_related_queryset(
+                SurveyAttribute.objects.all(), request.user
+            ).count(),
         )
         if obj and obj.pk:
             existing_attributes_count = get_request_cached_value(
                 request,
                 f"_submodule_mapping_attributes_count_{obj.pk}",
-                lambda: obj.survey_attributes.visible_for_user(request.user).count(),
+                lambda: mutation_safe_related_queryset(
+                    obj.survey_attributes.all(), request.user
+                ).count(),
             )
             return max(total_attributes - existing_attributes_count, 0)
         return total_attributes
 
 
 @admin.register(SubmoduleMapping)
-class SubmoduleMappingAdmin(AdminUserTrackingMixin, nested_admin.NestedModelAdmin):
+class SubmoduleMappingAdmin(
+    ObjectPermissionMixin, AdminUserTrackingMixin, nested_admin.NestedModelAdmin
+):
     form = SubmoduleMappingForm
     list_display = (
         "id",
@@ -610,13 +607,10 @@ class SubmoduleMappingAdmin(AdminUserTrackingMixin, nested_admin.NestedModelAdmi
         user = request.user
 
         if submodule_ids or module_ids:
-            submodules = (
-                Submodule.objects.filter(
-                    Q(id__in=submodule_ids) | Q(module_id__in=module_ids), mapping=None
-                )
-                .visible_for_user(user)
-                .distinct()
-            )
+            submodules = Submodule.objects.filter(
+                Q(id__in=submodule_ids) | Q(module_id__in=module_ids), mapping=None
+            ).distinct()
+            submodules = mutation_safe_related_queryset(submodules, user)
             for submodule in submodules:
                 if original_mapping_used:
                     mapping_to_set = submodule_mapping.duplicate()
@@ -629,9 +623,12 @@ class SubmoduleMappingAdmin(AdminUserTrackingMixin, nested_admin.NestedModelAdmi
                 updated_submodules.append(submodule.name)
 
             if module_ids:
-                modules = Module.objects.filter(
-                    id__in=module_ids, default_submodule_mapping=None
-                ).visible_for_user(user)
+                modules = mutation_safe_related_queryset(
+                    Module.objects.filter(
+                        id__in=module_ids, default_submodule_mapping=None
+                    ),
+                    user,
+                )
                 for module in modules:
                     if original_mapping_used:
                         mapping_to_set = submodule_mapping.duplicate()
@@ -687,6 +684,7 @@ class IndicatorAreaAdmin(
 @admin.register(Indicator)
 class IndicatorAdmin(
     CollationSafeSearchAdminMixin,
+    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
     SortableAdminMixin,
     AdminUserTrackingMixin,
@@ -694,6 +692,7 @@ class IndicatorAdmin(
     SafeDynamicRawIDMixin,
     nested_admin.NestedModelAdmin,
 ):
+    mutation_safe_related_fields = ["questions", "mapping"]
     exclude = ("created_by", "updated_by")
     autocomplete_fields = ("questions",)
     search_fields = ("name", "label", "description")
@@ -720,11 +719,14 @@ class IndicatorAdmin(
         )
 
     def formfield_for_manytomany(self, db_field, request=None, **kwargs):
-        if db_field.name == "questions":
-            kwargs["queryset"] = BaseQuestion.objects.select_related(
-                "root_question",
-                "sub_question",
-                "repeat_section",
+        if db_field.name == "questions" and getattr(request, "user", None) is not None:
+            kwargs["queryset"] = mutation_safe_related_queryset(
+                BaseQuestion.objects.select_related(
+                    "root_question",
+                    "sub_question",
+                    "repeat_section",
+                ),
+                request.user,
             )
         return super().formfield_for_manytomany(db_field, request, **kwargs)
 
@@ -768,7 +770,7 @@ class IndicatorAdmin(
 
     @admin.action(
         description="Export Questions as XLS",
-        permissions=("add", "change", "delete"),
+        permissions=("view",),
     )
     def export_action(self, request, queryset):
         q_export = QuestionsExport()
@@ -783,34 +785,33 @@ class IndicatorAdmin(
 
 
 class IndicatorMappingSurveyModeInline(
-    FormsetRequestMixin, nested_admin.NestedTabularInline
+    FormsetRequestMixin, ObjectPermissionMixin, nested_admin.NestedTabularInline
 ):
     form = IndicatorSurveyModeForm
     model = IndicatorMappingSurveyMode
     formset = MappingSurveyModeInlineFormSet
 
     def get_queryset(self, request):
-        queryset = IndicatorMappingSurveyMode.objects.prefetch_related(
+        return IndicatorMappingSurveyMode.objects.prefetch_related(
             "survey_mode__organizations"
-        )
-        if request.user.is_global_admins_member or request.user.is_superuser:
-            return queryset
-        return queryset.filter(
-            survey_mode__in=SurveyMode.objects.visible_for_user(request.user)
         )
 
     def get_extra(self, request, obj=None, **kwargs):
         total_modes = get_request_cached_value(
             request,
-            "_visible_survey_mode_count",
-            lambda: SurveyMode.objects.visible_for_user(request.user).count(),
+            "_mutation_safe_survey_mode_count",
+            lambda: mutation_safe_related_queryset(
+                SurveyMode.objects.all(), request.user
+            ).count(),
         )
         if obj and obj.pk:
             existing_modes_count = get_request_cached_value(
                 request,
                 f"_indicator_mapping_modes_count_{obj.pk}",
                 lambda: obj.modes.filter(
-                    survey_mode__in=SurveyMode.objects.visible_for_user(request.user)
+                    survey_mode__in=mutation_safe_related_queryset(
+                        SurveyMode.objects.all(), request.user
+                    )
                 ).count(),
             )
             return max(total_modes - existing_modes_count, 0)
@@ -818,7 +819,7 @@ class IndicatorMappingSurveyModeInline(
 
 
 class IndicatorMappingSurveyTypeInline(
-    FormsetRequestMixin, nested_admin.NestedTabularInline
+    FormsetRequestMixin, ObjectPermissionMixin, nested_admin.NestedTabularInline
 ):
     model = IndicatorMappingSurveyType
     form = IndicatorSurveyTypeForm
@@ -827,33 +828,32 @@ class IndicatorMappingSurveyTypeInline(
     template = "modules/mapping_type.html"
 
     def get_queryset(self, request):
-        queryset = IndicatorMappingSurveyType.objects.prefetch_related(
+        return IndicatorMappingSurveyType.objects.prefetch_related(
             "survey_type__organizations"
-        )
-        if request.user.is_global_admins_member or request.user.is_superuser:
-            return queryset
-        return queryset.filter(
-            survey_type__in=SurveyType.objects.visible_for_user(request.user)
         )
 
     def get_extra(self, request, obj=None, **kwargs):
         total_types = get_request_cached_value(
             request,
-            "_visible_survey_type_count",
-            lambda: SurveyType.objects.visible_for_user(request.user).count(),
+            "_mutation_safe_survey_type_count",
+            lambda: mutation_safe_related_queryset(
+                SurveyType.objects.all(), request.user
+            ).count(),
         )
         if obj and obj.pk:
             existing_types_count = get_request_cached_value(
                 request,
                 f"_indicator_mapping_types_count_{obj.pk}",
-                lambda: obj.survey_types.visible_for_user(request.user).count(),
+                lambda: mutation_safe_related_queryset(
+                    obj.survey_types.all(), request.user
+                ).count(),
             )
             return max(total_types - existing_types_count, 0)
         return total_types
 
 
 class IndicatorMappingSurveyAttributeInline(
-    FormsetRequestMixin, nested_admin.NestedTabularInline
+    FormsetRequestMixin, ObjectPermissionMixin, nested_admin.NestedTabularInline
 ):
     form = SurveyAttributeForm
     template = "modules/mapping_attribute.html"
@@ -861,33 +861,34 @@ class IndicatorMappingSurveyAttributeInline(
     formset = MappingSurveyAttributeInlineFormSet
 
     def get_queryset(self, request):
-        queryset = IndicatorMappingSurveyAttribute.objects.prefetch_related(
+        return IndicatorMappingSurveyAttribute.objects.prefetch_related(
             "survey_attribute__organizations"
-        )
-        if request.user.is_global_admins_member or request.user.is_superuser:
-            return queryset
-        return queryset.filter(
-            survey_attribute__in=SurveyAttribute.objects.visible_for_user(request.user)
         )
 
     def get_extra(self, request, obj=None, **kwargs):
         total_attributes = get_request_cached_value(
             request,
-            "_visible_survey_attribute_count",
-            lambda: SurveyAttribute.objects.visible_for_user(request.user).count(),
+            "_mutation_safe_survey_attribute_count",
+            lambda: mutation_safe_related_queryset(
+                SurveyAttribute.objects.all(), request.user
+            ).count(),
         )
         if obj and obj.pk:
             existing_attributes_count = get_request_cached_value(
                 request,
                 f"_indicator_mapping_attributes_count_{obj.pk}",
-                lambda: obj.survey_attributes.visible_for_user(request.user).count(),
+                lambda: mutation_safe_related_queryset(
+                    obj.survey_attributes.all(), request.user
+                ).count(),
             )
             return max(total_attributes - existing_attributes_count, 0)
         return total_attributes
 
 
 @admin.register(IndicatorMapping)
-class IndicatorMappingAdmin(AdminUserTrackingMixin, nested_admin.NestedModelAdmin):
+class IndicatorMappingAdmin(
+    ObjectPermissionMixin, AdminUserTrackingMixin, nested_admin.NestedModelAdmin
+):
     exclude = ("created_by", "updated_by")
     inlines = [
         IndicatorMappingSurveyTypeInline,
