@@ -148,8 +148,6 @@ function Surveys({
   });
   const watchAttributes = watch("attributes", []);
   const watchOrganizations = watch("organizations", []);
-  const watchType = watch("type", null);
-  const watchMode = watch("mode", null);
 
   const typeOptions = useMemo(() => {
     const filtered = surveyTypes.filter(
@@ -233,14 +231,14 @@ function Surveys({
   }, []);
 
   useEffect(() => {
-    // If we have a survey to edit, we need to update the surveyForm state with the converted survey
-    dispatch(surveyFormActions.setSurveyData(convertedSavedSurvey));
+    // Only initialise an edit from the saved snapshot. When returning from a
+    // later step, surveyForm already contains the user's in-progress changes.
+    if (!isSurveyFormInUse) {
+      dispatch(surveyFormActions.setSurveyData(convertedSavedSurvey));
+      reset(convertedSavedSurvey);
+    }
     // We need to fetch the categories and survey types to populate the dropdowns
     dispatch(fetchSurveys());
-    // Set the form values to the converted survey
-    reset(convertedSavedSurvey);
-    // reset freeze state if prop changes
-    setFreezeContextUntilChange(!!selectedSurveyToEdit);
   }, [selectedSurveyToEdit]);
 
   useEffect(() => {
@@ -256,36 +254,20 @@ function Surveys({
         );
         setSurveyTypes(selectedCategoryType?.survey_types || []);
 
-        if (selectedSurveyToEdit) {
-          // show saved snapshot until user changes type/mode
-          setSurveyAttributes(selectedSurveyToEdit.attributes || []);
-        } else {
-          // compute from current type/mode defaults (if any)
-          const selectedSurveyType =
-            selectedCategoryType?.survey_types.find(
-              (type) => type.id === convertedSavedSurvey.type?.id,
-            ) || null;
+        const selectedSurveyType =
+          selectedCategoryType?.survey_types.find(
+            (type) => type.id === getValues("type")?.id,
+          ) || null;
 
-          const selectedMode =
-            (surveys.data?.modes || []).find(
-              (m: any) => m.id === convertedSavedSurvey.mode?.id,
-            ) || null;
+        const selectedMode =
+          (surveys.data?.modes || []).find(
+            (m: any) => m.id === getValues("mode")?.id,
+          ) || null;
 
-          recomputeSurveyAttributes(selectedSurveyType, selectedMode);
-        }
+        recomputeSurveyAttributes(selectedSurveyType, selectedMode);
       }
     }
   }, [surveys]);
-
-  // keep attributes in sync when user changes type/mode (only if unfrozen)
-  useEffect(() => {
-    if (!freezeContextUntilChange) {
-      const currentType = getValues("type") || null;
-      const currentMode = getValues("mode") || null;
-      recomputeSurveyAttributes(currentType, currentMode);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchType, watchMode, freezeContextUntilChange]);
 
   const updateOrganizationDependencies = () => {
     dispatch(surveyFormActions.setSurveyData(getValues()));
@@ -499,10 +481,11 @@ function Surveys({
                           onChange={(e) => {
                             onChange(e);
                             setValue("attributes", []);
-                            // UNFREEZE on first change; then recompute intersection
-                            if (freezeContextUntilChange)
-                              setFreezeContextUntilChange(false);
-                            const currentMode = getValues("mode") || null;
+                            const currentModeId = getValues("mode")?.id;
+                            const currentMode =
+                              surveys.data?.modes.find(
+                                (mode) => mode.id === currentModeId,
+                              ) || null;
                             recomputeSurveyAttributes(e || null, currentMode);
                           }}
                         />
@@ -560,10 +543,11 @@ function Surveys({
                         }))}
                         onChange={(e) => {
                           onChange(e);
-                          // UNFREEZE on first change; then recompute intersection
-                          if (freezeContextUntilChange)
-                            setFreezeContextUntilChange(false);
-                          const currentType = getValues("type") || null;
+                          const currentTypeId = getValues("type")?.id;
+                          const currentType =
+                            surveyTypes.find(
+                              (type) => type.id === currentTypeId,
+                            ) || null;
                           recomputeSurveyAttributes(currentType, e || null);
                         }}
                       />
