@@ -86,6 +86,46 @@ def test_xls_form_includes_survey_designer_metadata(submodule_1):
     assert parsed_timestamp.microsecond == 0
 
 
+def test_xls_form_settings_include_versioned_form_id(submodule_1, mocker):
+    mocker.patch("questions.services.xls_form.SURVEY_DESIGNER_VERSION", "20260716.1")
+    token_urlsafe = mocker.patch(
+        "questions.services.xls_form.secrets.token_urlsafe",
+        return_value="K8s2pQx9aBc",
+    )
+
+    xls_form = XLSForm(
+        name="test_name",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    workbook = load_workbook(io.BytesIO(xls_form.generate()))
+    settings_rows = list(workbook["settings"].iter_rows(values_only=True))
+    settings = dict(zip(settings_rows[0], settings_rows[1]))
+
+    assert settings["form_id"] == "surveydesigner_v202607161_K8s2pQx9aBc"
+    assert settings["version"] == "_v202607161"
+    assert xls_form.export_id == settings["form_id"]
+    token_urlsafe.assert_called_once_with(nbytes=8)
+
+
+@pytest.mark.parametrize(
+    ("generator_version", "expected"),
+    [
+        ("20260716.1", "_v202607161"),
+        ("v202607161", "_v202607161"),
+        ("", "_vdev"),
+    ],
+)
+def test_get_form_version(mocker, generator_version, expected):
+    mocker.patch(
+        "questions.services.xls_form.SURVEY_DESIGNER_VERSION", generator_version
+    )
+
+    assert XLSForm.get_form_version() == expected
+
+
 def test_xls_form_rejects_survey_designer_metadata_name_collision(submodule_1):
     reserved_name = "sd_metadata_export_id"
     question = RootQuestion.objects.filter(submodule=submodule_1).first()
