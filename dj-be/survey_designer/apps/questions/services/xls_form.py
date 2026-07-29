@@ -84,7 +84,10 @@ class XLSForm:
     ):
         self.name = name
         self.protected = protected
-        self.id_name = secrets.token_urlsafe()
+        self.form_version = self.get_form_version()
+        self.id_name = (
+            f"surveydesigner{self.form_version}_{secrets.token_urlsafe(nbytes=8)}"
+        )
         self.export_id = self.id_name
         self.exported_at = self.get_utc_timestamp()
         self.language_values = languages or ()
@@ -285,6 +288,13 @@ class XLSForm:
             return f"survey-designer-{version}"
         return f"survey-designer-v{version}"
 
+    @staticmethod
+    def get_form_version():
+        version = str(SURVEY_DESIGNER_VERSION or "dev").replace(".", "")
+        if not version.startswith("v"):
+            version = f"v{version}"
+        return f"_{version}"
+
     def get_survey_designer_metadata(self):
         return (
             (
@@ -467,7 +477,7 @@ class XLSForm:
         self.fill_cell("type", "end_repeat", bold=True)
 
     def add_settings(self):
-        columns = ["form_title", "form_id"]
+        columns = ["form_title", "form_id", "version"]
         columns = enum.Enum("Columns", columns)
         for column in columns:
             self.settings_sheet.cell(row=1, column=column.value, value=column.name)
@@ -477,6 +487,9 @@ class XLSForm:
         )
         self.settings_sheet.cell(
             row=2, column=columns["form_id"].value, value=self.id_name
+        )
+        self.settings_sheet.cell(
+            row=2, column=columns["version"].value, value=self.form_version
         )
 
     def add_choices(self):
