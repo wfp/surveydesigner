@@ -12,7 +12,8 @@ from organization.permissions import (
     can_create_organization_scoped_content,
     can_mutate_object,
     has_global_mutation_authority,
-    mutation_safe_related_queryset,
+    mutable_objects_queryset,
+    organization_assignment_queryset,
 )
 from organization.utils import get_organizations
 
@@ -252,17 +253,30 @@ class RequestUserFormMixin:
         return form
 
 
-class MutationSafeRelatedFieldsMixin:
+class OrganizationAssignmentFieldMixin:
+    """Restrict ownership assignment while leaving relationships flexible."""
+
     def get_form(self, request, obj=None, change=False, **kwargs):
         form = super().get_form(request, obj, change, **kwargs)
         form.user = request.user
-        for field_name in self.mutation_safe_related_fields:
-            field = form.base_fields.get(field_name)
-            if not field or not hasattr(field, "queryset"):
-                continue
-            field.queryset = mutation_safe_related_queryset(
+        field = form.base_fields.get("organizations")
+        if field is not None and hasattr(field, "queryset"):
+            field.queryset = organization_assignment_queryset(
                 field.queryset, request.user
             )
+        return form
+
+
+class OrganizationOwnedParentFieldMixin:
+    """Restrict fields that determine an object's organization ownership."""
+
+    def get_form(self, request, obj=None, change=False, **kwargs):
+        form = super().get_form(request, obj, change, **kwargs)
+        form.user = request.user
+        for field_name in self.organization_owned_parent_fields:
+            field = form.base_fields.get(field_name)
+            if field is not None and hasattr(field, "queryset"):
+                field.queryset = mutable_objects_queryset(field.queryset, request.user)
         return form
 
 

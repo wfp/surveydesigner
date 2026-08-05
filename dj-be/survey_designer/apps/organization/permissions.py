@@ -1,24 +1,7 @@
 """Canonical organization read and mutation permission helpers."""
 
-from django.db.models import Count, Q
-from organization.models import Organization
+from django.db.models import Count
 from organization.utils import get_organizations
-
-_MUTATION_ORGANIZATION_RELATIONS = {
-    "modules.indicator": (
-        "questions__root_question__submodule__module__organizations",
-        "questions__sub_question__root_question__submodule__module__organizations",
-        "questions__repeat_section__submodule__module__organizations",
-        "mapping__survey_types__organizations",
-        "mapping__survey_attributes__organizations",
-    ),
-    "questions.basequestion": (
-        "root_question__submodule__module__organizations",
-        "sub_question__root_question__submodule__module__organizations",
-        "repeat_section__submodule__module__organizations",
-    ),
-    "questions.repeatsection": ("submodule__module__organizations",),
-}
 
 
 def has_global_mutation_authority(user):
@@ -57,17 +40,27 @@ def can_mutate_object(user, obj):
     return organization_ids == {user.organization_id}
 
 
-def mutation_safe_related_queryset(queryset, user):
-    """Limit editable related-object choices; never use this for reading."""
+def organization_assignment_queryset(queryset, user):
+    """Limit direct organization assignment without restricting relationships."""
+    if has_global_mutation_authority(user):
+        return queryset
+    if user is None or user.organization_id is None:
+        return queryset.none()
+    return queryset.filter(pk=user.organization_id)
+
+
+def mutable_objects_queryset(queryset, user):
+    """Filter objects that an action is allowed to mutate.
+
+    Relationship choices intentionally do not use this helper: organization admins
+    may link content they own to readable foreign or shared content.
+    """
     if has_global_mutation_authority(user):
         return queryset
     if not can_create_organization_scoped_content(user):
         return queryset.none()
 
     model = queryset.model
-    if model is Organization:
-        return queryset.filter(pk=user.organization_id)
-
     if any(field.name == "organizations" for field in model._meta.many_to_many):
         return queryset.annotate(
             _mutation_organization_count=Count("organizations", distinct=True)
@@ -81,18 +74,6 @@ def mutation_safe_related_queryset(queryset, user):
         ).filter(
             module__organizations=user.organization_id,
             _mutation_organization_count=1,
-        )
-
-    relations = _MUTATION_ORGANIZATION_RELATIONS.get(model._meta.label_lower)
-    if relations:
-        own_organization = Q()
-        foreign_organizations = Q()
-        other_organizations = Organization.objects.exclude(pk=user.organization_id)
-        for relation in relations:
-            own_organization |= Q(**{f"{relation}__id": user.organization_id})
-            foreign_organizations |= Q(**{f"{relation}__in": other_organizations})
-        return (
-            queryset.filter(own_organization).exclude(foreign_organizations).distinct()
         )
 
     allowed_ids = [obj.pk for obj in queryset if can_mutate_object(user, obj)]

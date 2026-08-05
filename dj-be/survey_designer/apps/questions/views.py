@@ -10,7 +10,6 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, reverse
 from django.views.generic import FormView
 from modules.models import Indicator
-from organization.permissions import mutation_safe_related_queryset
 from questions.models import (
     BaseQuestion,
     RepeatSection,
@@ -367,7 +366,7 @@ class UploadQuestionsView(UserPassesTestMixin, LoginRequiredMixin, FormView):
 
 class IndicatorAutocomplete(autocomplete.Select2QuerySetView):
     def get_queryset(self):
-        qs = mutation_safe_related_queryset(Indicator.objects.all(), self.request.user)
+        qs = Indicator.objects.all()
 
         if self.q:
             qs = _collation_safe_icontains(qs, self.q, ("name",))
@@ -391,9 +390,7 @@ class LanguageAutocomplete(autocomplete.Select2ListView):
 
 class RepeatSectionAutocomplete(autocomplete.Select2QuerySetView):
     def get_queryset(self):
-        qs = mutation_safe_related_queryset(
-            RepeatSection.objects.all(), self.request.user
-        )
+        qs = RepeatSection.objects.all()
 
         if self.q:
             qs = _collation_safe_icontains(qs, self.q, ("name",))
@@ -405,9 +402,7 @@ class BaseQuestionAutocomplete(autocomplete.Select2QuerySetView):
     paginate_by = 50
 
     def get_queryset(self):
-        qs = mutation_safe_related_queryset(
-            BaseQuestion.objects.all(), self.request.user
-        )
+        qs = BaseQuestion.objects.all()
         search_term = self.request.GET.get("term") or self.q
         if search_term:
             qs = _collation_safe_icontains(

@@ -28,11 +28,10 @@ from django.views.generic import RedirectView
 from modules.models import Indicator, Module, Submodule
 from organization.mixins import (
     ChangeFormOrganizationsDisplayMixin,
-    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
+    OrganizationOwnedParentFieldMixin,
     RequestUserFormMixin,
 )
-from organization.permissions import mutation_safe_related_queryset
 from questions.admin_filters import (
     ChoiceListFilter,
     ParentSuffixListFilter,
@@ -243,14 +242,12 @@ class SubQuestionInline(
 @admin.register(ChoiceGroup)
 class ChoiceGroupAdmin(
     CollationSafeSearchAdminMixin,
-    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,
     FormFieldOverridesMixin,
     nested_admin.NestedModelAdmin,
 ):
-    mutation_safe_related_fields = ["choice_filter_list"]
     exclude = ("created_by", "updated_by")
     list_display = (
         "name",
@@ -402,7 +399,7 @@ class ChoiceGroupFileAdmin(
 @admin.register(RootQuestion)
 class RootQuestionAdmin(
     CollationSafeSearchAdminMixin,
-    MutationSafeRelatedFieldsMixin,
+    OrganizationOwnedParentFieldMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     RequestUserFormMixin,
@@ -411,6 +408,7 @@ class RootQuestionAdmin(
     FormFieldOverridesMixin,
     nested_admin.NestedModelAdmin,
 ):
+    organization_owned_parent_fields = ["submodule"]
     form = RootQuestionAdminModelForm
     exclude = ("created_by", "updated_by")
     list_display = (
@@ -422,14 +420,6 @@ class RootQuestionAdmin(
         "modified_by",
         "modified_on",
     )
-    mutation_safe_related_fields = [
-        "submodule",
-        "choices",
-        "choices_file",
-        "calculation",
-        "repeat_sections",
-        "indicators",
-    ]
     dynamic_raw_id_fields = ("submodule",)
     # autocomplete_fields = ("choices",)
     inlines = (
@@ -675,14 +665,12 @@ class RecallPeriodAdmin(
 @admin.register(Suffix)
 class SuffixAdmin(
     CollationSafeSearchAdminMixin,
-    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,
     FormFieldOverridesMixin,
     admin.ModelAdmin,
 ):
-    mutation_safe_related_fields = ["choices", "choices_file", "nested_suffixes"]
     exclude = ("created_by", "updated_by")
     form = SuffixAdminForm
     list_display = (
@@ -771,7 +759,7 @@ class SuffixAdmin(
 @admin.register(SubQuestion)
 class SubQuestionAdmin(
     CollationSafeSearchAdminMixin,
-    MutationSafeRelatedFieldsMixin,
+    OrganizationOwnedParentFieldMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,
@@ -779,13 +767,7 @@ class SubQuestionAdmin(
     FormFieldOverridesMixin,
     nested_admin.NestedModelAdmin,
 ):
-    mutation_safe_related_fields = [
-        "root_question",
-        "suffix",
-        "suffix_2",
-        "repeat_sections",
-        "indicators",
-    ]
+    organization_owned_parent_fields = ["root_question"]
     exclude = (
         "created_by",
         "updated_by",
@@ -1620,7 +1602,7 @@ class SubQuestionProxyAdmin(
 @admin.register(RepeatSection)
 class RepeatSectionAdmin(
     CollationSafeSearchAdminMixin,
-    MutationSafeRelatedFieldsMixin,
+    OrganizationOwnedParentFieldMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     AdminUserTrackingMixin,
@@ -1628,7 +1610,7 @@ class RepeatSectionAdmin(
     FormFieldOverridesMixin,
     nested_admin.NestedModelAdmin,
 ):
-    mutation_safe_related_fields = ["submodule", "questions"]
+    organization_owned_parent_fields = ["submodule"]
     exclude = (
         "created_by",
         "updated_by",
@@ -1664,14 +1646,11 @@ class RepeatSectionAdmin(
         )
 
     def formfield_for_manytomany(self, db_field, request=None, **kwargs):
-        if db_field.name == "questions" and getattr(request, "user", None) is not None:
-            kwargs["queryset"] = mutation_safe_related_queryset(
-                BaseQuestion.objects.select_related(
-                    "root_question",
-                    "sub_question",
-                    "repeat_section",
-                ),
-                request.user,
+        if db_field.name == "questions":
+            kwargs["queryset"] = BaseQuestion.objects.select_related(
+                "root_question",
+                "sub_question",
+                "repeat_section",
             )
         return super().formfield_for_manytomany(db_field, request, **kwargs)
 

@@ -11,7 +11,6 @@ from django.forms.models import BaseInlineFormSet
 from modules.models import Indicator, Submodule
 from openpyxl import load_workbook
 from organization.models import Organization
-from organization.permissions import mutation_safe_related_queryset
 from questions.const import (
     LogicalOperatorType,
     OperatorType,
@@ -33,16 +32,6 @@ def _user_has_change_permission(user, obj):
     opts = obj._meta
     codename = get_permission_codename("change", opts)
     return user.has_perm(f"{opts.app_label}.{codename}", obj)
-
-
-def _limit_related_fields_to_mutation_scope(form, field_names):
-    user = getattr(form, "user", None)
-    if user is None:
-        return
-    for field_name in field_names:
-        field = form.fields.get(field_name)
-        if field is not None and hasattr(field, "queryset"):
-            field.queryset = mutation_safe_related_queryset(field.queryset, user)
 
 
 class SubQuestionAdminModelForm(ModelForm):
@@ -99,11 +88,6 @@ class SubQuestionAdminModelForm(ModelForm):
         if self.data:
             self.fields["repeat_sections"].queryset = RepeatSection.objects.all()
             self.fields["indicators"].queryset = Indicator.objects.all()
-
-        _limit_related_fields_to_mutation_scope(
-            self,
-            ("suffix", "suffix_2", "repeat_sections", "indicators"),
-        )
 
     def check_question_names(self, field_name, field_value, error_message):
         names = BaseQuestion.get_question_names(field_value)
@@ -253,18 +237,6 @@ class RootQuestionAdminModelForm(ModelForm):
             self.fields["repeat_sections"].queryset = RepeatSection.objects.all()
             self.fields["indicators"].queryset = Indicator.objects.all()
 
-        _limit_related_fields_to_mutation_scope(
-            self,
-            (
-                "submodule",
-                "choices",
-                "choices_file",
-                "calculation",
-                "repeat_sections",
-                "indicators",
-            ),
-        )
-
     def check_question_names(self, field_name, field_value, error_message):
         names = BaseQuestion.get_question_names(field_value)
         # If there are no ${...} in the string, we consider it valid and return early
@@ -328,7 +300,6 @@ class NestedSuffixForm(ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["nested_suffixes"].required = True
-        _limit_related_fields_to_mutation_scope(self, ("nested_suffixes",))
 
     def clean(self):
         super().clean()
@@ -370,10 +341,6 @@ class NestedSuffixForm(ModelForm):
 
 class SubQuestionProxyForm(ModelForm):
     root_question_ids = forms.CharField(widget=forms.HiddenInput(), required=False)
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        _limit_related_fields_to_mutation_scope(self, ("suffix", "suffix_2"))
 
     def clean(self):
         super().clean()

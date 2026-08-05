@@ -51,14 +51,10 @@ def get_organizations(obj) -> QuerySet:
         return obj.module.organizations.all()
 
     if isinstance(obj, SubmoduleMapping):
-        q = (
+        return Organization.objects.filter(
             Q(module__default_submodule_mapping=obj)
             | Q(module__submodules__mapping=obj)
-            | Q(surveycategory__submodule_mappings=obj)
-            | Q(surveytype__submodule_mappings=obj)
-            | Q(surveyattribute__submodule_mappings=obj)
-        )
-        return Organization.objects.filter(q).distinct()
+        ).distinct()
 
     if isinstance(obj, Suffix):
         q1 = Q(module__submodules__root_questions__sub_questions__suffix=obj)
@@ -99,18 +95,12 @@ def get_organizations(obj) -> QuerySet:
             module__submodules__root_questions__sub_questions__base_question__indicators=obj
         )
         q_repeat = Q(module__submodules__repeat_sections__base_question__indicators=obj)
-        q3 = Q(surveytype__indicator_mappings__indicator=obj)
-        q4 = Q(surveyattribute__indicator_mappings__indicator=obj)
-        return Organization.objects.filter(q1 | q2 | q_repeat | q3 | q4).distinct()
+        return Organization.objects.filter(q1 | q2 | q_repeat).distinct()
 
     if isinstance(obj, IndicatorMapping):
-        q = Q(surveytype__indicator_mappings=obj) | Q(
-            surveyattribute__indicator_mappings=obj
-        )
-        organizations = Organization.objects.filter(q)
         if obj.has_indicator:
-            organizations = organizations | get_organizations(obj.indicator)
-        return organizations.distinct()
+            return get_organizations(obj.indicator)
+        return Organization.objects.none()
 
     if isinstance(obj, SubQuestion):
         if hasattr(obj, "root_question"):
