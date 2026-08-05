@@ -343,6 +343,7 @@ function Surveys({
     const selectedCategory = surveys.data.categories.find(
       (category) => category.id === selectedCategoryId,
     );
+    if (!selectedCategory) return;
     const nextSurveyTypes = selectedCategory?.survey_types || [];
     setSurveyTypes(nextSurveyTypes);
 
