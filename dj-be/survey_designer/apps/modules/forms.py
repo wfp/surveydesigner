@@ -9,7 +9,6 @@ from modules.models import (
     SubmoduleMappingSurveyType,
     SubmoduleRequiredGroup,
 )
-from organization.permissions import mutation_safe_related_queryset
 from questions.models import RecallPeriod, Suffix
 from surveys.models import SurveyAttribute, SurveyCategory, SurveyMode, SurveyType
 from surveys.serializers import SurveyCategoryWithoutIndicatorsSerializer
@@ -84,16 +83,14 @@ class SurveyCategoryForm(BaseMappingForm):
 
     def __init__(self, *args, **kwargs):
         request = kwargs.pop("request", None) or getattr(self, "request", None)
-        user = kwargs.pop("user", None) or getattr(self, "user", None)
+        kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
         _set_cached_model_choices(
             self.fields["survey_category"],
             request,
-            "_mutation_safe_survey_categories",
-            "_mutation_safe_survey_category_choices",
-            lambda: mutation_safe_related_queryset(
-                SurveyCategory.objects.all(), user
-            ).prefetch_related("organizations"),
+            "_all_survey_categories",
+            "_all_survey_category_choices",
+            lambda: SurveyCategory.objects.prefetch_related("organizations"),
         )
 
 
@@ -103,17 +100,15 @@ class SurveyTypeForm(BaseMappingForm):
         fields = ["include", "is_mandatory", "survey_type"]
 
     def __init__(self, *args, **kwargs):
-        user = kwargs.pop("user", None) or getattr(self, "user", None)
+        kwargs.pop("user", None)
         request = kwargs.pop("request", None) or getattr(self, "request", None)
         super().__init__(*args, **kwargs)
         _set_cached_model_choices(
             self.fields["survey_type"],
             request,
-            "_mutation_safe_survey_types",
-            "_mutation_safe_survey_type_choices",
-            lambda: mutation_safe_related_queryset(
-                SurveyType.objects.all(), user
-            ).prefetch_related("organizations"),
+            "_all_survey_types",
+            "_all_survey_type_choices",
+            lambda: SurveyType.objects.prefetch_related("organizations"),
         )
 
 
@@ -123,18 +118,16 @@ class SurveyModeForm(BaseMappingForm):
         fields = ["include", "is_mandatory", "survey_mode"]
 
     def __init__(self, *args, **kwargs):
-        self.user = kwargs.pop("user", None) or getattr(self, "user", None)
+        kwargs.pop("user", None)
         request = kwargs.pop("request", None) or getattr(self, "request", None)
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.survey_type:
             _set_cached_model_choices(
                 self.fields["survey_mode"],
                 request,
-                "_mutation_safe_survey_modes",
-                "_mutation_safe_survey_mode_choices",
-                lambda: mutation_safe_related_queryset(
-                    SurveyMode.objects.all(), self.user
-                ).prefetch_related("organizations"),
+                "_all_survey_modes",
+                "_all_survey_mode_choices",
+                lambda: SurveyMode.objects.prefetch_related("organizations"),
             )
 
 
@@ -145,16 +138,14 @@ class SurveyAttributeForm(BaseMappingForm):
 
     def __init__(self, *args, **kwargs):
         request = kwargs.pop("request", None) or getattr(self, "request", None)
-        user = kwargs.pop("user", None) or getattr(self, "user", None)
+        kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
         _set_cached_model_choices(
             self.fields["survey_attribute"],
             request,
-            "_mutation_safe_survey_attributes",
-            "_mutation_safe_survey_attribute_choices",
-            lambda: mutation_safe_related_queryset(
-                SurveyAttribute.objects.all(), user
-            ).prefetch_related("organizations"),
+            "_all_survey_attributes",
+            "_all_survey_attribute_choices",
+            lambda: SurveyAttribute.objects.prefetch_related("organizations"),
         )
 
 
@@ -164,17 +155,15 @@ class IndicatorSurveyTypeForm(BaseMappingForm):
         fields = ["include", "is_mandatory", "survey_type"]
 
     def __init__(self, *args, **kwargs):
-        self.user = kwargs.pop("user", None) or getattr(self, "user", None)
+        kwargs.pop("user", None)
         request = kwargs.pop("request", None) or getattr(self, "request", None)
         super().__init__(*args, **kwargs)
         _set_cached_model_choices(
             self.fields["survey_type"],
             request,
-            "_mutation_safe_survey_types",
-            "_mutation_safe_survey_type_choices",
-            lambda: mutation_safe_related_queryset(
-                SurveyType.objects.all(), self.user
-            ).prefetch_related("organizations"),
+            "_all_survey_types",
+            "_all_survey_type_choices",
+            lambda: SurveyType.objects.prefetch_related("organizations"),
         )
 
 
@@ -184,17 +173,15 @@ class IndicatorSurveyModeForm(BaseMappingForm):
         fields = ["include", "is_mandatory", "survey_mode"]
 
     def __init__(self, *args, **kwargs):
-        self.user = kwargs.pop("user", None) or getattr(self, "user", None)
+        kwargs.pop("user", None)
         request = kwargs.pop("request", None) or getattr(self, "request", None)
         super().__init__(*args, **kwargs)
         _set_cached_model_choices(
             self.fields["survey_mode"],
             request,
-            "_mutation_safe_survey_modes",
-            "_mutation_safe_survey_mode_choices",
-            lambda: mutation_safe_related_queryset(
-                SurveyMode.objects.all(), self.user
-            ).prefetch_related("organizations"),
+            "_all_survey_modes",
+            "_all_survey_mode_choices",
+            lambda: SurveyMode.objects.prefetch_related("organizations"),
         )
 
 
@@ -238,13 +225,10 @@ class SubmoduleRequiredGroupInlineFormSet(BaseInlineFormSet):
 class SubmoduleMappingSurveyCategoryInlineFormSet(BaseInlineFormSet):
     def __init__(self, *args, **kwargs):
         instance = kwargs.get("instance")
-        user = self.request.user
         categories = _get_request_cached_value(
             self.request,
-            "_mutation_safe_survey_categories",
-            lambda: mutation_safe_related_queryset(
-                SurveyCategory.objects.all(), user
-            ).prefetch_related("organizations"),
+            "_all_survey_categories",
+            lambda: SurveyCategory.objects.prefetch_related("organizations"),
         )
 
         if instance and instance.id:
@@ -260,21 +244,16 @@ class SubmoduleMappingSurveyCategoryInlineFormSet(BaseInlineFormSet):
     def get_form_kwargs(self, index):
         kwargs = super().get_form_kwargs(index)
         kwargs["request"] = self.request
-        kwargs["user"] = self.request.user
         return kwargs
 
 
 class MappingSurveyTypeInlineFormSet(BaseInlineFormSet):
     def __init__(self, *args, **kwargs):
         instance = kwargs.get("instance")
-        user = self.request.user if self.request else None
-        self.user = user
         types = _get_request_cached_value(
             self.request,
-            "_mutation_safe_survey_types",
-            lambda: mutation_safe_related_queryset(
-                SurveyType.objects.all(), user
-            ).prefetch_related("organizations"),
+            "_all_survey_types",
+            lambda: SurveyType.objects.prefetch_related("organizations"),
         )
         if instance and instance.id:
             ids = instance.survey_types.values_list("id", flat=True)
@@ -289,7 +268,6 @@ class MappingSurveyTypeInlineFormSet(BaseInlineFormSet):
 
     def get_form_kwargs(self, index):
         kwargs = super().get_form_kwargs(index)
-        kwargs["user"] = self.user
         kwargs["request"] = self.request
         return kwargs
 
@@ -297,14 +275,10 @@ class MappingSurveyTypeInlineFormSet(BaseInlineFormSet):
 class MappingSurveyModeInlineFormSet(BaseInlineFormSet):
     def __init__(self, *args, **kwargs):
         instance = kwargs.get("instance")
-        user = self.request.user if self.request else None
-        self.user = user
         modes = _get_request_cached_value(
             self.request,
-            "_mutation_safe_survey_modes",
-            lambda: mutation_safe_related_queryset(
-                SurveyMode.objects.all(), user
-            ).prefetch_related("organizations"),
+            "_all_survey_modes",
+            lambda: SurveyMode.objects.prefetch_related("organizations"),
         )
         if instance and instance.id:
             ids = instance.modes.values_list("survey_mode__id", flat=True)
@@ -319,7 +293,6 @@ class MappingSurveyModeInlineFormSet(BaseInlineFormSet):
 
     def get_form_kwargs(self, index):
         kwargs = super().get_form_kwargs(index)
-        kwargs["user"] = self.user
         kwargs["request"] = self.request
         return kwargs
 
@@ -327,13 +300,10 @@ class MappingSurveyModeInlineFormSet(BaseInlineFormSet):
 class MappingSurveyAttributeInlineFormSet(BaseInlineFormSet):
     def __init__(self, *args, **kwargs):
         instance = kwargs.get("instance")
-        user = self.request.user
         attrs = _get_request_cached_value(
             self.request,
-            "_mutation_safe_survey_attributes",
-            lambda: mutation_safe_related_queryset(
-                SurveyAttribute.objects.all(), user
-            ).prefetch_related("organizations"),
+            "_all_survey_attributes",
+            lambda: SurveyAttribute.objects.prefetch_related("organizations"),
         )
 
         if instance and instance.id:
@@ -349,5 +319,4 @@ class MappingSurveyAttributeInlineFormSet(BaseInlineFormSet):
     def get_form_kwargs(self, index):
         kwargs = super().get_form_kwargs(index)
         kwargs["request"] = self.request
-        kwargs["user"] = self.request.user
         return kwargs

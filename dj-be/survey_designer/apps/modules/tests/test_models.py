@@ -8,26 +8,26 @@ from modules.models import (
     SubmoduleMappingSurveyMode,
     SubmoduleMappingSurveyType,
 )
-from organization.permissions import mutation_safe_related_queryset
+from organization.permissions import mutable_objects_queryset
 
 
 @pytest.mark.django_db
-def test_mutation_safe_module_queryset_excludes_shared_content(
+def test_mutable_module_queryset_excludes_shared_content(
     user, module_1, module_2, organization_1
 ):
     user.organization = organization_1
     user.groups.add(Group.objects.get_or_create(name=PermissionGroups.ADMINS)[0])
-    writable_modules = mutation_safe_related_queryset(Module.objects.all(), user)
+    writable_modules = mutable_objects_queryset(Module.objects.all(), user)
     assert list(writable_modules) == [module_1]
 
 
 @pytest.mark.django_db
-def test_mutation_safe_submodule_queryset_excludes_shared_content(
+def test_mutable_submodule_queryset_excludes_shared_content(
     user, submodule_1, submodule_2, organization_1
 ):
     user.organization = organization_1
     user.groups.add(Group.objects.get_or_create(name=PermissionGroups.ADMINS)[0])
-    writable_submodules = mutation_safe_related_queryset(Submodule.objects.all(), user)
+    writable_submodules = mutable_objects_queryset(Submodule.objects.all(), user)
     assert list(writable_submodules) == [submodule_1]
 
 

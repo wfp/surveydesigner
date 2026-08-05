@@ -9,7 +9,9 @@ from modules.admin import (
     SubmoduleMappingAdmin,
     SubmoduleMappingSurveyTypeInline,
 )
+from modules.forms import SurveyTypeForm as SubmoduleMappingSurveyTypeForm
 from modules.models import (
+    Indicator,
     Module,
     Submodule,
     SubmoduleMapping,
@@ -17,7 +19,10 @@ from modules.models import (
 )
 from organization.permissions import can_mutate_object
 from questions.admin import RootQuestionAdmin
-from questions.models import RootQuestion
+from questions.const import QuestionType
+from questions.models import RepeatSection, RootQuestion
+from surveys.admin import SurveyAttributeAdmin
+from surveys.models import SurveyAttribute, SurveyCategory, SurveyMode, SurveyType
 
 pytestmark = pytest.mark.django_db
 
@@ -182,7 +187,7 @@ def test_foreign_admin_change_url_renders_read_only(
     assert b'name="_save"' not in response.content
 
 
-def test_editable_related_fields_only_accept_mutation_safe_content(
+def test_ownership_parent_fields_only_include_mutable_content(
     organization_1, organization_2, request_factory
 ):
     user = _user_with_module_permissions(
@@ -238,6 +243,94 @@ def test_direct_organization_choices_are_forced_to_assigned_organization(
     assert organization_2 not in form_class.base_fields["organizations"].queryset
 
 
+def test_org_admin_question_edit_preserves_cross_org_indicator_and_repeat_links(
+    organization_1, organization_2, request_factory
+):
+    user = _user_with_module_permissions(
+        "question-relationships@example.com",
+        organization=organization_1,
+        actions=("view",),
+    )
+    _grant_model_permissions(user, RootQuestion, ("change", "view"))
+
+    own_module = Module.objects.create(name="QuestionOwn", label="Question own")
+    own_module.organizations.set([organization_1])
+    foreign_module = Module.objects.create(
+        name="QuestionForeign", label="Question foreign"
+    )
+    foreign_module.organizations.set([organization_2])
+    own_submodule = Submodule.objects.create(
+        module=own_module,
+        name="QuestionOwnSubmodule",
+        label="Question own submodule",
+    )
+    foreign_submodule = Submodule.objects.create(
+        module=foreign_module,
+        name="QuestionForeignSubmodule",
+        label="Question foreign submodule",
+    )
+    own_question = RootQuestion.objects.create(
+        name="OwnQuestion", label="Own question", type=QuestionType.INTEGER
+    )
+    own_question.submodule.set([own_submodule])
+    foreign_question = RootQuestion.objects.create(
+        name="ForeignQuestion", label="Foreign question", type=QuestionType.INTEGER
+    )
+    foreign_question.submodule.set([foreign_submodule])
+    foreign_indicator = Indicator.objects.create(
+        name="ForeignIndicator", label="Foreign indicator"
+    )
+    foreign_indicator.questions.set([foreign_question.base_question])
+    foreign_repeat = RepeatSection.objects.create(
+        name="ForeignRepeat", label="Foreign repeat"
+    )
+    foreign_repeat.submodule.set([foreign_submodule])
+    foreign_indicator.questions.add(own_question.base_question)
+    foreign_repeat.questions.add(own_question.base_question)
+
+    request = request_factory.post("/")
+    request.user = user
+    question_admin = RootQuestionAdmin(RootQuestion, AdminSite())
+    form_class = question_admin.get_form(request, own_question, change=True)
+    form = form_class(
+        data={
+            "submodule": str(own_submodule.pk),
+            "name": own_question.name,
+            "label": "Updated own question",
+            "description": "",
+            "type": QuestionType.INTEGER,
+            "calculation": "",
+            "choices": "",
+            "choices_file": "",
+            "hint": "",
+            "relevant": "",
+            "constraint": "",
+            "constraint_message": "",
+            "appearance": "",
+            "repeat_sections": [foreign_repeat.pk],
+            "indicators": [foreign_indicator.pk],
+            "required": "",
+            "disabled": "",
+            "read_only": "",
+            "default": "",
+            "choice_filter": "",
+            "parameters": "",
+        },
+        instance=own_question,
+    )
+
+    assert foreign_repeat in form.fields["repeat_sections"].queryset
+    assert foreign_indicator in form.fields["indicators"].queryset
+    assert form.is_valid(), form.errors
+
+    updated_question = question_admin.save_form(request, form, change=True)
+    question_admin.save_model(request, updated_question, form, change=True)
+    form.save_m2m()
+
+    assert foreign_repeat.questions.filter(pk=own_question.base_question.pk).exists()
+    assert foreign_indicator.questions.filter(pk=own_question.base_question.pk).exists()
+
+
 def test_read_only_export_action_remains_available(organization_1, request_factory):
     user = _user_with_module_permissions(
         "readonly-export@example.com",
@@ -286,14 +379,100 @@ def test_mapping_and_nested_edits_follow_parent_organization(
         name="NestedForeignSubmodule",
         label="Nested foreign submodule",
     )
+    foreign_category = SurveyCategory.objects.create(
+        name="NestedForeignCategory", label="Nested foreign category"
+    )
+    foreign_category.organizations.set([organization_2])
+    foreign_type = SurveyType.objects.create(
+        category=foreign_category,
+        name="NestedForeignType",
+        label="Nested foreign type",
+    )
+    foreign_type.organizations.set([organization_2])
+    foreign_mapping_item = SubmoduleMappingSurveyType.objects.create(
+        submodule_mapping=own_mapping,
+        survey_type=foreign_type,
+    )
 
     request = request_factory.get("/")
     request.user = user
     admin_site = AdminSite()
     mapping_admin = SubmoduleMappingAdmin(SubmoduleMapping, admin_site)
     mapping_inline = SubmoduleMappingSurveyTypeInline(SubmoduleMapping, admin_site)
+    mapping_form = SubmoduleMappingSurveyTypeForm(
+        instance=foreign_mapping_item,
+        request=request,
+        user=user,
+    )
 
     assert mapping_admin.has_change_permission(request, own_mapping)
     assert not mapping_admin.has_change_permission(request, foreign_mapping)
     assert mapping_inline.has_change_permission(request, own_mapping)
     assert not mapping_inline.has_change_permission(request, foreign_mapping)
+    assert foreign_type in mapping_form.fields["survey_type"].queryset
+
+
+def test_org_admin_can_edit_context_with_foreign_and_shared_relationships(
+    organization_1, organization_2, request_factory
+):
+    user = _user_with_module_permissions(
+        "context-relationships@example.com",
+        organization=organization_1,
+        actions=("view",),
+    )
+    _grant_model_permissions(user, SurveyAttribute, ("change", "view"))
+
+    own_context = SurveyAttribute.objects.create(name="OwnContext", label="Own context")
+    own_context.organizations.set([organization_1])
+    foreign_category = SurveyCategory.objects.create(
+        name="ForeignCategory", label="Foreign category"
+    )
+    foreign_category.organizations.set([organization_2])
+    foreign_type = SurveyType.objects.create(
+        category=foreign_category,
+        name="ForeignType",
+        label="Foreign type",
+    )
+    foreign_type.organizations.set([organization_2])
+    shared_type = SurveyType.objects.create(
+        category=foreign_category,
+        name="SharedType",
+        label="Shared type",
+    )
+    shared_type.organizations.set([organization_1, organization_2])
+    foreign_mode = SurveyMode.objects.create(name="ForeignMode", label="Foreign mode")
+    foreign_mode.organizations.set([organization_2])
+    foreign_type.attributes.add(own_context)
+    shared_type.attributes.add(own_context)
+    foreign_mode.attributes.add(own_context)
+
+    request = request_factory.post("/")
+    request.user = user
+    context_admin = SurveyAttributeAdmin(SurveyAttribute, AdminSite())
+    form_class = context_admin.get_form(request, own_context, change=True)
+    form = form_class(
+        data={
+            "name": own_context.name,
+            "label": "Updated own context",
+            "description": "",
+            "organizations": [organization_1.pk],
+            "survey_types": [foreign_type.pk, shared_type.pk],
+            "survey_modes": [foreign_mode.pk],
+        },
+        instance=own_context,
+    )
+
+    assert {foreign_type, shared_type}.issubset(
+        set(form.fields["survey_types"].queryset)
+    )
+    assert foreign_mode in form.fields["survey_modes"].queryset
+    assert form.is_valid(), form.errors
+
+    updated_context = context_admin.save_form(request, form, change=True)
+    context_admin.save_model(request, updated_context, form, change=True)
+
+    assert set(SurveyType.objects.filter(attributes=own_context)) == {
+        foreign_type,
+        shared_type,
+    }
+    assert set(SurveyMode.objects.filter(attributes=own_context)) == {foreign_mode}

@@ -61,11 +61,12 @@ from modules.models import (
 from organization.mixins import (
     ChangeFormOrganizationsDisplayMixin,
     FormsetRequestMixin,
-    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
+    OrganizationAssignmentFieldMixin,
+    OrganizationOwnedParentFieldMixin,
 )
 from organization.models import Organization
-from organization.permissions import mutation_safe_related_queryset
+from organization.permissions import mutable_objects_queryset
 from questions.models import BaseQuestion, RootQuestion
 from questions.services import QuestionsExport
 from surveys.models import SurveyAttribute, SurveyCategory, SurveyMode, SurveyType
@@ -168,10 +169,9 @@ class ModuleAdmin(
     AdminUserTrackingMixin,
     FormFieldOverridesMixin,
     SafeDynamicRawIDMixin,
-    MutationSafeRelatedFieldsMixin,
+    OrganizationAssignmentFieldMixin,
     nested_admin.NestedModelAdmin,
 ):
-    mutation_safe_related_fields = ["organizations", "default_submodule_mapping"]
     exclude = ("created_by", "updated_by", "relevant_dependencies")
     list_display = (
         "name",
@@ -248,7 +248,7 @@ class ModuleAdmin(
         permissions=("add", "change"),
     )
     def add_submodule_mapping(self, request, queryset):
-        queryset = mutation_safe_related_queryset(queryset, request.user)
+        queryset = mutable_objects_queryset(queryset, request.user)
         ids = ",".join([str(id_) for id_ in queryset.values_list("id", flat=True)])
         url = f"{get_model_admin_base_url(SubmoduleMapping, '_add')}?module_ids={ids}"
         return redirect(url)
@@ -266,7 +266,7 @@ class SubmoduleRequiredGroupInline(
 @admin.register(Submodule)
 class SubmoduleAdmin(
     CollationSafeSearchAdminMixin,
-    MutationSafeRelatedFieldsMixin,
+    OrganizationOwnedParentFieldMixin,
     ObjectPermissionMixin,
     ChangeFormOrganizationsDisplayMixin,
     SortableAdminMixin,
@@ -275,6 +275,7 @@ class SubmoduleAdmin(
     SafeDynamicRawIDMixin,
     nested_admin.NestedModelAdmin,
 ):
+    organization_owned_parent_fields = ["module"]
     exclude = ("created_by", "updated_by", "relevant_dependencies")
     list_display = (
         "name",
@@ -295,7 +296,6 @@ class SubmoduleAdmin(
         SubmoduleSurveyModeFilter,
         ModuleListFilter,
     )
-    mutation_safe_related_fields = ["module", "mapping"]
     list_select_related = ("module", "updated_by")
     search_fields = ("label", "name", "description")
     inlines = (SubmoduleRequiredGroupInline, SubmoduleTranslationInline)
@@ -416,18 +416,14 @@ class SubmoduleMappingSurveyCategoryInline(
     def get_extra(self, request, obj=None, **kwargs):
         total_categories = get_request_cached_value(
             request,
-            "_mutation_safe_survey_category_count",
-            lambda: mutation_safe_related_queryset(
-                SurveyCategory.objects.all(), request.user
-            ).count(),
+            "_all_survey_category_count",
+            lambda: SurveyCategory.objects.count(),
         )
         if obj and obj.pk:
             existing_categories_count = get_request_cached_value(
                 request,
                 f"_submodule_mapping_categories_count_{obj.pk}",
-                lambda: mutation_safe_related_queryset(
-                    obj.survey_categories.all(), request.user
-                ).count(),
+                lambda: obj.survey_categories.count(),
             )
             return max(total_categories - existing_categories_count, 0)
         return total_categories
@@ -448,20 +444,14 @@ class SubmoduleMappingSurveyModeInline(
     def get_extra(self, request, obj=None, **kwargs):
         total_modes = get_request_cached_value(
             request,
-            "_mutation_safe_survey_mode_count",
-            lambda: mutation_safe_related_queryset(
-                SurveyMode.objects.all(), request.user
-            ).count(),
+            "_all_survey_mode_count",
+            lambda: SurveyMode.objects.count(),
         )
         if obj and obj.pk:
             existing_modes_count = get_request_cached_value(
                 request,
                 f"_submodule_mapping_modes_count_{obj.pk}",
-                lambda: obj.modes.filter(
-                    survey_mode__in=mutation_safe_related_queryset(
-                        SurveyMode.objects.all(), request.user
-                    )
-                ).count(),
+                lambda: obj.modes.count(),
             )
             return max(total_modes - existing_modes_count, 0)
         return total_modes
@@ -484,18 +474,14 @@ class SubmoduleMappingSurveyTypeInline(
     def get_extra(self, request, obj=None, **kwargs):
         total_types = get_request_cached_value(
             request,
-            "_mutation_safe_survey_type_count",
-            lambda: mutation_safe_related_queryset(
-                SurveyType.objects.all(), request.user
-            ).count(),
+            "_all_survey_type_count",
+            lambda: SurveyType.objects.count(),
         )
         if obj and obj.pk:
             existing_types_count = get_request_cached_value(
                 request,
                 f"_submodule_mapping_types_count_{obj.pk}",
-                lambda: mutation_safe_related_queryset(
-                    obj.survey_types.all(), request.user
-                ).count(),
+                lambda: obj.survey_types.count(),
             )
             return max(total_types - existing_types_count, 0)
         return total_types
@@ -517,18 +503,14 @@ class SubmoduleMappingSurveyAttributeInline(
     def get_extra(self, request, obj=None, **kwargs):
         total_attributes = get_request_cached_value(
             request,
-            "_mutation_safe_survey_attribute_count",
-            lambda: mutation_safe_related_queryset(
-                SurveyAttribute.objects.all(), request.user
-            ).count(),
+            "_all_survey_attribute_count",
+            lambda: SurveyAttribute.objects.count(),
         )
         if obj and obj.pk:
             existing_attributes_count = get_request_cached_value(
                 request,
                 f"_submodule_mapping_attributes_count_{obj.pk}",
-                lambda: mutation_safe_related_queryset(
-                    obj.survey_attributes.all(), request.user
-                ).count(),
+                lambda: obj.survey_attributes.count(),
             )
             return max(total_attributes - existing_attributes_count, 0)
         return total_attributes
@@ -610,7 +592,7 @@ class SubmoduleMappingAdmin(
             submodules = Submodule.objects.filter(
                 Q(id__in=submodule_ids) | Q(module_id__in=module_ids), mapping=None
             ).distinct()
-            submodules = mutation_safe_related_queryset(submodules, user)
+            submodules = mutable_objects_queryset(submodules, user)
             for submodule in submodules:
                 if original_mapping_used:
                     mapping_to_set = submodule_mapping.duplicate()
@@ -623,7 +605,7 @@ class SubmoduleMappingAdmin(
                 updated_submodules.append(submodule.name)
 
             if module_ids:
-                modules = mutation_safe_related_queryset(
+                modules = mutable_objects_queryset(
                     Module.objects.filter(
                         id__in=module_ids, default_submodule_mapping=None
                     ),
@@ -684,7 +666,6 @@ class IndicatorAreaAdmin(
 @admin.register(Indicator)
 class IndicatorAdmin(
     CollationSafeSearchAdminMixin,
-    MutationSafeRelatedFieldsMixin,
     ObjectPermissionMixin,
     SortableAdminMixin,
     AdminUserTrackingMixin,
@@ -692,7 +673,6 @@ class IndicatorAdmin(
     SafeDynamicRawIDMixin,
     nested_admin.NestedModelAdmin,
 ):
-    mutation_safe_related_fields = ["questions", "mapping"]
     exclude = ("created_by", "updated_by")
     autocomplete_fields = ("questions",)
     search_fields = ("name", "label", "description")
@@ -719,14 +699,11 @@ class IndicatorAdmin(
         )
 
     def formfield_for_manytomany(self, db_field, request=None, **kwargs):
-        if db_field.name == "questions" and getattr(request, "user", None) is not None:
-            kwargs["queryset"] = mutation_safe_related_queryset(
-                BaseQuestion.objects.select_related(
-                    "root_question",
-                    "sub_question",
-                    "repeat_section",
-                ),
-                request.user,
+        if db_field.name == "questions":
+            kwargs["queryset"] = BaseQuestion.objects.select_related(
+                "root_question",
+                "sub_question",
+                "repeat_section",
             )
         return super().formfield_for_manytomany(db_field, request, **kwargs)
 
@@ -799,20 +776,14 @@ class IndicatorMappingSurveyModeInline(
     def get_extra(self, request, obj=None, **kwargs):
         total_modes = get_request_cached_value(
             request,
-            "_mutation_safe_survey_mode_count",
-            lambda: mutation_safe_related_queryset(
-                SurveyMode.objects.all(), request.user
-            ).count(),
+            "_all_survey_mode_count",
+            lambda: SurveyMode.objects.count(),
         )
         if obj and obj.pk:
             existing_modes_count = get_request_cached_value(
                 request,
                 f"_indicator_mapping_modes_count_{obj.pk}",
-                lambda: obj.modes.filter(
-                    survey_mode__in=mutation_safe_related_queryset(
-                        SurveyMode.objects.all(), request.user
-                    )
-                ).count(),
+                lambda: obj.modes.count(),
             )
             return max(total_modes - existing_modes_count, 0)
         return total_modes
@@ -835,18 +806,14 @@ class IndicatorMappingSurveyTypeInline(
     def get_extra(self, request, obj=None, **kwargs):
         total_types = get_request_cached_value(
             request,
-            "_mutation_safe_survey_type_count",
-            lambda: mutation_safe_related_queryset(
-                SurveyType.objects.all(), request.user
-            ).count(),
+            "_all_survey_type_count",
+            lambda: SurveyType.objects.count(),
         )
         if obj and obj.pk:
             existing_types_count = get_request_cached_value(
                 request,
                 f"_indicator_mapping_types_count_{obj.pk}",
-                lambda: mutation_safe_related_queryset(
-                    obj.survey_types.all(), request.user
-                ).count(),
+                lambda: obj.survey_types.count(),
             )
             return max(total_types - existing_types_count, 0)
         return total_types
@@ -868,18 +835,14 @@ class IndicatorMappingSurveyAttributeInline(
     def get_extra(self, request, obj=None, **kwargs):
         total_attributes = get_request_cached_value(
             request,
-            "_mutation_safe_survey_attribute_count",
-            lambda: mutation_safe_related_queryset(
-                SurveyAttribute.objects.all(), request.user
-            ).count(),
+            "_all_survey_attribute_count",
+            lambda: SurveyAttribute.objects.count(),
         )
         if obj and obj.pk:
             existing_attributes_count = get_request_cached_value(
                 request,
                 f"_indicator_mapping_attributes_count_{obj.pk}",
-                lambda: mutation_safe_related_queryset(
-                    obj.survey_attributes.all(), request.user
-                ).count(),
+                lambda: obj.survey_attributes.count(),
             )
             return max(total_attributes - existing_attributes_count, 0)
         return total_attributes
