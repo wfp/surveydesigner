@@ -62,7 +62,7 @@ class SurveysAPIView(APIView):
         categories = SurveyCategorySerializer(
             filter_for_selected_organizations(
                 SurveyCategory.objects.all(), organizations
-            ).prefetch_related(related_objects),
+            ).prefetch_related("organizations", related_objects),
             many=True,
         ).data
         modes = SurveyModeSerializer(

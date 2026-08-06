@@ -816,6 +816,12 @@ export interface SurveyCategory {
   survey_types: Array<SurveyTypes>;
   /**
    *
+   * @type {Array<Organization>}
+   * @memberof SurveyCategory
+   */
+  organizations: Array<Organization>;
+  /**
+   *
    * @type {string}
    * @memberof SurveyCategory
    */

@@ -74,7 +74,7 @@ def _authenticate_for_organization(api_client, user, organization):
 
 
 def test_survey_api_uses_selected_organization_scope(
-    api_client, user, organization_1, scoped_survey_data
+    api_client, user, organization_1, organization_2, scoped_survey_data
 ):
     _authenticate_for_organization(api_client, user, organization_1)
     api_client.credentials(HTTP_SURVEY_DESIGNER_ORGANIZATIONS=str(organization_1.id))
@@ -85,6 +85,17 @@ def test_survey_api_uses_selected_organization_scope(
     assert {category["id"] for category in response.data["categories"]} == {
         scoped_survey_data["category_org_1"].id,
         scoped_survey_data["category_shared"].id,
+    }
+    shared_category = next(
+        category
+        for category in response.data["categories"]
+        if category["id"] == scoped_survey_data["category_shared"].id
+    )
+    assert {
+        organization["id"] for organization in shared_category["organizations"]
+    } == {
+        organization_1.id,
+        organization_2.id,
     }
     org_1_category = next(
         category

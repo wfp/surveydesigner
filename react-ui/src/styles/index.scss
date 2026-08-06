@@ -261,6 +261,64 @@
   }
 }
 
+.survey-organization-option {
+  pointer-events: none;
+
+  .wfp--form-item {
+    margin-bottom: 0;
+  }
+}
+
+.survey-category-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.survey-category-option__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.survey-category-organizations-tooltip.wfp--tooltip--trigger {
+  flex: 0 1 45%;
+  min-width: 0;
+}
+
+.survey-category-organizations {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+  max-width: 100%;
+  overflow: hidden;
+
+  .wfp--tag {
+    flex: 0 1 auto;
+    max-width: 100%;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .wfp--tag:last-child {
+    flex-shrink: 0;
+  }
+}
+
+.survey-organization-select .wfp--react-select__option--is-selected {
+  background: var(--action-default-fill-secondary-active, #c5ecff);
+  color: var(--text-body-default, #13162b);
+}
+
 .cms-link-icon {
   height: 15px;
   width: 15px;
