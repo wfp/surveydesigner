@@ -1,3 +1,4 @@
+from organization.serializers import OrganizationListSerializer
 from questions.models import SubQuestion
 from rest_framework import serializers
 from surveys.models import SurveyAttribute, SurveyCategory, SurveyMode, SurveyType
@@ -61,10 +62,11 @@ class SurveyTypesListSerializer(serializers.ModelSerializer):
 
 class SurveyCategorySerializer(serializers.ModelSerializer):
     survey_types = SurveyTypesSerializer(many=True, read_only=True)
+    organizations = OrganizationListSerializer(many=True, read_only=True)
 
     class Meta:
         model = SurveyCategory
-        fields = ("id", "label", "survey_types", "description")
+        fields = ("id", "label", "survey_types", "description", "organizations")
 
 
 class SurveyCategoryListSerializer(serializers.ModelSerializer):

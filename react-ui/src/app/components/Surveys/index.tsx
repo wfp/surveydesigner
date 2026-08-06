@@ -11,12 +11,13 @@ import {
   InlineLoading,
   List,
   ListItem,
+  Tag,
   TextInput,
   Tooltip,
 } from "@wfp/react";
 
 import { useTranslation } from "react-i18next";
-import Select from "react-select";
+import Select, { components, OptionProps } from "react-select";
 import { useForm, Controller } from "react-hook-form";
 import _ from "lodash";
 import { useAppDispatch, useAppSelector } from "../../redux/store";
@@ -32,11 +33,86 @@ import { indicatorAreasActions } from "../../redux/reducers/indicatorAreasReduce
 import { indicatorsActions } from "../../redux/reducers/indicatorsReducer";
 import { renderTooltipMarkdown } from "../../utils";
 import { SurveysProps } from "./Surveys.interface";
-import { SavedSurvey } from "../../types/api";
+import { Organization, SavedSurvey, SurveyCategory } from "../../types/api";
 import {
   clearModuleDependentSurveyData,
   haveModuleCriteriaChanged,
 } from "./moduleCriteria";
+
+interface CategorySelectOption extends SurveyCategory {
+  value: number;
+}
+
+function OrganizationCheckboxOption(
+  props: OptionProps<OrganizationOption, true>,
+) {
+  return (
+    <components.Option {...props}>
+      <div className="survey-organization-option" aria-hidden="true">
+        <Checkbox
+          id={`organization-option-${props.data.id}`}
+          checked={props.isSelected}
+          labelText={props.label}
+          onChange={() => undefined}
+        />
+      </div>
+    </components.Option>
+  );
+}
+
+function CategoryOrganizationTags({
+  organizations,
+}: {
+  organizations?: Organization[];
+}) {
+  if (!organizations?.length) return null;
+
+  const organizationNames = organizations
+    .map((organization) => organization.name)
+    .join(", ");
+  const visibleOrganizations = organizations.slice(0, 2);
+  const remainingOrganizationCount =
+    organizations.length - visibleOrganizations.length;
+
+  return (
+    <Tooltip
+      className="survey-category-organizations-tooltip"
+      createRefWrapper
+      content={`Organizations: ${organizationNames}`}
+      dark
+      placement="right"
+      trigger="hover"
+      usePortal
+    >
+      <span
+        className="survey-category-organizations"
+        aria-label={`Organizations: ${organizationNames}`}
+      >
+        {visibleOrganizations.map((organization) => (
+          <Tag type="info" key={organization.id}>
+            {organization.name}
+          </Tag>
+        ))}
+        {remainingOrganizationCount > 0 && (
+          <Tag type="info">+{remainingOrganizationCount}</Tag>
+        )}
+      </span>
+    </Tooltip>
+  );
+}
+
+function CategoryOptionLabel({ category }: { category: SurveyCategory }) {
+  return (
+    <div className="survey-category-option">
+      <span className="survey-category-option__label">{category.label}</span>
+      <CategoryOrganizationTags organizations={category.organizations} />
+    </div>
+  );
+}
+
+function formatCategoryOptionLabel(category: SurveyCategory) {
+  return <CategoryOptionLabel category={category} />;
+}
 
 function Surveys({
   next,
@@ -163,6 +239,15 @@ function Surveys({
 
     return sorted.map((t) => ({ ...t, value: t.id }));
   }, [surveyTypes, selectedSurveyToEdit]);
+
+  const categoryOptions = useMemo<CategorySelectOption[]>(
+    () =>
+      surveys.data?.categories.map((category) => ({
+        ...category,
+        value: category.id,
+      })) || [],
+    [surveys.data?.categories],
+  );
 
   // helper to normalize Mode.attributes (IDs or objects)
   function getModeAttrIds(mode: any | null) {
@@ -365,9 +450,12 @@ function Surveys({
                 control={control}
                 render={({ field: { onChange, value } }) => (
                   <Select
-                    className="wfp--react-select-container"
+                    className="wfp--react-select-container survey-organization-select"
                     classNamePrefix="wfp--react-select"
+                    closeMenuOnSelect={false}
+                    components={{ Option: OrganizationCheckboxOption }}
                     id="id_organizations_select"
+                    hideSelectedOptions={false}
                     isClearable
                     defaultValue={null}
                     value={value}
@@ -421,11 +509,13 @@ function Surveys({
                         id="id_category_select"
                         isClearable
                         defaultValue={null}
-                        value={value}
-                        options={surveys.data?.categories.map((category) => ({
-                          ...category,
-                          value: category.id,
-                        }))}
+                        value={
+                          categoryOptions.find(
+                            (category) => category.id === value?.id,
+                          ) || value
+                        }
+                        options={categoryOptions}
+                        formatOptionLabel={formatCategoryOptionLabel}
                         onChange={(e) => {
                           onChange(e);
                           setSurveyTypes((e && e.survey_types) || []);
