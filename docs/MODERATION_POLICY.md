@@ -303,18 +303,18 @@ remove resigning team member from respective permissions and private access.
 ### Current Members of Moderation Team
 
 * [ValerioGiuffrida](https://github.com/ValerioGiuffrida) -
-  **Valerio Giuffrida** <<axsar@hotmail.com>> (he/him)
+  **Valerio Giuffrida** <<valerio.giuffrida@wfp.org>> (he/him)
 
 * [hatemgkotb](https://github.com/hatemgkotb) -
-  **Hatem Kotb** <<hatemgkotb@gmail.com>> (he/him)
+  **Hatem Kotb** <<hatem.kotb@wfp.org>> (he/him)
   
 ### Admins for SurveyDesigner Slack community
 
 * [ValerioGiuffrida](https://github.com/ValerioGiuffrida) -
-  **Valerio Giuffrida** <<axsar@hotmail.com>> (he/him)
+  **Valerio Giuffrida** <<valerio.giuffrida@wfp.org>> (he/him)
 
 * [hatemgkotb](https://github.com/hatemgkotb) -
-  **Hatem Kotb** <<hatemgkotb@gmail.com>> (he/him)
+  **Hatem Kotb** <<hatem.kotb@wfp.org> (he/him)
 
 ## Escalation of issues
 
