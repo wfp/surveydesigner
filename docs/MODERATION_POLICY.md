@@ -305,10 +305,16 @@ remove resigning team member from respective permissions and private access.
 * [ValerioGiuffrida](https://github.com/ValerioGiuffrida) -
   **Valerio Giuffrida** <<axsar@hotmail.com>> (he/him)
 
+* [hatemgkotb](https://github.com/hatemgkotb) -
+  **Hatem Kotb** <<hatemgkotb@gmail.com>> (he/him)
+  
 ### Admins for SurveyDesigner Slack community
 
 * [ValerioGiuffrida](https://github.com/ValerioGiuffrida) -
   **Valerio Giuffrida** <<axsar@hotmail.com>> (he/him)
+
+* [hatemgkotb](https://github.com/hatemgkotb) -
+  **Hatem Kotb** <<hatemgkotb@gmail.com>> (he/him)
 
 ## Escalation of issues
 
