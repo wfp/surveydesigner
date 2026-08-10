@@ -80,7 +80,7 @@ function CategoryOrganizationTags({
       createRefWrapper
       content={`Organizations: ${organizationNames}`}
       dark
-      offset={[0, 24]}
+      offset={[0, 38]}
       placement="right"
       trigger="hover"
       usePortal
