@@ -18,9 +18,9 @@ export const surveysSlice = createSlice({
   name: "surveys",
   initialState,
   reducers: {
-    getSurveys: (state) => ({
+    getSurveys: (state, action: PayloadAction<boolean | undefined>) => ({
       ...state,
-      data: null,
+      data: action.payload ? state.data : null,
       error: null,
       isLoading: true,
     }),
@@ -32,7 +32,6 @@ export const surveysSlice = createSlice({
     }),
     setSurveysError: (state, action: PayloadAction<AxiosError>) => ({
       ...state,
-      data: null,
       error: action.payload,
       isLoading: false,
     }),

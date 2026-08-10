@@ -87,6 +87,17 @@ function Modules({
     submodules: watchAllFields.submodules || [],
     indicators: watchAllFields.indicators || [],
   };
+  // The module request depends on the definition selected in step 1. The
+  // wizard can mount this step in the same render that commits that
+  // definition to Redux, so keep a scalar key and refetch if the committed
+  // criteria arrive just after mount.
+  const moduleCriteriaKey = [
+    surveyForm.category?.id ?? "",
+    surveyForm.type?.id ?? "",
+    surveyForm.mode?.id ?? "",
+    surveyForm.attributes.join(","),
+    surveyForm.organizations.map(({ id }) => id).join(","),
+  ].join("|");
   const isEditingSavedSurvey = !!selectedSurveyToEdit;
   const hasSavedOrSessionState =
     isEditingSavedSurvey ||
@@ -353,12 +364,15 @@ function Modules({
 
   useEffect(() => {
     register("submodules");
+    register("indicators");
+    setSelectAll({ isChecked: false, run: true });
+    dispatch(fetchIndicatorAreas());
+  }, [dispatch, register, setSelectAll]);
+
+  useEffect(() => {
     dispatch(submodulesActions.clearSubmodules());
     dispatch(fetchModules());
-    setSelectAll({ isChecked: false, run: true });
-    register("indicators");
-    dispatch(fetchIndicatorAreas());
-  }, []);
+  }, [dispatch, moduleCriteriaKey]);
 
   useEffect(() => {
     next((proceed, step, setGoToStep) => {

@@ -70,6 +70,42 @@ class TestSavedSurveyApi:
         )
         assert submodule_mapping.count() == 2
 
+    def test_create_saved_survey_accepts_any_selected_organization_scope(
+        self,
+        api_client_authenticated_admin,
+        survey_category_1,
+        survey_type_1,
+        survey_mode_1,
+        organization_1,
+        organization_2,
+        submodule_1,
+    ):
+        survey_category_1.organizations.set([organization_1, organization_2])
+        survey_type_1.organizations.set([organization_1])
+
+        response = api_client_authenticated_admin.post(
+            "/api/saved-surveys/",
+            data={
+                "name": "Cross organization survey",
+                "survey_type": survey_type_1.id,
+                "survey_mode": survey_mode_1.id,
+                "survey_category": survey_category_1.id,
+                "organizations": [organization_1.id, organization_2.id],
+                "submodules": [submodule_1.id],
+                "modules_order": [submodule_1.module_id],
+                "submodules_order": [submodule_1.id],
+                "indicators": [],
+                "attributes": [],
+                "subquestions": {},
+                "languages": [],
+                "indicator_areas_order": [],
+                "indicators_order": {},
+            },
+            format="json",
+        )
+
+        assert response.status_code == 201
+
     def test_update_saved_survey(
         self,
         api_client_authenticated_admin,

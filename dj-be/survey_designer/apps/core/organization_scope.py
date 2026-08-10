@@ -28,22 +28,22 @@ def get_selected_organization_ids(request):
 def filter_for_selected_organizations(
     queryset, organization_ids, relations=("organizations",)
 ):
-    """Require association with every selected organization.
+    """Return objects associated with any selected organization.
 
-    Multiple relation paths are alternatives for each organization. Repeated filters
-    provide intersection semantics while allowing additional associations.
+    Multiple relation paths are alternatives as well, so an object is in scope when
+    at least one of its organization relationships matches at least one selected
+    organization. This lets a survey combine organization-specific and shared
+    definitions when more than one organization is selected.
     """
     if not organization_ids:
         return queryset.none()
     if isinstance(relations, str):
         relations = (relations,)
 
-    for organization_id in set(organization_ids):
-        organization_filter = Q()
-        for relation in relations:
-            organization_filter |= Q(**{f"{relation}__id": organization_id})
-        queryset = queryset.filter(organization_filter)
-    return queryset.distinct()
+    organization_filter = Q()
+    for relation in relations:
+        organization_filter |= Q(**{f"{relation}__id__in": organization_ids})
+    return queryset.filter(organization_filter).distinct()
 
 
 def validate_scoped_ids(
