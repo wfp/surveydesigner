@@ -80,6 +80,7 @@ function CategoryOrganizationTags({
       createRefWrapper
       content={`Organizations: ${organizationNames}`}
       dark
+      offset={[0, 24]}
       placement="right"
       trigger="hover"
       usePortal
@@ -327,44 +328,69 @@ function Surveys({
   }, [selectedSurveyToEdit]);
 
   useEffect(() => {
-    // Wait for surveys.data to be populated for the survey types.
-    if (surveys.data) {
-      if (
-        convertedSavedSurvey &&
-        Object.keys(convertedSavedSurvey).length > 0
-      ) {
-        // Find the selected category in the surveys.data.categories
-        const selectedCategoryType = surveys.data?.categories.find(
-          (category) => category.id === convertedSavedSurvey.category?.id,
-        );
-        setSurveyTypes(selectedCategoryType?.survey_types || []);
+    // Keep the selected category and its dependent fields mounted while a new
+    // organization scope is loading. Once the response arrives, replace the
+    // options from the fresh union scope and clear only stale selections.
+    if (!surveys.data) return;
 
-        const selectedSurveyType =
-          selectedCategoryType?.survey_types.find(
-            (type) => type.id === getValues("type")?.id,
-          ) || null;
+    const selectedCategoryId = getValues("category")?.id;
+    if (!selectedCategoryId) return;
 
-        const selectedMode =
-          (surveys.data?.modes || []).find(
-            (m: any) => m.id === getValues("mode")?.id,
-          ) || null;
+    const selectedCategory = surveys.data.categories.find(
+      (category) => category.id === selectedCategoryId,
+    );
+    const nextSurveyTypes = selectedCategory?.survey_types || [];
+    setSurveyTypes(nextSurveyTypes);
 
-        recomputeSurveyAttributes(selectedSurveyType, selectedMode);
-      }
+    const selectedTypeId = getValues("type")?.id;
+    const selectedSurveyType =
+      nextSurveyTypes.find((type) => type.id === selectedTypeId) || null;
+    if (selectedTypeId && !selectedSurveyType) {
+      setValue("type", null);
     }
-  }, [surveys]);
 
-  const updateOrganizationDependencies = () => {
-    dispatch(surveyFormActions.setSurveyData(getValues()));
+    const selectedModeId = getValues("mode")?.id;
+    const selectedMode =
+      surveys.data.modes.find((mode) => mode.id === selectedModeId) || null;
+    if (selectedModeId && !selectedMode) {
+      setValue("mode", null);
+    }
 
-    dispatch(fetchSurveys());
+    recomputeSurveyAttributes(selectedSurveyType, selectedMode);
+  }, [surveys.data]);
+
+  const updateOrganizationDependencies = (
+    nextOrganizations: OrganizationOption[] = getValues("organizations") || [],
+    preserveDefinitions = false,
+    categoryOverride?: SurveyCategory | null,
+  ) => {
+    const nextSurveyData = {
+      ...getValues(),
+      organizations: nextOrganizations,
+    };
+
+    if (categoryOverride !== undefined) {
+      nextSurveyData.category = categoryOverride;
+    }
+
+    if (!preserveDefinitions) {
+      nextSurveyData.category = null;
+      nextSurveyData.type = undefined;
+      nextSurveyData.mode = undefined;
+      nextSurveyData.attributes = [];
+      setSurveyTypes([]);
+      setSurveyAttributes([]);
+      setValue("category", null);
+      setValue("type", undefined);
+      setValue("mode", undefined);
+      setValue("attributes", []);
+    }
+
+    dispatch(surveyFormActions.setSurveyData(nextSurveyData));
     dispatch(modulesActions.clearModules());
     dispatch(indicatorAreasActions.clearIndicatorAreas());
     dispatch(indicatorsActions.clearIndicators());
-
-    setValue("category", undefined);
-    setValue("type", undefined);
-    setValue("mode", undefined);
+    dispatch(fetchSurveys(preserveDefinitions));
   };
 
   function attributeOnChange(checked: boolean, id: number) {
@@ -381,7 +407,7 @@ function Surveys({
   }
 
   const isLoading = surveys.isLoading || organizations.isLoading;
-  const haveData = surveys.data && organizations.data;
+  const haveData = !!surveys.data && !!organizations.data;
   const haveOrganizations = !!organizations.data;
   const isOrganizationsLoading = organizations.isLoading;
 
@@ -389,8 +415,8 @@ function Surveys({
     <form>
       {isLoading && <InlineLoading description="loading..." />}
       {haveOrganizations && !isOrganizationsLoading && (
-        <div className="d-flex">
-          <div className="flex-column">
+        <div className="d-flex survey-definition-layout">
+          <div className="flex-column survey-definition-column">
             <div className="wfp--form-item" style={{ marginBottom: "1rem" }}>
               <Controller
                 name="name"
@@ -463,14 +489,14 @@ function Surveys({
                     options={organizationOptions}
                     onChange={(e) => {
                       onChange(e);
-                      updateOrganizationDependencies();
+                      updateOrganizationDependencies(e ? [...e] : []);
                     }}
                   />
                 )}
               />
             </div>
 
-            {haveData && !!watchOrganizations.length && !isLoading && (
+            {haveData && !!watchOrganizations.length && (
               <>
                 <div
                   className="wfp--form-item"
@@ -522,6 +548,46 @@ function Surveys({
                           setSurveyAttributes([]);
                           setValue("type", null);
                           setValue("attributes", []);
+
+                          if (e?.organizations?.length) {
+                            const selectedOrganizations =
+                              getValues("organizations") || [];
+                            const selectedOrganizationIds = new Set(
+                              selectedOrganizations.map(
+                                (organization) => organization.id,
+                              ),
+                            );
+                            const missingOrganizations = e.organizations
+                              .filter(
+                                (organization) =>
+                                  !selectedOrganizationIds.has(organization.id),
+                              )
+                              .map(
+                                (organization) =>
+                                  organizationOptions.find(
+                                    (option) => option.id === organization.id,
+                                  ) || {
+                                    id: organization.id,
+                                    value: organization.id,
+                                    label: organization.name,
+                                  },
+                              );
+
+                            if (missingOrganizations.length) {
+                              const nextOrganizations = [
+                                ...selectedOrganizations,
+                                ...missingOrganizations,
+                              ];
+                              setValue("organizations", nextOrganizations, {
+                                shouldDirty: true,
+                              });
+                              updateOrganizationDependencies(
+                                nextOrganizations,
+                                true,
+                                e,
+                              );
+                            }
+                          }
                         }}
                       />
                     )}
@@ -648,7 +714,7 @@ function Surveys({
             )}
           </div>
 
-          <div className="flex-column">
+          <div className="flex-column survey-definition-column">
             {!_.isEmpty(surveyAttributes) && (
               <div className="wfp--form-item" style={{ marginBottom: "1rem" }}>
                 {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}

@@ -187,12 +187,12 @@ class SavedSurveysWriteSerializer(serializers.ModelSerializer):
         if (
             survey_category
             and organizations
-            and not all(
-                org in survey_category.organizations.all() for org in organizations
-            )
+            and not survey_category.organizations.filter(
+                pk__in=[organization.pk for organization in organizations]
+            ).exists()
         ):
             raise serializers.ValidationError(
-                "Survey category must belong to the same organization as the saved survey."
+                "Survey category must belong to at least one selected organization."
             )
 
         if survey_type and survey_category and survey_type.category != survey_category:
@@ -201,12 +201,25 @@ class SavedSurveysWriteSerializer(serializers.ModelSerializer):
             )
 
         if (
-            survey_mode
+            survey_type
             and organizations
-            and not all(org in survey_mode.organizations.all() for org in organizations)
+            and not survey_type.organizations.filter(
+                pk__in=[organization.pk for organization in organizations]
+            ).exists()
         ):
             raise serializers.ValidationError(
-                "Survey mode must belong to the same organization as the saved survey."
+                "Survey type must belong to at least one selected organization."
+            )
+
+        if (
+            survey_mode
+            and organizations
+            and not survey_mode.organizations.filter(
+                pk__in=[organization.pk for organization in organizations]
+            ).exists()
+        ):
+            raise serializers.ValidationError(
+                "Survey mode must belong to at least one selected organization."
             )
 
         if (
@@ -216,6 +229,20 @@ class SavedSurveysWriteSerializer(serializers.ModelSerializer):
         ):
             raise serializers.ValidationError(
                 "Attribute must belong to the same type as the saved survey."
+            )
+
+        if (
+            attributes
+            and organizations
+            and not all(
+                attribute.organizations.filter(
+                    pk__in=[organization.pk for organization in organizations]
+                ).exists()
+                for attribute in attributes
+            )
+        ):
+            raise serializers.ValidationError(
+                "Each attribute must belong to at least one selected organization."
             )
 
         return data

@@ -52,10 +52,14 @@ class SavedSurvey(TimestampMixin):
     def clean_survey_category(self):
         if (
             self.survey_category
-            and self.survey_category.organizations != self.organizations
+            and self.pk
+            and self.organizations.exists()
+            and not self.survey_category.organizations.filter(
+                pk__in=self.organizations.values_list("pk", flat=True)
+            ).exists()
         ):
             raise ValidationError(
-                "Survey category must belong to the same organization as the saved survey."
+                "Survey category must belong to at least one selected organization."
             )
 
     def clean_survey_type(self):
@@ -63,11 +67,29 @@ class SavedSurvey(TimestampMixin):
             raise ValidationError(
                 "Survey type must belong to the same category as the saved survey."
             )
+        if (
+            self.survey_type
+            and self.pk
+            and self.organizations.exists()
+            and not self.survey_type.organizations.filter(
+                pk__in=self.organizations.values_list("pk", flat=True)
+            ).exists()
+        ):
+            raise ValidationError(
+                "Survey type must belong to at least one selected organization."
+            )
 
     def clean_survey_mode(self):
-        if self.survey_mode and self.survey_mode.organizations != self.organizations:
+        if (
+            self.survey_mode
+            and self.pk
+            and self.organizations.exists()
+            and not self.survey_mode.organizations.filter(
+                pk__in=self.organizations.values_list("pk", flat=True)
+            ).exists()
+        ):
             raise ValidationError(
-                "Survey mode must belong to the same organization as the saved survey."
+                "Survey mode must belong to at least one selected organization."
             )
 
     def clean_attributes(self):
@@ -75,6 +97,16 @@ class SavedSurvey(TimestampMixin):
             if attribute not in self.survey_type.attributes.all():
                 raise ValidationError(
                     "Attribute must belong to the same type as the saved survey."
+                )
+            if (
+                self.pk
+                and self.organizations.exists()
+                and not attribute.organizations.filter(
+                    pk__in=self.organizations.values_list("pk", flat=True)
+                ).exists()
+            ):
+                raise ValidationError(
+                    "Attribute must belong to at least one selected organization."
                 )
 
     def clean(self):

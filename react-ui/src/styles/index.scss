@@ -200,6 +200,11 @@
   margin-right: 1rem;
 }
 
+.survey-definition-layout > .survey-definition-column {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 .required {
   color: red;
 }

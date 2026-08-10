@@ -190,6 +190,11 @@ function SurveyWizard() {
   useEffect(() => {
     // If a copiedSurvey is present in navigation state, use it directly
     if (state && state.copiedSurvey) {
+      // A share-link copy can be opened from an existing wizard session. Do
+      // not let that session's partially edited definition override the copy
+      // while Surveys initialises its form defaults.
+      dispatch(surveyFormActions.resetSurveyData({}));
+      dispatch(modulesActions.clearModules());
       setSelectedSurveyToEdit(state.copiedSurvey);
       setModuleCriteriaWereChanged(false);
       setModulesContextKey((value) => value + 1);

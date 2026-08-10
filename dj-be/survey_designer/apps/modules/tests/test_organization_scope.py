@@ -71,7 +71,7 @@ def test_empty_scope_returns_empty_organization_content_lists(
     assert api_client_authenticated.get("/api/indicators/").data == []
 
 
-def test_multiple_organizations_use_intersection_and_allow_extra_associations(
+def test_multiple_organizations_use_union_and_allow_extra_associations(
     api_client_authenticated, organization_1, organization_2, scoped_modules
 ):
     _scope(api_client_authenticated, organization_2, organization_1)
@@ -80,7 +80,11 @@ def test_multiple_organizations_use_intersection_and_allow_extra_associations(
     response = api_client_authenticated.get("/api/modules/")
 
     assert response.status_code == status.HTTP_200_OK
-    assert [module["id"] for module in response.data] == [shared.pk]
+    assert {module["id"] for module in response.data} == {
+        scoped_modules[0].pk,
+        scoped_modules[1].pk,
+        shared.pk,
+    }
 
 
 def test_cached_content_varies_by_authenticated_user_and_normalized_scope(

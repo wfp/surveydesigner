@@ -126,7 +126,7 @@ def test_survey_api_allows_organization_outside_user_assignment(
     }
 
 
-def test_survey_api_multiple_selected_organizations_use_intersection_scope(
+def test_survey_api_multiple_selected_organizations_use_union_scope(
     api_client, user, organization_1, organization_2, scoped_survey_data
 ):
     _authenticate_for_organization(api_client, user, organization_1)
@@ -137,9 +137,16 @@ def test_survey_api_multiple_selected_organizations_use_intersection_scope(
     response = api_client.get("/api/surveys/")
 
     assert response.status_code == status.HTTP_200_OK
-    assert [category["id"] for category in response.data["categories"]] == [
-        scoped_survey_data["category_shared"].id
-    ]
+    assert {category["id"] for category in response.data["categories"]} == {
+        scoped_survey_data["category_org_1"].id,
+        scoped_survey_data["category_org_2"].id,
+        scoped_survey_data["category_shared"].id,
+    }
+    assert {mode["id"] for mode in response.data["modes"]} == {
+        scoped_survey_data["mode_org_1"].id,
+        scoped_survey_data["mode_org_2"].id,
+        scoped_survey_data["mode_shared"].id,
+    }
 
 
 def test_survey_api_allows_orgless_user_non_empty_organization_header(
@@ -201,13 +208,13 @@ def test_survey_api_global_admin_can_request_all_organizations(
     response = api_client.get("/api/surveys/")
 
     assert response.status_code == status.HTTP_200_OK
-    assert [category["id"] for category in response.data["categories"]] == [
-        scoped_survey_data["category_shared"].id
-    ]
-    assert [
-        survey_type["id"]
-        for survey_type in response.data["categories"][0]["survey_types"]
-    ] == [scoped_survey_data["type_shared"].id]
-    assert [mode["id"] for mode in response.data["modes"]] == [
-        scoped_survey_data["mode_shared"].id
-    ]
+    assert {category["id"] for category in response.data["categories"]} == {
+        scoped_survey_data["category_org_1"].id,
+        scoped_survey_data["category_org_2"].id,
+        scoped_survey_data["category_shared"].id,
+    }
+    assert {mode["id"] for mode in response.data["modes"]} == {
+        scoped_survey_data["mode_org_1"].id,
+        scoped_survey_data["mode_org_2"].id,
+        scoped_survey_data["mode_shared"].id,
+    }
