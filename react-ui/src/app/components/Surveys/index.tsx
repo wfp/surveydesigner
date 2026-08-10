@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -225,6 +225,7 @@ function Surveys({
   });
   const watchAttributes = watch("attributes", []);
   const watchOrganizations = watch("organizations", []);
+  const organizationScopeChanged = useRef(false);
 
   const typeOptions = useMemo(() => {
     const filtered = surveyTypes.filter(
@@ -292,12 +293,15 @@ function Surveys({
   useEffect(() => {
     next((proceed) => {
       handleSubmit((data) => {
-        const criteriaChanged = haveModuleCriteriaChanged(surveyForm, data);
+        const criteriaChanged =
+          organizationScopeChanged.current ||
+          haveModuleCriteriaChanged(surveyForm, data);
         const surveyData = criteriaChanged
           ? clearModuleDependentSurveyData(data)
           : data;
 
         if (criteriaChanged) {
+          organizationScopeChanged.current = false;
           dispatch(modulesActions.clearModules());
           dispatch(indicatorAreasActions.clearIndicatorAreas());
           dispatch(indicatorsActions.clearIndicators());
@@ -360,14 +364,14 @@ function Surveys({
   }, [surveys.data]);
 
   const updateOrganizationDependencies = (
-    nextOrganizations: OrganizationOption[] = getValues("organizations") || [],
-    preserveDefinitions = false,
+    nextOrganizations: OrganizationOption[],
+    preserveDefinitions?: boolean,
     categoryOverride?: SurveyCategory | null,
   ) => {
-    const nextSurveyData = {
+    const nextSurveyData = clearModuleDependentSurveyData({
       ...getValues(),
       organizations: nextOrganizations,
-    };
+    });
 
     if (categoryOverride !== undefined) {
       nextSurveyData.category = categoryOverride;
@@ -386,6 +390,8 @@ function Surveys({
       setValue("attributes", []);
     }
 
+    organizationScopeChanged.current = true;
+    reset(nextSurveyData);
     dispatch(surveyFormActions.setSurveyData(nextSurveyData));
     dispatch(modulesActions.clearModules());
     dispatch(indicatorAreasActions.clearIndicatorAreas());

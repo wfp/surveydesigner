@@ -7,9 +7,9 @@ function organizationScopeKey(organizations: { id: number }[]) {
   return organizations.map(({ id }) => id).join(",");
 }
 
-export const fetchSurveys = createAppAsyncThunk(
+export const fetchSurveys = createAppAsyncThunk<void, boolean | undefined>(
   "surveys/FETCH_SURVEYS",
-  (preserveCurrentData = false, { dispatch, getState }) => {
+  (preserveCurrentData, { dispatch, getState }) => {
     const requestedOrganizationScope = organizationScopeKey(
       getState().surveyForm.organizations,
     );

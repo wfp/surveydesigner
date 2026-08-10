@@ -36,6 +36,7 @@ class TestSavedSurveyApi:
         indicator_1,
     ):
         survey_category_1.organizations.add(organization_1)
+        survey_type_1.organizations.add(organization_1)
         survey_category_1.save()
         indicator_area = IndicatorArea.objects.create(
             name="CreateSavedSurveyArea",
@@ -150,8 +151,10 @@ class TestSavedSurveyApi:
             "survey_category": saved_survey_1.survey_category.id,
             "organizations": [organization_1.id],
             "submodules": [saved_survey_1.submodules.first().id],
+            "submodules_order": expected_submodules_order,
+            "indicators_order": expected_indicators_order,
         }
-        response = api_client_authenticated_admin.put(url, data=data)
+        response = api_client_authenticated_admin.put(url, data=data, format="json")
         assert response.status_code == 200
 
         saved_survey_1.refresh_from_db()
