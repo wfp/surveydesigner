@@ -704,6 +704,8 @@ def xls_form_data(root_question_1, root_question_2, calculation_1, repeat_sectio
 def saved_survey_1(
     organization_1, admin, indicator_1, submodule_1, submodule_2, survey_type_1
 ):
+    survey_type_1.category.organizations.add(organization_1)
+    survey_type_1.organizations.add(organization_1)
     indicator_area = IndicatorArea.objects.create(
         name="SavedSurveyArea1",
         label="Saved Survey Area 1",
