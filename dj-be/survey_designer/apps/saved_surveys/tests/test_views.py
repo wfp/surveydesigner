@@ -63,9 +63,14 @@ class TestSavedSurveyApi:
         assert response.status_code == 201
         saved_survey = SavedSurvey.objects.first()
         assert saved_survey.name == "Test Survey"
-        assert saved_survey.modules_order == [submodule_2.module_id, submodule_1.module_id]
+        assert saved_survey.modules_order == [
+            submodule_2.module_id,
+            submodule_1.module_id,
+        ]
         assert saved_survey.indicator_areas_order == [indicator_area.id]
-        assert saved_survey.indicators_order == {str(indicator_area.id): [indicator_1.id]}
+        assert saved_survey.indicators_order == {
+            str(indicator_area.id): [indicator_1.id]
+        }
         submodule_mapping = SubQuestionSubmodule.objects.filter(
             saved_survey=saved_survey.id
         )
@@ -133,11 +138,14 @@ class TestSavedSurveyApi:
         assert response.status_code == 200
         saved_survey_1.refresh_from_db()
         assert saved_survey_1.name == "Test Survey"
-        assert list(
-            saved_survey_1.submodule_orders.order_by("order").values_list(
-                "submodule_id", flat=True
+        assert (
+            list(
+                saved_survey_1.submodule_orders.order_by("order").values_list(
+                    "submodule_id", flat=True
+                )
             )
-        ) == expected_submodules_order
+            == expected_submodules_order
+        )
         assert saved_survey_1.modules_order == expected_modules_order
         assert saved_survey_1.indicator_areas_order == expected_indicator_areas_order
         assert saved_survey_1.indicators_order == expected_indicators_order
@@ -159,11 +167,14 @@ class TestSavedSurveyApi:
 
         saved_survey_1.refresh_from_db()
         assert saved_survey_1.name == "Test Survey 2"
-        assert list(
-            saved_survey_1.submodule_orders.order_by("order").values_list(
-                "submodule_id", flat=True
+        assert (
+            list(
+                saved_survey_1.submodule_orders.order_by("order").values_list(
+                    "submodule_id", flat=True
+                )
             )
-        ) == expected_submodules_order
+            == expected_submodules_order
+        )
         assert saved_survey_1.modules_order == expected_modules_order
         assert saved_survey_1.indicator_areas_order == expected_indicator_areas_order
         assert saved_survey_1.indicators_order == expected_indicators_order

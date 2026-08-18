@@ -47,9 +47,10 @@ class TestSubmodulesOrderValidator:
         validator.process()
 
         assert submodule_1 in validator.dependencies_result
-        assert submodule_3 in validator.dependencies_result[submodule_1][
-            "related_submodules"
-        ]
+        assert (
+            submodule_3
+            in validator.dependencies_result[submodule_1]["related_submodules"]
+        )
         assert [
             dependency.name
             for dependency in validator.dependencies_result[submodule_1]["dependencies"]

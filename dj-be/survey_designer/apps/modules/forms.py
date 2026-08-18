@@ -10,6 +10,7 @@ from modules.models import (
     SubmoduleRequiredGroup,
 )
 from questions.models import RecallPeriod, Suffix
+from questions.recall_period_ordering import order_recall_period_queryset
 from surveys.models import SurveyAttribute, SurveyCategory, SurveyMode, SurveyType
 from surveys.serializers import SurveyCategoryWithoutIndicatorsSerializer
 
@@ -210,16 +211,20 @@ class SubmoduleRequiredGroupInlineFormSet(BaseInlineFormSet):
                 )
             )
             form.fields["required_recall_period"].queryset = (
-                RecallPeriod.objects.filter(
-                    id__in=self.instance.root_questions.values_list(
-                        "sub_questions__recall_period", flat=True
+                order_recall_period_queryset(
+                    RecallPeriod.objects.filter(
+                        id__in=self.instance.root_questions.values_list(
+                            "sub_questions__recall_period", flat=True
+                        )
                     )
                 )
             )
         else:
             form.fields["required_suffix"].queryset = Suffix.objects.none()
             form.fields["required_nested_suffix"].queryset = Suffix.objects.none()
-            form.fields["required_recall_period"].queryset = RecallPeriod.objects.none()
+            form.fields["required_recall_period"].queryset = (
+                order_recall_period_queryset(RecallPeriod.objects.none())
+            )
 
 
 class SubmoduleMappingSurveyCategoryInlineFormSet(BaseInlineFormSet):

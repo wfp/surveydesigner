@@ -16,7 +16,18 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from lxml import html
 from modules.models import Module, Submodule
-from questions.admin import RepeatSectionAdmin, RootQuestionTranslationInline
+from questions.admin import (
+    RecallPeriodAdmin,
+    RepeatSectionAdmin,
+    RootQuestionTranslationInline,
+    SubQuestionAdmin,
+    SubQuestionProxyAdmin,
+)
+from questions.admin_filters import (
+    BaseQuestionRecallPeriodListFilter,
+    QuestionRecallPeriodFilter,
+    RecallPeriodListFilter,
+)
 from questions.const import QuestionType
 from questions.models import (
     BaseQuestion,
@@ -554,6 +565,146 @@ def test_recall_period_search_view(logged_admin_client, recall_period_1):
     _assert_admin_search_works(logged_admin_client, RecallPeriod, recall_period_1.name)
 
 
+def test_recall_period_ordering_is_shared_across_admin_forms_filters_and_changelist(
+    request_factory, admin
+):
+    for name in ("_5Y", "_2M", "_10D", "_7D", "_Tot", "_1M"):
+        RecallPeriod.objects.create(name=name, description=name)
+
+    request = request_factory.get("/")
+    request.user = admin
+    proxy_admin = SubQuestionProxyAdmin(SubQuestionProxy, AdminSite())
+    proxy_form = proxy_admin.get_form(request)()
+    proxy_choices = list(proxy_form.fields["recall_period"].choices)
+    assert proxy_choices[0][0] == ""
+    assert [label for _, label in proxy_choices[1:]] == [
+        "_7D",
+        "_10D",
+        "_1M",
+        "_2M",
+        "_5Y",
+        "_Tot",
+    ]
+
+    active_filter = QuestionRecallPeriodFilter(request, {}, BaseQuestion, None)
+    active_names = [name for _, name in active_filter.lookups(request, None)]
+    assert active_names == ["_7D", "_10D", "_1M", "_2M", "_5Y", "_Tot"]
+
+    inactive_names = [
+        recall_period.name
+        for recall_period in BaseQuestionRecallPeriodListFilter.get_queryset_for_field(
+            None, None
+        )
+    ]
+    assert inactive_names == active_names
+
+    autocomplete_names = [
+        recall_period.name
+        for recall_period in RecallPeriodListFilter.get_queryset_for_field(None, None)
+    ]
+    assert autocomplete_names == active_names
+
+    recall_period_admin = RecallPeriodAdmin(RecallPeriod, AdminSite())
+    changelist_names = [
+        recall_period.name
+        for recall_period in recall_period_admin.get_queryset(request)
+    ]
+    assert changelist_names == active_names
+    assert hasattr(recall_period_admin.get_ordering(request)[0], "resolve_expression")
+    assert hasattr(
+        SubQuestionAdmin.recall_period_url.admin_order_field, "resolve_expression"
+    )
+
+
+def test_recall_period_changelist_request_orders_paginated_results(
+    logged_admin_client, monkeypatch
+):
+    for name in ("_5Y", "_2M", "_10D", "_7D", "_Tot", "_1M"):
+        RecallPeriod.objects.create(name=name, description=name)
+
+    monkeypatch.setattr(RecallPeriodAdmin, "list_per_page", 2)
+    response = logged_admin_client.get(
+        get_model_admin_base_url(RecallPeriod, "_changelist"), {"p": "1"}
+    )
+
+    assert response.status_code == 200
+    changelist = response.context["cl"]
+    assert changelist.result_count == 6
+    assert changelist.paginator.num_pages == 3
+    assert [period.name for period in changelist.result_list] == ["_7D", "_10D"]
+
+
+def test_recall_period_autocomplete_request_orders_results(logged_admin_client):
+    for name in ("_5Y", "_2M", "_10D", "_7D", "_Tot", "_1M"):
+        RecallPeriod.objects.create(name=name, description=name)
+
+    endpoint = reverse("admin:autocomplete")
+    response = logged_admin_client.get(
+        endpoint,
+        {
+            "app_label": "questions",
+            "model_name": "subquestion",
+            "field_name": "recall_period",
+            "term": "",
+        },
+    )
+
+    assert response.status_code == 200
+    assert [result["text"] for result in response.json()["results"]] == [
+        "_7D",
+        "_10D",
+        "_1M",
+        "_2M",
+        "_5Y",
+        "_Tot",
+    ]
+    assert response.json()["pagination"]["more"] is False
+
+
+def test_sub_question_recall_period_column_sort_request_uses_semantic_order(
+    logged_admin_client, root_question_1
+):
+    names = ("_5Y", "_2M", "_10D", "_7D", "_Tot", "_1M")
+    periods = [
+        RecallPeriod.objects.create(name=name, description=name) for name in names
+    ]
+    for period in periods:
+        SubQuestion.objects.create(
+            root_question=root_question_1,
+            recall_period=period,
+            label=period.name,
+        )
+
+    changelist_url = get_model_admin_base_url(SubQuestion, "_changelist")
+    initial_response = logged_admin_client.get(
+        changelist_url, {"root_question__pk": root_question_1.id}
+    )
+    assert initial_response.status_code == 200
+    recall_period_order_index = initial_response.context["cl"].list_display.index(
+        "recall_period_url"
+    )
+
+    response = logged_admin_client.get(
+        changelist_url,
+        {
+            "root_question__pk": root_question_1.id,
+            "o": str(recall_period_order_index),
+        },
+    )
+
+    assert response.status_code == 200
+    assert [
+        question.recall_period.name for question in response.context["cl"].result_list
+    ] == [
+        "_7D",
+        "_10D",
+        "_1M",
+        "_2M",
+        "_5Y",
+        "_Tot",
+    ]
+
+
 def test_suffix_list_view(
     logged_admin_client, sub_question_1, sub_question_3, sub_question_4
 ):
@@ -614,6 +765,55 @@ def test_root_question_admin_edit_view_orders_sub_question_suffixes_alphabetical
 
     assert [name for name in suffix_names if name in expected_names] == expected_names
     assert [name for name in suffix_2_names if name in expected_names] == expected_names
+
+
+def test_root_question_admin_edit_view_orders_sub_question_recall_periods(
+    logged_admin_client, root_question_1, sub_question_1
+):
+    recall_period_names = [
+        "_5Y",
+        "_2M",
+        "_7D",
+        "_1M",
+        "_6M",
+        "_Tot",
+        "_3M",
+        "_1Y",
+        "_10D",
+        "_0D",
+    ]
+    for name in recall_period_names:
+        RecallPeriod.objects.create(name=name, description=f"{name} description")
+
+    response = logged_admin_client.get(
+        get_model_admin_base_url(RootQuestion, "_change", [root_question_1.id])
+    )
+
+    assert response.status_code == 200
+
+    tree = html.fromstring(response.content)
+    recall_period_select = next(
+        select
+        for select in tree.xpath("//select")
+        if (select.get("id") or "").startswith("id_sub_questions-")
+        and (select.get("id") or "").endswith("-recall_period")
+        and "__prefix__" not in (select.get("id") or "")
+    )
+
+    options = recall_period_select.xpath("./option")
+    assert options[0].get("value") == ""
+    assert [option.text_content().strip() for option in options[1:]] == [
+        "_7D",
+        "_10D",
+        "_1M",
+        "_2M",
+        "_3M",
+        "_6M",
+        "_1Y",
+        "_5Y",
+        "_0D",
+        "_Tot",
+    ]
 
 
 def test_repeat_section_list_view(logged_admin_client, repeat_section_1):

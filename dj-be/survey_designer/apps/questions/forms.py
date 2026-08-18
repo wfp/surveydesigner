@@ -26,6 +26,7 @@ from questions.models import (
     SubQuestion,
     Suffix,
 )
+from questions.recall_period_ordering import order_recall_period_field
 
 
 def _user_has_change_permission(user, obj):
@@ -52,6 +53,10 @@ class SubQuestionAdminModelForm(ModelForm):
             suffix_field = self.fields.get(field_name)
             if suffix_field:
                 suffix_field.queryset = suffix_field.queryset.order_by("name")
+
+        recall_period_field = self.fields.get("recall_period")
+        if recall_period_field:
+            order_recall_period_field(recall_period_field)
 
         try:
             self.fields["constraint"].widget.attrs["class"] = "sub_question_constraint"
@@ -341,6 +346,12 @@ class NestedSuffixForm(ModelForm):
 
 class SubQuestionProxyForm(ModelForm):
     root_question_ids = forms.CharField(widget=forms.HiddenInput(), required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        recall_period_field = self.fields.get("recall_period")
+        if recall_period_field:
+            order_recall_period_field(recall_period_field)
 
     def clean(self):
         super().clean()

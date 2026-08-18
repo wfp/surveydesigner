@@ -89,7 +89,9 @@ class IndicatorsImport(BaseImport):
             indicator_label = data["indicator_label"]
             question_name = data["question_name"]
             if skip_saving:
-                indicator = Indicator.objects.filter(name__iexact=indicator_name).first()
+                indicator = Indicator.objects.filter(
+                    name__iexact=indicator_name
+                ).first()
                 if not indicator:
                     self.log_change(Indicator, indicator_name, create=True)
                     continue
