@@ -8,9 +8,21 @@ from django.contrib.admin.widgets import (
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.templatetags.static import static
 from django.urls import reverse
-from modules.admin import IndicatorAdmin, ModuleAdmin, SubmoduleAdmin
+from modules.admin import (
+    IndicatorAdmin,
+    ModuleAdmin,
+    SubmoduleAdmin,
+    SubmoduleRequiredGroupInline,
+)
 from modules.factories import ModuleFactory, SubmoduleFactory
-from modules.models import Indicator, IndicatorArea, Module, Submodule
+from modules.models import (
+    Indicator,
+    IndicatorArea,
+    Module,
+    Submodule,
+    SubmoduleRequiredGroup,
+)
+from questions.models import RecallPeriod, SubQuestion
 
 
 def _assert_admin_search_works(logged_admin_client, model, expected_text):
@@ -146,6 +158,45 @@ class TestSubmoduleAdmin:
         submodule.question_count = 12345
         response = submodule_admin.question_list_button(submodule)
         assert "12345" in response
+
+    def test_required_recall_period_inline_uses_semantic_order(
+        self, root_question_1, request_factory, admin_site, admin
+    ):
+        names = ["_5Y", "_2M", "_10D", "_7D", "_Tot", "_1M"]
+        periods = [
+            RecallPeriod.objects.create(name=name, description=name) for name in names
+        ]
+        for recall_period in periods:
+            SubQuestion.objects.create(
+                root_question=root_question_1,
+                recall_period=recall_period,
+                label=recall_period.name,
+            )
+
+        required_group = SubmoduleRequiredGroup.objects.create(
+            submodule=root_question_1.submodule.first(),
+            required_recall_period=periods[0],
+        )
+        request = request_factory.get("/")
+        request.user = admin
+        inline = SubmoduleRequiredGroupInline(Submodule, admin_site)
+        formset_class = inline.get_formset(request, required_group.submodule)
+        formset = formset_class(
+            instance=required_group.submodule,
+            queryset=SubmoduleRequiredGroup.objects.filter(pk=required_group.pk),
+        )
+
+        field = formset.forms[0].fields["required_recall_period"]
+        choices = list(field.choices)
+        assert choices[0][0] == ""
+        assert [label for _, label in choices[1:]] == [
+            "_7D",
+            "_10D",
+            "_1M",
+            "_2M",
+            "_5Y",
+            "_Tot",
+        ]
 
 
 class TestIndicatorAreaAdmin:

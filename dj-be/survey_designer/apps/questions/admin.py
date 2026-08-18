@@ -80,6 +80,10 @@ from questions.models import (
     SubQuestionTranslation,
     Suffix,
 )
+from questions.recall_period_ordering import (
+    order_recall_period_queryset,
+    recall_period_ordering_expression,
+)
 from questions.services import QuestionsExport
 from questions.views import BaseQuestionAutocomplete
 
@@ -630,10 +634,15 @@ class RecallPeriodAdmin(
     )
     search_fields = ("name", "description")
 
+    def get_ordering(self, request):
+        return (recall_period_ordering_expression("name"), "pk")
+
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        return queryset.annotate(
-            question_count=models.Count("sub_questions__root_question")
+        return order_recall_period_queryset(
+            queryset.annotate(
+                question_count=models.Count("sub_questions__root_question")
+            )
         )
 
     def has_change_permission(self, request, obj=None):
@@ -906,7 +915,7 @@ class SubQuestionAdmin(
 
     @admin.display(
         description="Recall Period",
-        ordering="recall_period__name",
+        ordering=recall_period_ordering_expression("recall_period__name"),
     )
     def recall_period_url(self, obj):
         if not obj.recall_period_id:

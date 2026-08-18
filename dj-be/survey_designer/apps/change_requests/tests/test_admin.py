@@ -40,7 +40,9 @@ def test_approve_button_renders_valid_anchor(
     change_request_1,
     admin,
 ):
-    request = request_factory.get(reverse("admin:change_requests_changerequest_changelist"))
+    request = request_factory.get(
+        reverse("admin:change_requests_changerequest_changelist")
+    )
     request.user = admin
     change_request_admin.request = request
 
