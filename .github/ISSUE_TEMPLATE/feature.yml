@@ -1,7 +1,8 @@
 name: 🚀 Feature Request
 description: Suggest a new feature or improvement
-title: "feat: <title>"
+title: "<Type your feature request>"
 labels: ["enhancement"]
+type: ["feature"]
 body:
   - type: input
     id: parent-epic
@@ -26,7 +27,7 @@ body:
   - type: textarea
     id: user-story
     attributes:
-      label: 📖 User Story
+      label: 🚀 Feature Details
       description: What is the goal of this feature?
       placeholder: |
         As a [user/admin/developer]
