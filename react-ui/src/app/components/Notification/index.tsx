@@ -10,6 +10,9 @@ function Notification() {
   );
   const dispatch = useAppDispatch();
   if (show && kind) {
+    const isTextMessage =
+      typeof msg === "string" || typeof msg === "number" || !msg;
+
     return (
       <div style={{ position: "fixed", bottom: 20, right: 20, zIndex: 1 }}>
         <Callout
@@ -17,14 +20,16 @@ function Notification() {
           kind={kind}
           lowContrast
           statusIconDescription=""
-          subtitle={msg ?? ""}
+          subtitle={isTextMessage ? (msg ?? "") : ""}
           title={title ?? ""}
           onCloseButtonClick={() =>
             dispatch(notificationsActions.clearNotification())
           }
           role="alert"
           isDismissible={true}
-        />
+        >
+          {!isTextMessage && msg}
+        </Callout>
       </div>
     );
   }

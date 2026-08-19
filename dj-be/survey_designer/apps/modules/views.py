@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 import uuid
 import zipfile
@@ -69,6 +70,8 @@ from rest_framework.viewsets import ModelViewSet
 from rq.exceptions import NoSuchJobError
 from rq.job import Job
 from surveys.models import Survey, SurveyType
+
+logger = logging.getLogger(__name__)
 
 
 @job("generate-doc")
@@ -182,17 +185,29 @@ class UploadXLSForm(GenericAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = UploadXLSFormSerializer
 
-    def _handle_bad_response(self, response):
+    def _get_response_error_details(self, response):
         try:
-            details = response.json()
-        except JSONDecodeError:
-            details = {}
+            return response.json()
+        except (JSONDecodeError, ValueError):
+            return {"response": response.text[:2000] if response.text else ""}
+
+    def _handle_bad_response(self, response, service_name, action):
+        details = self._get_response_error_details(response)
+        logger.warning(
+            "%s publish failed while trying to %s. status=%s url=%s details=%s",
+            service_name,
+            action,
+            response.status_code,
+            response.url,
+            details,
+        )
 
         raise ValidationError(
             detail={
-                "message": "Error Occurred",
+                "message": f"{service_name} rejected the survey while trying to {action}.",
                 "details": details,
                 "code": response.status_code,
+                "service": service_name,
             }
         )
 
@@ -206,7 +221,7 @@ class UploadXLSForm(GenericAPIView):
         )
 
         if not response.ok:
-            self._handle_bad_response(response)
+            self._handle_bad_response(response, "Kobo", "create the form asset")
 
         data = response.json()
         uid = data["uid"]
@@ -219,7 +234,9 @@ class UploadXLSForm(GenericAPIView):
         )
 
         if not upload_response.ok:
-            self._handle_bad_response(upload_response)
+            self._handle_bad_response(
+                upload_response, "Kobo", "import the generated XLSForm"
+            )
 
         preview_url = f"https://kobo.humanitarianresponse.info/#/forms/{uid}/landing"
 
@@ -233,7 +250,10 @@ class UploadXLSForm(GenericAPIView):
         )
 
         if not response.ok:
-            self._handle_bad_response(response)
+            service_name = "Moda" if site.is_moda else "Ona"
+            self._handle_bad_response(
+                response, service_name, "upload the generated XLSForm"
+            )
 
         data = response.json()
 
@@ -275,10 +295,18 @@ class UploadXLSForm(GenericAPIView):
             try:
                 field_file.open("rb")
             except FileNotFoundError:
+                logger.warning(
+                    "Moda metadata upload failed because choices file is missing. file=%s",
+                    file_name,
+                )
                 raise ValidationError(
                     {"message": f"Choices file '{file_name}' could not be found."}
                 )
             except Exception as exc:
+                logger.exception(
+                    "Moda metadata upload failed while opening choices file. file=%s",
+                    file_name,
+                )
                 raise ValidationError(
                     {
                         "message": f"Unable to open choices file '{file_name}' for Moda metadata upload: {exc}"
@@ -309,16 +337,21 @@ class UploadXLSForm(GenericAPIView):
         return uploaded_files
 
     def _handle_moda_metadata_error(self, response, file_name):
-        try:
-            details = response.json()
-        except JSONDecodeError:
-            details = {}
+        details = self._get_response_error_details(response)
+        logger.warning(
+            "Moda metadata upload failed. status=%s url=%s file=%s details=%s",
+            response.status_code,
+            response.url,
+            file_name,
+            details,
+        )
 
         raise ValidationError(
             detail={
                 "message": f"Failed to upload metadata file '{file_name}' to Moda.",
                 "details": details,
                 "code": response.status_code,
+                "service": "Moda",
             }
         )
 
@@ -351,6 +384,15 @@ class UploadXLSForm(GenericAPIView):
         project_id = data.get("project_id")
 
         api_configuration = self.request.user.api_keys.filter(id=api_key_id).first()
+        if not api_configuration or not api_configuration.site:
+            raise ValidationError(
+                {
+                    "message": "The selected publishing site is not configured.",
+                    "details": {
+                        "site": "Select a configured API key before publishing."
+                    },
+                }
+            )
         site = api_configuration.site
 
         if site.is_ona and not project_id:
@@ -374,7 +416,7 @@ class UploadXLSForm(GenericAPIView):
         if site.is_ona:
             return self.handle_ona(site, url, xlsx_form, xlsx_file, token)
 
-        return ValidationError({"message": "Site is not configured."})
+        raise ValidationError({"message": "Site is not configured."})
 
 
 generate_doc_form_response = OpenApiResponse(
