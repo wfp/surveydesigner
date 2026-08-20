@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
+import { faChevronDown } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Button } from "@wfp/react";
 import { langFlags } from "./flags";
 import { languages, onChangeLanguage, getUserLanguage } from "../../utils/i18n";
@@ -28,12 +30,29 @@ export function LanguageDropdown() {
         kind="ghost"
         small
         icon={CurrentFlag ? React.createElement(CurrentFlag) : undefined}
-        iconReverse
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="listbox"
+        aria-label="Select language"
       >
-        {currentLabel}
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.375rem",
+          }}
+        >
+          {currentLabel}
+          <FontAwesomeIcon
+            icon={faChevronDown}
+            aria-hidden="true"
+            style={{
+              fontSize: "0.75rem",
+              transform: open ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 160ms ease",
+            }}
+          />
+        </span>
       </Button>
       {open && (
         <ul
