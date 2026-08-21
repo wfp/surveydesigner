@@ -64,13 +64,15 @@ class SubmodulesOrderValidator:
     def get_available_submodules_by_root_question(self):
         if self._available_submodules_by_root_question is None:
             related_submodules = defaultdict(set)
-            all_submodules = Submodule.objects.filter(
-                id__in=self.all_submodule_ids
-            ).exclude(id__in=self.submodule_ids).prefetch_related(
-                Prefetch(
-                    "root_questions",
-                    queryset=RootQuestion.objects.only("id"),
-                    to_attr="prefetched_root_questions",
+            all_submodules = (
+                Submodule.objects.filter(id__in=self.all_submodule_ids)
+                .exclude(id__in=self.submodule_ids)
+                .prefetch_related(
+                    Prefetch(
+                        "root_questions",
+                        queryset=RootQuestion.objects.only("id"),
+                        to_attr="prefetched_root_questions",
+                    )
                 )
             )
             for submodule in all_submodules:

@@ -15,6 +15,7 @@ from questions.models import (
     SubQuestion,
     Suffix,
 )
+from questions.recall_period_ordering import order_recall_period_queryset
 
 
 class SubmoduleFilter(AutocompleteFilter):
@@ -61,6 +62,10 @@ class RecallPeriodListFilter(AutocompleteFilter):
     field_name = "recall_period"
     parameter_name = "recall_period__pk"
     rel_model = SubQuestion
+
+    @staticmethod
+    def get_queryset_for_field(model, name):
+        return order_recall_period_queryset(RecallPeriod.objects.all())
 
 
 class RootQuestionListFilter(AutocompleteFilter):
@@ -217,7 +222,7 @@ class BaseQuestionRecallPeriodListFilter(AutocompleteFilter):
 
     @staticmethod
     def get_queryset_for_field(model, name):
-        return RecallPeriod.objects.all()
+        return order_recall_period_queryset(RecallPeriod.objects.all())
 
     def queryset(self, request, queryset):
         if self.value():
@@ -383,7 +388,8 @@ class QuestionRecallPeriodFilter(SimpleListFilter):
     template = "admin/dropdown_filter.html"
 
     def lookups(self, request, model_admin):
-        return ((q.id, q.name) for q in RecallPeriod.objects.all())
+        recall_periods = order_recall_period_queryset(RecallPeriod.objects.all())
+        return ((q.id, q.name) for q in recall_periods)
 
     def queryset(self, request, queryset):
         if self.value():
