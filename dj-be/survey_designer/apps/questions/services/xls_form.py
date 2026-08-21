@@ -1,9 +1,12 @@
+import datetime
 import enum
 import os
 import secrets
 import string
 
+from django.core.exceptions import ValidationError
 from django.db.models import Prefetch, Q
+from django.utils import timezone
 from modules.models import (
     Indicator,
     Module,
@@ -27,6 +30,7 @@ from questions.models import (
     SubQuestion,
     SubQuestionTranslation,
 )
+from survey_designer import ___version___ as SURVEY_DESIGNER_VERSION
 
 
 class XLSForm:
@@ -51,6 +55,13 @@ class XLSForm:
     )
     LANGUAGE_COLUMNS = ("label", "hint", "constraint_message", "required_message")
     METADATA = ("start", "end", "today", "deviceid")
+    SURVEY_DESIGNER_GENERATED_BY = "survey_designer"
+    SURVEY_DESIGNER_METADATA_FIELD_NAMES = (
+        "sd_metadata_generated_by",
+        "sd_metadata_export_id",
+        "sd_metadata_exported_at",
+        "sd_metadata_generator_version",
+    )
     ENGLISH_LANGUAGES = {
         "en": "English",
         "fr": "French",
@@ -73,7 +84,12 @@ class XLSForm:
     ):
         self.name = name
         self.protected = protected
-        self.id_name = secrets.token_urlsafe()
+        self.form_version = self.get_form_version()
+        self.id_name = (
+            f"surveydesigner{self.form_version}_{secrets.token_urlsafe(nbytes=8)}"
+        )
+        self.export_id = self.id_name
+        self.exported_at = self.get_utc_timestamp()
         self.language_values = languages or ()
         self.languages = [
             (language, self.ENGLISH_LANGUAGES.get(language, language))
@@ -253,6 +269,75 @@ class XLSForm:
     def increment_row_index(self):
         self.current_row_index += 1
 
+    @staticmethod
+    def get_utc_timestamp():
+        return (
+            timezone.now()
+            .astimezone(datetime.timezone.utc)
+            .replace(microsecond=0)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
+
+    @staticmethod
+    def get_generator_version():
+        version = str(SURVEY_DESIGNER_VERSION or "dev")
+        if version.startswith("survey-designer-"):
+            return version
+        if version.startswith("v"):
+            return f"survey-designer-{version}"
+        return f"survey-designer-v{version}"
+
+    @staticmethod
+    def get_form_version():
+        version = str(SURVEY_DESIGNER_VERSION or "dev").replace(".", "")
+        if not version.startswith("v"):
+            version = f"v{version}"
+        return f"_{version}"
+
+    def get_survey_designer_metadata(self):
+        return (
+            (
+                self.SURVEY_DESIGNER_METADATA_FIELD_NAMES[0],
+                self.SURVEY_DESIGNER_GENERATED_BY,
+            ),
+            (self.SURVEY_DESIGNER_METADATA_FIELD_NAMES[1], self.export_id),
+            (self.SURVEY_DESIGNER_METADATA_FIELD_NAMES[2], self.exported_at),
+            (
+                self.SURVEY_DESIGNER_METADATA_FIELD_NAMES[3],
+                self.get_generator_version(),
+            ),
+        )
+
+    def get_existing_survey_names(self):
+        name_column = self.get_column_value("name")
+        if not name_column:
+            return set()
+
+        return {
+            str(row[0])
+            for row in self.survey_sheet.iter_rows(
+                min_row=2,
+                min_col=name_column,
+                max_col=name_column,
+                values_only=True,
+            )
+            if row[0]
+        }
+
+    def validate_survey_designer_metadata_names_available(self):
+        existing_names = {name.casefold() for name in self.get_existing_survey_names()}
+        collisions = [
+            name
+            for name in self.SURVEY_DESIGNER_METADATA_FIELD_NAMES
+            if name.casefold() in existing_names
+        ]
+        if collisions:
+            raise ValidationError(
+                "Survey contains reserved Survey Designer metadata field name(s): "
+                f"{', '.join(collisions)}. Rename these questions before exporting."
+            )
+
     def fill_cell(self, column_name, value, bold=False, language: tuple = None):
         column = self.get_column_value(column_name, language=language)
 
@@ -269,10 +354,18 @@ class XLSForm:
         return cell
 
     def add_metadata(self):
+        self.validate_survey_designer_metadata_names_available()
+
         for meta in self.METADATA:
             self.increment_row_index()
             self.fill_cell("type", meta)
             self.fill_cell("name", meta)
+
+        for name, default in self.get_survey_designer_metadata():
+            self.increment_row_index()
+            self.fill_cell("type", "hidden")
+            self.fill_cell("name", name)
+            self.fill_cell("default", default)
 
     def _track_external_file(self, question):
         if question.type not in (
@@ -384,7 +477,7 @@ class XLSForm:
         self.fill_cell("type", "end_repeat", bold=True)
 
     def add_settings(self):
-        columns = ["form_title", "form_id"]
+        columns = ["form_title", "form_id", "version"]
         columns = enum.Enum("Columns", columns)
         for column in columns:
             self.settings_sheet.cell(row=1, column=column.value, value=column.name)
@@ -394,6 +487,9 @@ class XLSForm:
         )
         self.settings_sheet.cell(
             row=2, column=columns["form_id"].value, value=self.id_name
+        )
+        self.settings_sheet.cell(
+            row=2, column=columns["version"].value, value=self.form_version
         )
 
     def add_choices(self):

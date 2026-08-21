@@ -1,9 +1,13 @@
+import datetime
 import io
 import os
 import uuid
 
 import pandas as pd
+import pytest
+from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
+from openpyxl import load_workbook
 from questions.const import QuestionType
 from questions.models import ChoiceGroupFile, RootQuestion, SubQuestion, Suffix
 from questions.services import DocConversion, XLSForm, XMLConversion
@@ -45,6 +49,98 @@ def test_xls_form_generation(
         submodules_order={submodule_1.module.id: [submodule_1.id]},
     )
     assert xls_form.generate()
+
+
+def test_xls_form_includes_survey_designer_metadata(submodule_1):
+    xls_form = XLSForm(
+        name="test_name",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    workbook = load_workbook(io.BytesIO(xls_form.generate()))
+    survey_sheet = workbook["survey"]
+    headers = [cell.value for cell in survey_sheet[1]]
+    rows = {
+        row[headers.index("name")]: dict(zip(headers, row))
+        for row in survey_sheet.iter_rows(min_row=2, values_only=True)
+        if row[headers.index("name")]
+    }
+
+    expected_defaults = {
+        "sd_metadata_generated_by": "survey_designer",
+        "sd_metadata_export_id": xls_form.export_id,
+        "sd_metadata_generator_version": xls_form.get_generator_version(),
+    }
+    for name, default in expected_defaults.items():
+        assert rows[name]["type"] == "hidden"
+        assert rows[name]["default"] == default
+
+    exported_at = rows["sd_metadata_exported_at"]
+    assert exported_at["type"] == "hidden"
+    parsed_timestamp = datetime.datetime.fromisoformat(
+        exported_at["default"].replace("Z", "+00:00")
+    )
+    assert parsed_timestamp.tzinfo == datetime.timezone.utc
+    assert parsed_timestamp.microsecond == 0
+
+
+def test_xls_form_settings_include_versioned_form_id(submodule_1, mocker):
+    mocker.patch("questions.services.xls_form.SURVEY_DESIGNER_VERSION", "20260716.1")
+    token_urlsafe = mocker.patch(
+        "questions.services.xls_form.secrets.token_urlsafe",
+        return_value="K8s2pQx9aBc",
+    )
+
+    xls_form = XLSForm(
+        name="test_name",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    workbook = load_workbook(io.BytesIO(xls_form.generate()))
+    settings_rows = list(workbook["settings"].iter_rows(values_only=True))
+    settings = dict(zip(settings_rows[0], settings_rows[1]))
+
+    assert settings["form_id"] == "surveydesigner_v202607161_K8s2pQx9aBc"
+    assert settings["version"] == "_v202607161"
+    assert xls_form.export_id == settings["form_id"]
+    token_urlsafe.assert_called_once_with(nbytes=8)
+
+
+@pytest.mark.parametrize(
+    ("generator_version", "expected"),
+    [
+        ("20260716.1", "_v202607161"),
+        ("v202607161", "_v202607161"),
+        ("", "_vdev"),
+    ],
+)
+def test_get_form_version(mocker, generator_version, expected):
+    mocker.patch(
+        "questions.services.xls_form.SURVEY_DESIGNER_VERSION", generator_version
+    )
+
+    assert XLSForm.get_form_version() == expected
+
+
+def test_xls_form_rejects_survey_designer_metadata_name_collision(submodule_1):
+    reserved_name = "sd_metadata_export_id"
+    question = RootQuestion.objects.filter(submodule=submodule_1).first()
+    question.name = reserved_name
+    question.save()
+
+    xls_form = XLSForm(
+        name="test_name",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    with pytest.raises(ValidationError, match=reserved_name):
+        xls_form.generate()
 
 
 def test_xml_conversion(
