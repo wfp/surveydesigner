@@ -53,7 +53,7 @@ jobs:
 
             // If it's an Epic, ensure it has NO parent of type Epic.
             if (currentType === 'Epic') {
-              const match = body.match(/### Parent Epic\s*\n\n?#(\d+)/i);
+              const match = body.match(/^###[ \t]+(?:[\p{Extended_Pictographic}\p{Emoji_Modifier}\uFE0F\u200D]+[ \t]+)?Parent[ \t]+Epic[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]*#(\d+)\b/imu);
               if (match) {
                 await github.rest.issues.createComment({
                   owner: context.repo.owner,
@@ -74,8 +74,9 @@ jobs:
             const rule = rules[currentType];
             
             // Extract parent number
-            // Matches "### Parent ... \n\n #123" or similar from YAML form rendering
-            const parentMatch = body.match(/### Parent .*\s*\n\n?#(\d+)/i);
+            // Matches rendered issue-form headings such as "### 🚀 Parent Feature"
+            // followed by the parent issue number on the next line(s).
+            const parentMatch = body.match(/^###[ \t]+(?:[\p{Extended_Pictographic}\p{Emoji_Modifier}\uFE0F\u200D]+[ \t]+)?Parent[ \t]+[^\r\n]*\r?\n(?:[ \t]*\r?\n)*[ \t]*#(\d+)\b/imu);
             
             if (!parentMatch) {
               await github.rest.issues.createComment({
