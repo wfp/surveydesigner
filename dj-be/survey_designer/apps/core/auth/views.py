@@ -1,8 +1,14 @@
+import json
+from hmac import compare_digest
 from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import auth
-from django.http import HttpResponseRedirect
+from django.contrib.auth import get_user_model
+from django.middleware.csrf import get_token
+from django.http import HttpResponseRedirect, JsonResponse
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from django.views import View
 
 from .utils import generate_codes
@@ -75,6 +81,47 @@ class OIDCAuthenticationCallbackView(View):
                 return response
 
         return self.login_failure()
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class E2ELoginView(View):
+    http_method_names = ["post"]
+
+    def post(self, request):
+        if not settings.ENABLE_E2E_AUTH:
+            return JsonResponse({"detail": "E2E auth is disabled."}, status=404)
+
+        token = request.headers.get("X-E2E-Auth-Token", "")
+        if not compare_digest(token, settings.E2E_AUTH_TOKEN):
+            return JsonResponse({"detail": "Invalid E2E auth token."}, status=403)
+
+        try:
+            payload = json.loads(request.body.decode("utf-8") or "{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"detail": "Invalid JSON."}, status=400)
+
+        email = (payload.get("email") or "").lower()
+        allowed_emails = [value.lower() for value in settings.E2E_AUTH_EMAILS]
+        if email not in allowed_emails:
+            return JsonResponse(
+                {"detail": "Email is not enabled for E2E auth."}, status=403
+            )
+
+        User = get_user_model()
+        user, _created = User.objects.get_or_create(
+            email=email,
+            defaults={
+                "is_active": True,
+                "is_staff": email in ("admin@wfp.org", "me@me"),
+                "is_superuser": email in ("admin@wfp.org", "me@me"),
+            },
+        )
+        if not user.is_active:
+            return JsonResponse({"detail": "User is inactive."}, status=403)
+
+        auth.login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        get_token(request)
+        return JsonResponse({"email": user.email})
 
 
 class LogoutView(View):

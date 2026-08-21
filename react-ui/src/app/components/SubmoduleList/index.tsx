@@ -361,8 +361,11 @@ function SubmoduleList({
 
     const rootQuestionsCount = getRootQuestionsCount(submodules);
     const selectedQuestionsCount = selectedOptions.size
-      ? getSubQuestionsCountFromSelectedOptions(selectedOptions, submodulesMap)
-      : 0;
+      ? Math.max(
+          getSubQuestionsCountFromSelectedOptions(selectedOptions, submodulesMap),
+          subQuestions.length,
+        )
+      : subQuestions.length;
     const initialQuestionCount = rootQuestionsCount + selectedQuestionsCount;
     if (!isChecked) {
       setNumberOfQuestionsToBeGenerated(initialQuestionCount);
@@ -371,7 +374,7 @@ function SubmoduleList({
 
   useEffect(() => {
     calculateInitialNumberOfQuestions(selectAll);
-  }, [submodulesMap, selectedOptions, selectAll]);
+  }, [submodulesMap, selectedOptions, selectAll, subQuestions]);
 
   useEffect(() => {
     const { isChecked } = selectAll;

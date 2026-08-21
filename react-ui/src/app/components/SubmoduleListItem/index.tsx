@@ -97,6 +97,7 @@ function SubmoduleListItem({
           className={
             submoduleSnapshot.isDragging ? "greyBackground" : "whiteBackground"
           }
+          data-testid={`submodule-draggable-${submodule.id}`}
           {...submoduleProvidedNext.draggableProps}
           {...submoduleProvidedNext.dragHandleProps}
           ref={submoduleProvidedNext.innerRef}

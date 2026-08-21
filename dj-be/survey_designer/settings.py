@@ -26,6 +26,9 @@ ENV = environ.get("ENV", "local")
 BASE_DOMAIN = environ.get("BASE_DOMAIN", "localhost")
 
 FRONTEND_BASE_DOMAIN = environ.get("FRONTEND_BASE_DOMAIN", "http://localhost:3000")
+CORS_ALLOWED_ORIGINS = [
+    origin for origin in environ.get("CORS_ALLOWED_ORIGINS", "").split(";") if origin
+]
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
@@ -112,9 +115,9 @@ MIDDLEWARE = [
     "core.middleware.OrganizationMiddleware",
 ]
 
-CSRF_TRUSTED_ORIGINS = [
-    FRONTEND_BASE_DOMAIN,
-]
+CSRF_TRUSTED_ORIGINS = list(
+    dict.fromkeys([FRONTEND_BASE_DOMAIN, *CORS_ALLOWED_ORIGINS])
+)
 
 
 ROOT_URLCONF = "survey_designer.urls"
@@ -352,6 +355,16 @@ OIDC_USERINFO_ENDPOINT = environ.get("OIDC_USERINFO_ENDPOINT", "")
 
 IDENTITY_PROVIDER = environ.get("IDENTITY_PROVIDER", False)
 
+E2E_AUTH_TOKEN = environ.get("E2E_AUTH_TOKEN", "")
+ENABLE_E2E_AUTH = (
+    environ.get("ENABLE_E2E_AUTH", "False").lower() == "true"
+    and ENV in ("ci", "test")
+    and bool(E2E_AUTH_TOKEN)
+)
+E2E_AUTH_EMAILS = environ.get(
+    "E2E_AUTH_EMAILS", "admin@wfp.org;user@wfp.org;me@me"
+).split(";")
+
 # RQ queues definition
 RQ_QUEUES = {
     "send-email": {"URL": REDIS_URL, "DEFAULT_TIMEOUT": 500},
@@ -360,7 +373,6 @@ RQ_QUEUES = {
 }
 
 # CORS headers
-CORS_ALLOWED_ORIGINS = environ.get("CORS_ALLOWED_ORIGINS", "").split(";")
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-csrftoken",

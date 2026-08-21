@@ -20,7 +20,11 @@
     "lint": "eslint ./src/app --ext .ts,.tsx",
     "lint:fix": "eslint ./src/app --ext .ts,.tsx --fix",
     "tsc": "tsc --noEmit",
-    "translate": "pip3 install deep_translator tabulate && python3 translationcli.py && pnpm run build"
+    "translate": "pip3 install deep_translator tabulate && python3 translationcli.py && pnpm run build",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:ci": "playwright test --project=chromium",
+    "e2e:ui:happy": "playwright test e2e/tests/happy-flow.spec.ts --project=chromium --workers=1 --ui"
   },
   "dependencies": {
     "@adobe/css-tools": "4.4.0",
@@ -89,6 +93,7 @@
     "@babel/plugin-transform-runtime": "7.23.2",
     "@babel/preset-env": "7.23.2",
     "@babel/preset-react": "7.22.15",
+    "@playwright/test": "1.61.1",
     "@types/jest": "29.5.5",
     "@types/lodash": "4.14.199",
     "@types/react-beautiful-dnd": "13.1.5",

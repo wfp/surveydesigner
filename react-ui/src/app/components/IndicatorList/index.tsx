@@ -62,6 +62,7 @@ function IndicatorList({
           className={
             indicatorSnapshot.isDragging ? "greyBackground" : "whiteBackground"
           }
+          data-testid={`indicator-draggable-${indicator.id}`}
           {...indicatorProvidedNext.draggableProps}
           {...indicatorProvidedNext.dragHandleProps}
           ref={indicatorProvidedNext.innerRef}

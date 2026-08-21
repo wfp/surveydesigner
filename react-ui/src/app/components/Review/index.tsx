@@ -155,10 +155,12 @@ function Review({
     next((proceed) => {
       handleSubmit((data) => {
         data.submodules = getOrderedSubmodules(surveyForm, modulesData);
-        data.modules_order = [...modulesData.current.modules_order];
-        data.submodules_order = modulesData.current.modules_order.flatMap(
-          (moduleId) => modulesData.current.submodules_order[moduleId],
+        data.modules_order = modulesData.current.modules_order.filter((moduleId) =>
+          modulesData.current.submodules_order[moduleId].some((submoduleId) =>
+            data.submodules.includes(submoduleId),
+          ),
         );
+        data.submodules_order = data.submodules;
         data.indicator_areas_order = [
           ...modulesData.current.indicator_areas_order,
         ];
