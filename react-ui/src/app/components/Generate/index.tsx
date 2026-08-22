@@ -14,6 +14,7 @@ import { useAppDispatch, useAppSelector } from "../../redux/store";
 import { useModules } from "../../contexts/ModulesContext";
 import { fetchProjects } from "../../redux/actions/projectsActions";
 import { API, capitalize } from "../../utils";
+import { renderApiErrorMessage } from "../../utils/apiError";
 import { clearJob } from "../../redux/actions/docFetcherActions";
 import { notificationsActions } from "../../redux/reducers/notificationReducer";
 import {
@@ -96,10 +97,10 @@ function Generate({ next }: GenerateProps) {
         setUploading(false);
         dispatch(
           notificationsActions.setErrorNotification({
-            msg: `${err.response.data.message
-                ? err.response.data.message
-                : err.message
-              }`,
+            msg: renderApiErrorMessage(
+              err,
+              "The survey could not be published.",
+            ),
             title: t("generate.notification.uploadError"),
           }),
         );
@@ -110,8 +111,10 @@ function Generate({ next }: GenerateProps) {
       const err = projects.error;
       dispatch(
         notificationsActions.setErrorNotification({
-          msg: `${err.response?.data.message ? err.response.data.message : err.message
-            }`,
+          msg: renderApiErrorMessage(
+            err,
+            "Projects could not be loaded for this publishing site.",
+          ),
           title: t("generate.notification.getProjectError"),
         }),
       );

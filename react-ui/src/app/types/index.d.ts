@@ -25,5 +25,10 @@ export interface IndicatorAreaWithIndicators extends IndicatorArea {
 
 export type ApiError = AxiosError<{
   message?: string;
+  detail?: string;
+  details?: unknown;
+  code?: number;
+  service?: string;
   non_field_errors?: string[];
+  [key: string]: unknown;
 }>;

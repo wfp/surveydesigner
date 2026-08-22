@@ -19,6 +19,7 @@ import { surveyFormActions } from "../../redux/reducers/surveyFormReducer";
 import { fetchSubmodules } from "../../redux/actions/submodulesActions";
 import { submodulesActions } from "../../redux/reducers/submodulesReducer";
 import { API } from "../../utils";
+import { getApiErrorSummary } from "../../utils/apiError";
 import { useModules } from "../../contexts/ModulesContext";
 import {
   ChoiceTranslation,
@@ -115,11 +116,11 @@ function Review({
         setValue("languages", selectedLanguages);
       }
 
-      const savedMappings = selectedSurveyToEdit
-        .subquestion_submodule_mapping as unknown as Record<
-        string,
-        Array<{ id: number }>
-      >;
+      const savedMappings =
+        selectedSurveyToEdit.subquestion_submodule_mapping as unknown as Record<
+          string,
+          Array<{ id: number }>
+        >;
       const savedSubquestionIdsBySubmodule =
         getSavedSubquestionIdsBySubmodule(savedMappings);
       const selectedQuestions: SubQuestion[] = [];
@@ -354,11 +355,10 @@ function Review({
             kind="error"
             lowContrast
             statusIconDescription=""
-            subtitle={
-              APIError.response?.data.message
-                ? APIError.response.data.message
-                : APIError.message
-            }
+            subtitle={getApiErrorSummary(
+              APIError,
+              "The preview could not be generated.",
+            )}
             title="Error"
             // eslint-disable-next-line jsx-a11y/aria-role
             role="api_errors"
