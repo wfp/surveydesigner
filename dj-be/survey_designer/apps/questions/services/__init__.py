@@ -11,7 +11,6 @@ from .form_validation import (  # noqa
     failed_validation_result,
     materialize_external_files,
     validate_generated_artifact,
-    validate_xlsform,
     validate_xml_compatibility,
 )
 from .questions_export import QuestionsExport  # noqa

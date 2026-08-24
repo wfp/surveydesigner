@@ -513,28 +513,6 @@ def validate_generated_artifact(
     )
 
 
-def validate_xlsform(
-    xlsx_bytes: bytes,
-    *,
-    filename: str = "survey.xlsx",
-    external_files: Mapping[str, bytes] | None = None,
-) -> ValidationResult:
-    """Validate already-materialized XLSX bytes through the shared contract.
-
-    Endpoint code normally calls :func:`validate_generated_artifact` after the
-    generator has materialized external files.  This convenience entry point
-    keeps the service usable by workers and unit tests without introducing a
-    second conversion path.
-    """
-
-    del filename  # Reserved for future source-map diagnostics.
-    artifact = GeneratedSurveyArtifact(
-        xlsx_bytes=xlsx_bytes,
-        external_files=external_files or {},
-    )
-    return validate_generated_artifact(artifact)
-
-
 def failed_validation_result(
     issue: ValidationIssue, *, artifact_hash: str = _EMPTY_ARTIFACT_HASH
 ) -> ValidationResult:
@@ -555,6 +533,5 @@ __all__ = [
     "failed_validation_result",
     "materialize_external_files",
     "validate_generated_artifact",
-    "validate_xlsform",
     "validate_xml_compatibility",
 ]

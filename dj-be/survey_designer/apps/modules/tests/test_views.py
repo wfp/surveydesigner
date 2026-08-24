@@ -605,7 +605,7 @@ def test_preview_xls_form_with_external_media(
         "fruits.csv": ContentFile(csv_content, name="fruits.csv")
     }
 
-    mocker.patch("modules.views.get_xlsx_from_request", return_value=stub_form)
+    mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
 
     mock_successful_xml_conversion(mocker)
 
@@ -680,7 +680,7 @@ def test_preview_xls_form_rewrites_external_file_links(
         "logo.png": ContentFile(img_content, name="logo.png"),
     }
 
-    mocker.patch("modules.views.get_xlsx_from_request", return_value=stub_form)
+    mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
 
     xml_payload = (
         '<h:html xmlns:h="http://www.w3.org/1999/xhtml" '
