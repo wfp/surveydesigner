@@ -62,6 +62,20 @@ def build_stub_xls_form(external_files):
     return StubXLSForm(external_files)
 
 
+def mock_successful_xml_conversion(mocker, xml=None):
+    conversion = mocker.Mock()
+    conversion.run.return_value = xml or (
+        '<h:html xmlns:h="http://www.w3.org/1999/xhtml" '
+        'xmlns:xf="http://www.w3.org/2002/xforms">'
+        "<h:head><xf:model><xf:instance><data/></xf:instance>"
+        "</xf:model></h:head><h:body/></h:html>"
+    )
+    conversion.warnings = []
+    conversion.errors = []
+    mocker.patch("modules.views.XMLConversion", return_value=conversion)
+    return conversion
+
+
 @pytest.fixture(autouse=True)
 def selected_organization_header(
     logged_admin_client, api_client_authenticated_admin, organization_1
@@ -593,11 +607,7 @@ def test_preview_xls_form_with_external_media(
 
     mocker.patch("modules.views.get_xlsx_from_request", return_value=stub_form)
 
-    xml_conversion = mocker.Mock()
-    xml_conversion.run.return_value = "<data/>"
-    xml_conversion.warnings = []
-    xml_conversion.errors = []
-    mocker.patch("modules.views.XMLConversion", return_value=xml_conversion)
+    mock_successful_xml_conversion(mocker)
 
     saved_paths = []
 
@@ -679,11 +689,7 @@ def test_preview_xls_form_rewrites_external_file_links(
         '<h:body><h:img src="jr://images/logo.png"/></h:body>'
         "</h:html>"
     )
-    xml_conversion = mocker.Mock()
-    xml_conversion.run.return_value = xml_payload
-    xml_conversion.warnings = []
-    xml_conversion.errors = []
-    mocker.patch("modules.views.XMLConversion", return_value=xml_conversion)
+    mock_successful_xml_conversion(mocker, xml_payload)
 
     saved_contents = {}
 
@@ -896,6 +902,7 @@ def test_upload_xls_form_moda_uploads_metadata(
     fake_file = FakeFieldFile("fruits.csv", b"name,color\nbanana,yellow\n")
     stub_form = build_stub_xls_form({"fruits.csv": fake_file})
     mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
+    mock_successful_xml_conversion(mocker)
 
     upload_response = mocker.Mock()
     upload_response.ok = True
@@ -966,6 +973,7 @@ def test_upload_xls_form_moda_without_attachments(
     site = moda_api_key.site
     stub_form = build_stub_xls_form({})
     mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
+    mock_successful_xml_conversion(mocker)
 
     upload_response = mocker.Mock()
     upload_response.ok = True
@@ -1009,6 +1017,7 @@ def test_upload_xls_form_moda_metadata_failure(
 ):
     stub_form = build_stub_xls_form({"fruits.csv": FakeFieldFile("fruits.csv")})
     mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
+    mock_successful_xml_conversion(mocker)
 
     upload_response = mocker.Mock()
     upload_response.ok = True

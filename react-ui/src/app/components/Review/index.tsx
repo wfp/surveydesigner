@@ -27,10 +27,17 @@ import {
   SubQuestion,
   Submodule,
   SubmoduleWithQuestions,
+  ValidationIssue,
 } from "../../types/api";
 import { ApiError } from "../../types";
 import { ReviewProps } from "./Review.interface";
 import { getOrderedSubmodules } from "../../utils/generate";
+import {
+  formatValidationIssues,
+  getApiErrorSummary,
+  getApiErrorTitle,
+  parseApiError,
+} from "../../utils/apiError";
 import {
   getSavedSelectionsForSubmoduleItems,
   getSavedSubquestionIdsBySubmodule,
@@ -58,8 +65,8 @@ function Review({
   const [languages, setLanguages] = useState<ChoiceTranslation[]>([]);
   const [subQuestions, setSubQuestions] = useState(surveyForm.sub_questions);
   const [previewData, setPreviewData] = useState<{
-    errors: string[];
-    warnings: string[];
+    errors: Array<ValidationIssue | string>;
+    warnings: Array<ValidationIssue | string>;
   } | null>(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [APIError, setAPIError] = useState<ApiError | null>(null);
@@ -115,11 +122,11 @@ function Review({
         setValue("languages", selectedLanguages);
       }
 
-      const savedMappings = selectedSurveyToEdit
-        .subquestion_submodule_mapping as unknown as Record<
-        string,
-        Array<{ id: number }>
-      >;
+      const savedMappings =
+        selectedSurveyToEdit.subquestion_submodule_mapping as unknown as Record<
+          string,
+          Array<{ id: number }>
+        >;
       const savedSubquestionIdsBySubmodule =
         getSavedSubquestionIdsBySubmodule(savedMappings);
       const selectedQuestions: SubQuestion[] = [];
@@ -207,6 +214,7 @@ function Review({
     })
       .then((res) => {
         setPreviewData(res.data);
+        setAPIError(null);
         // eslint-disable-next-line no-console
         console.log("warnings", res.data.warnings);
         // eslint-disable-next-line no-console
@@ -216,16 +224,16 @@ function Review({
         }
         setIsPreviewing(false);
       })
-      .catch((err) => {
-        setAPIError(err);
+      .catch(async (err) => {
+        setAPIError(await parseApiError(err));
         setIsPreviewing(false);
       });
   }
 
-  function wrapMessages(messages: string[]) {
+  function wrapMessages(messages: Array<ValidationIssue | string>) {
     return (
       <div style={{ marginBottom: "1rem", marginTop: "1rem" }}>
-        {messages.map((msg) => (
+        {formatValidationIssues(messages).map((msg) => (
           // eslint-disable-next-line react/jsx-key
           <div>{msg}</div>
         ))}
@@ -354,12 +362,11 @@ function Review({
             kind="error"
             lowContrast
             statusIconDescription=""
-            subtitle={
-              APIError.response?.data.message
-                ? APIError.response.data.message
-                : APIError.message
-            }
-            title="Error"
+            subtitle={getApiErrorSummary(
+              APIError,
+              "The preview could not be generated.",
+            )}
+            title={getApiErrorTitle(APIError, "Error")}
             // eslint-disable-next-line jsx-a11y/aria-role
             role="api_errors"
             isDismissible={true}

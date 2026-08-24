@@ -1,4 +1,6 @@
-from pyxform import builder, xls2json
+import inspect
+
+from pyxform import xls2xform
 
 
 class XMLConversion:
@@ -14,17 +16,23 @@ class XMLConversion:
 
     def run(self):
         try:
-            json_survey = xls2json.parse_file_to_json(
-                "preview.xlsx", warnings=self.warnings, file_object=self.xls_file
-            )
-            survey = builder.create_survey_element_from_dict(json_survey)
-
-            xml = survey.to_xml(
-                validate=False,
-                pretty_print=True,
-                warnings=self.warnings,
-                enketo=False,
-            )
+            kwargs = {
+                "warnings": self.warnings,
+                "validate": False,
+                "pretty_print": True,
+            }
+            # pyxform 4.5.0 has no enketo parameter because its conversion
+            # path never invokes Enketo.  Keep the explicit flag for older or
+            # adapter implementations that expose it, while remaining
+            # compatible with the pinned 4.5.0 API.
+            parameters = inspect.signature(xls2xform.convert).parameters
+            if "enketo" in parameters or any(
+                parameter.kind is inspect.Parameter.VAR_KEYWORD
+                for parameter in parameters.values()
+            ):
+                kwargs["enketo"] = False
+            converted = xls2xform.convert(self.xls_file, **kwargs)
+            xml = converted.xform
             self.filter_warnings()
 
         except Exception as e:
