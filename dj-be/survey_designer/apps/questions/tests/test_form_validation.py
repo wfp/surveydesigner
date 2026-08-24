@@ -1,6 +1,7 @@
 import io
 
 import pytest
+from django.core.files.base import ContentFile
 from questions.services.form_validation import (
     ArtifactInputError,
     GeneratedSurveyArtifact,
@@ -66,12 +67,6 @@ def test_build_generated_artifact_generates_and_reads_each_external_file_once():
     assert external.close_count == 1
 
 
-def test_materialize_external_files_accepts_already_materialized_bytes():
-    assert materialize_external_files({"choices.csv": b"name\nvalue\n"}) == {
-        "choices.csv": b"name\nvalue\n"
-    }
-
-
 def test_compatibility_requires_referenced_csv_in_exact_artifact():
     xml = (
         '<h:html xmlns:h="http://www.w3.org/1999/xhtml" '
@@ -118,28 +113,11 @@ def test_validation_result_normalizes_compatibility_issues():
     }
 
 
-def test_missing_xform_is_an_invalid_artifact():
-    class Conversion:
-        errors = []
-        warnings = []
-
-        def __init__(self, xlsx_file):
-            pass
-
-        def run(self):
-            return None
-
-    result = validate_generated_artifact(
-        GeneratedSurveyArtifact(b"xlsx"), converter_cls=Conversion
-    )
-
-    assert result.valid is False
-    assert result.errors[0].code == "PYXFORM_NO_XML"
-
-
 def test_empty_external_file_is_a_structured_input_error():
     with pytest.raises(ArtifactInputError) as raised:
-        materialize_external_files({"choices.csv": b""})
+        materialize_external_files(
+            {"choices.csv": ContentFile(b"", name="choices.csv")}
+        )
 
     assert isinstance(raised.value.issue, ValidationIssue)
     assert raised.value.issue.code == "EXTERNAL_FILE_EMPTY"

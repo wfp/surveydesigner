@@ -184,8 +184,10 @@ export function getApiErrorStatus(error: unknown): number | undefined {
 
 export function getApiErrorTitle(error: unknown, fallback = "Error"): string {
   const status = getApiErrorStatus(error);
-  if (status === 400) return "Survey validation failed";
-  if (status === 503) return "Survey validation unavailable";
+  if (isValidationResult((error as any)?.response?.data)) {
+    if (status === 400) return "Survey validation failed";
+    if (status === 503) return "Survey validation unavailable";
+  }
   return fallback;
 }
 

@@ -9,22 +9,21 @@ import {
 
 describe("API error handling", () => {
   it("preserves generic nested error formatting", () => {
-    expect(
-      getApiErrorSummary({
-        response: {
-          data: {
-            message: "Request failed",
-            detail: "The survey could not be published.",
-            fields: { name: ["This field is required."] },
-          },
+    const error = {
+      response: {
+        status: 400,
+        data: {
+          message: "Request failed",
+          detail: "The survey could not be published.",
+          fields: { name: ["This field is required."] },
         },
-      }),
-    ).toContain("Request failed");
-    expect(
-      getApiErrorSummary({
-        response: { data: { fields: { name: ["This field is required."] } } },
-      }),
-    ).toContain("fields.name: This field is required.");
+      },
+    };
+
+    const summary = getApiErrorSummary(error);
+    expect(summary).toContain("Request failed");
+    expect(summary).toContain("fields.name: This field is required.");
+    expect(getApiErrorTitle(error, "Publish failed")).toBe("Publish failed");
   });
 
   it("parses structured validation JSON returned as an Axios Blob", async () => {
@@ -64,13 +63,30 @@ describe("API error handling", () => {
     const parsed = await parseApiError({
       response: {
         status: 503,
-        data: new Blob([JSON.stringify({ message: "Validator unavailable" })]),
+        data: new Blob([
+          JSON.stringify({
+            valid: false,
+            artifact_hash: "sha256:test",
+            errors: [
+              {
+                code: "VALIDATOR_UNAVAILABLE",
+                layer: "validator",
+                severity: "error",
+                message: "Validator unavailable",
+              },
+            ],
+            warnings: [],
+            validator: { pyxform: "4.5.0", compatibility: "1.0" },
+          }),
+        ]),
       },
     });
 
     expect(getApiErrorStatus(parsed)).toBe(503);
     expect(getApiErrorTitle(parsed)).toBe("Survey validation unavailable");
-    expect(getApiErrorSummary(parsed)).toBe("Validator unavailable");
+    expect(getApiErrorSummary(parsed)).toBe(
+      "[VALIDATOR_UNAVAILABLE] Validator unavailable",
+    );
   });
 
   it("formats legacy strings and structured issue locations", () => {

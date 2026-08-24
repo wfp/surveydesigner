@@ -205,7 +205,12 @@ def prepare_validated_artifact(get_serializer, request):
             status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
-    return data, xlsx_form, result, status.HTTP_200_OK
+    return (
+        data,
+        xlsx_form,
+        result,
+        (status.HTTP_200_OK if result.valid else status.HTTP_400_BAD_REQUEST),
+    )
 
 
 def _validation_response(result, http_status):
