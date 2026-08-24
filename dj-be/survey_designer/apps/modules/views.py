@@ -1,5 +1,6 @@
 import io
 import json
+import logging
 import os
 import uuid
 import zipfile
@@ -82,6 +83,8 @@ from rest_framework.viewsets import ModelViewSet
 from rq.exceptions import NoSuchJobError
 from rq.job import Job
 from surveys.models import Survey, SurveyType
+
+logger = logging.getLogger(__name__)
 
 
 @job("generate-doc")
@@ -332,17 +335,30 @@ class UploadXLSForm(GenericAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = UploadXLSFormSerializer
 
-    def _handle_bad_response(self, response):
+    def _get_response_error_details(self, response):
         try:
-            details = response.json()
-        except JSONDecodeError:
-            details = {}
+            return response.json()
+        except (JSONDecodeError, ValueError):
+            response_text = getattr(response, "text", "") or ""
+            return {"response": response_text[:2000]}
+
+    def _handle_bad_response(self, response, service_name, action):
+        details = self._get_response_error_details(response)
+        logger.warning(
+            "%s publish failed while trying to %s. status=%s url=%s details=%s",
+            service_name,
+            action,
+            response.status_code,
+            getattr(response, "url", ""),
+            details,
+        )
 
         raise ValidationError(
             detail={
-                "message": "Error Occurred",
+                "message": f"{service_name} rejected the survey while trying to {action}.",
                 "details": details,
                 "code": response.status_code,
+                "service": service_name,
             }
         )
 
@@ -356,7 +372,7 @@ class UploadXLSForm(GenericAPIView):
         )
 
         if not response.ok:
-            self._handle_bad_response(response)
+            self._handle_bad_response(response, "Kobo", "create the form asset")
 
         data = response.json()
         uid = data["uid"]
@@ -369,7 +385,9 @@ class UploadXLSForm(GenericAPIView):
         )
 
         if not upload_response.ok:
-            self._handle_bad_response(upload_response)
+            self._handle_bad_response(
+                upload_response, "Kobo", "import the generated XLSForm"
+            )
 
         preview_url = f"https://kobo.humanitarianresponse.info/#/forms/{uid}/landing"
 
@@ -383,7 +401,10 @@ class UploadXLSForm(GenericAPIView):
         )
 
         if not response.ok:
-            self._handle_bad_response(response)
+            service_name = "Moda" if site.is_moda else "Ona"
+            self._handle_bad_response(
+                response, service_name, "upload the generated XLSForm"
+            )
 
         data = response.json()
 
@@ -442,16 +463,21 @@ class UploadXLSForm(GenericAPIView):
         return uploaded_files
 
     def _handle_moda_metadata_error(self, response, file_name):
-        try:
-            details = response.json()
-        except JSONDecodeError:
-            details = {}
+        details = self._get_response_error_details(response)
+        logger.warning(
+            "Moda metadata upload failed. status=%s url=%s file=%s details=%s",
+            response.status_code,
+            getattr(response, "url", ""),
+            file_name,
+            details,
+        )
 
         raise ValidationError(
             detail={
                 "message": f"Failed to upload metadata file '{file_name}' to Moda.",
                 "details": details,
                 "code": response.status_code,
+                "service": "Moda",
             }
         )
 
@@ -485,10 +511,14 @@ class UploadXLSForm(GenericAPIView):
         project_id = data.get("project_id")
 
         api_configuration = self.request.user.api_keys.filter(id=api_key_id).first()
-        if not api_configuration:
-            return Response(
-                {"message": "Configuration for that site not found."},
-                status=status.HTTP_400_BAD_REQUEST,
+        if not api_configuration or not api_configuration.site:
+            raise ValidationError(
+                {
+                    "message": "The selected publishing site is not configured.",
+                    "details": {
+                        "site": "Select a configured API key before publishing."
+                    },
+                }
             )
         site = api_configuration.site
 
@@ -500,10 +530,14 @@ class UploadXLSForm(GenericAPIView):
 
         url = UserAPISiteAPITypes.get_upload_url(site, project_id)
 
-        if not (url or api_configuration):
-            return Response(
-                {"message": "Configuration for that site not found."},
-                status=status.HTTP_400_BAD_REQUEST,
+        if not url:
+            raise ValidationError(
+                {
+                    "message": "The selected publishing site is not configured.",
+                    "details": {
+                        "site": "Select a configured API key before publishing."
+                    },
+                }
             )
 
         token = api_configuration.get_key()
@@ -517,7 +551,7 @@ class UploadXLSForm(GenericAPIView):
             response.data.update(_validation_payload(validation))
             return response
 
-        return ValidationError({"message": "Site is not configured."})
+        raise ValidationError({"message": "Site is not configured."})
 
 
 generate_doc_form_response = OpenApiResponse(

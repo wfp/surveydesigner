@@ -16,6 +16,7 @@ import { useAppSelector } from "../../redux/store";
 import MainLayout from "../../components/Layout";
 import SensitiveTextInput from "../../components/SensitiveTextInput";
 import { API } from "../../utils";
+import { getApiErrorSummary } from "../../utils/apiError";
 import {
   UserAPIKey,
   PatchedUserAPIKeyRequest,
@@ -158,16 +159,7 @@ function ApiKeys() {
   }
 
   function getErrorMessage(error: ApiError): string {
-    const { response } = error;
-    if (response && response.data) {
-      if (response.data.message) {
-        return response.data.message;
-      }
-      if (response.data.non_field_errors) {
-        return response.data.non_field_errors.join(", ");
-      }
-    }
-    return error.message;
+    return getApiErrorSummary(error, "An unknown error occurred");
   }
 
   function handleUpdate(index: number) {

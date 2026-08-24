@@ -121,9 +121,10 @@ function Generate({ next }: GenerateProps) {
       const err = projects.error;
       dispatch(
         notificationsActions.setErrorNotification({
-          msg: `${
-            err.response?.data.message ? err.response.data.message : err.message
-          }`,
+          msg: renderApiErrorMessage(
+            err,
+            "Projects could not be loaded for this publishing site.",
+          ),
           title: t("generate.notification.getProjectError"),
         }),
       );

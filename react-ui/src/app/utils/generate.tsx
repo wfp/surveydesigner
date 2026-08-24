@@ -165,11 +165,9 @@ export const generateDoc = (
       );
     })
     .catch((err) => {
-      const errorMessage =
-        err.response?.data?.message || err.message || "Unknown error occurred";
       dispatch(
         notificationsActions.setErrorNotification({
-          msg: errorMessage,
+          msg: renderApiErrorMessage(err, "Error getting Word file."),
           title: "Error getting Word file.",
         }),
       );

@@ -8,11 +8,12 @@ import { notificationsActions } from "../../redux/reducers/notificationReducer";
 import { useAppDispatch, useAppSelector } from "../../redux/store";
 import { clearJob } from "../../redux/actions/docFetcherActions";
 import { API } from "../../utils";
+import { renderApiErrorMessage } from "../../utils/apiError";
 import { downloadFile } from "../../utils/download";
 
 function DocFetcher() {
   const [job, setJob] = useState<(DocFetcherState & { doc: string }) | null>(
-    null
+    null,
   );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const currentJobIdRef = useRef<number | null>(null);
@@ -50,11 +51,11 @@ function DocFetcher() {
       .catch((err) => {
         dispatch(
           notificationsActions.setErrorNotification({
-            msg: `${err.response.data.message
-                ? err.response.data.message
-                : err.message
-              }`,
-          })
+            msg: renderApiErrorMessage(
+              err,
+              "The generated Word file status could not be loaded.",
+            ),
+          }),
         );
         dispatch(clearJob());
       });
@@ -73,18 +74,17 @@ function DocFetcher() {
           res,
           timestamp,
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          "docx"
+          "docx",
         );
       })
       .catch((err) => {
-        const errorMessage =
-          err.response?.data?.message ||
-          err.message ||
-          "Unknown error occurred";
         dispatch(
           notificationsActions.setErrorNotification({
-            msg: `Error: ${errorMessage}`,
-          })
+            msg: renderApiErrorMessage(
+              err,
+              "The generated Word file could not be downloaded.",
+            ),
+          }),
         );
         dispatch(clearJob());
       });
@@ -101,7 +101,7 @@ function DocFetcher() {
       dispatch(
         notificationsActions.setInfoNotification({
           msg: "Your file is being generated. This may take some time.",
-        })
+        }),
       );
       intervalRef.current = setInterval(() => fetchDoc(jobId), 5000);
     } else {
@@ -142,14 +142,14 @@ function DocFetcher() {
               </a>,
               ".",
             ],
-          })
+          }),
         );
         downloadDoc(job.doc);
       }
       if (
         !!job.status &&
         ["finished", "deferred", "stopped", "canceled", "scheduled"].includes(
-          job.status
+          job.status,
         )
       ) {
         dispatch(clearJob());
