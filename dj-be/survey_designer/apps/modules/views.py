@@ -102,22 +102,6 @@ def generate_docx(data, user):
     return doc_model.id
 
 
-_VALIDATED_DATA_NOT_SET = object()
-
-
-def get_xlsx_from_request(
-    get_serializer, request, as_wb=False, validated_data=_VALIDATED_DATA_NOT_SET
-):
-    if validated_data is _VALIDATED_DATA_NOT_SET:
-        serializer = get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-        validate_generation_scope(request, data)
-    else:
-        data = validated_data
-    return get_xlsx_from_data(data, as_wb=as_wb)
-
-
 def _validation_issues_from_detail(detail, field=None):
     if isinstance(detail, dict):
         issues = []
@@ -156,11 +140,7 @@ def prepare_validated_artifact(get_serializer, request):
         return None, None, result, status.HTTP_400_BAD_REQUEST
 
     try:
-        # Passing validated_data keeps serializer and scope checks single-pass,
-        # while retaining this helper's historical patch point in tests/callers.
-        xlsx_form = get_xlsx_from_request(
-            get_serializer, request, as_wb=True, validated_data=data
-        )
+        xlsx_form = get_xlsx_from_data(data, as_wb=True)
         artifact = build_generated_artifact(xlsx_form)
     except ArtifactInputError as exc:
         return (
@@ -729,23 +709,6 @@ class PreviewXLSForm(GenericAPIView):
 
     serializer_class = GenerateXLSFormSerializer
     permission_classes = [IsAuthenticated]
-
-    @staticmethod
-    def _read_file_content(file_obj):
-        """
-        Read file content regardless of whether we received a FieldFile or ContentFile.
-        """
-        if hasattr(file_obj, "open"):
-            file_obj.open("rb")
-            try:
-                data = file_obj.read()
-            finally:
-                file_obj.close()
-        else:
-            data = file_obj.read()
-            if hasattr(file_obj, "seek"):
-                file_obj.seek(0)
-        return data
 
     @extend_schema(responses={200: preview_xls_form_response})
     def post(self, request, *args, **kwargs):
