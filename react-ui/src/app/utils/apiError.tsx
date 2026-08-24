@@ -59,7 +59,9 @@ function issueLocation(issue: ValidationIssue) {
     issue.sheet && `sheet ${issue.sheet}`,
     issue.column && `column ${issue.column}`,
     issue.row !== undefined && `row ${issue.row}`,
-    issue.field && `field ${issue.field}`,
+    issue.field &&
+      !issue.message.includes(issue.field) &&
+      `field ${issue.field}`,
   ].filter(Boolean);
 
   return location.length ? ` (${location.join(", ")})` : "";
@@ -70,7 +72,7 @@ export function formatValidationIssues(
 ): string[] {
   return issues.map((issue) => {
     if (typeof issue === "string") return issue;
-    return `[${issue.code}] ${issue.message}${issueLocation(issue)}`;
+    return `${issue.message}${issueLocation(issue)}`;
   });
 }
 

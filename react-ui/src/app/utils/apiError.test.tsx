@@ -55,7 +55,7 @@ describe("API error handling", () => {
     expect(getApiErrorStatus(parsed)).toBe(400);
     expect(getApiErrorTitle(parsed)).toBe("Survey validation failed");
     expect(getApiErrorSummary(parsed)).toContain(
-      "[PYXFORM_CONVERSION_ERROR] Unknown question type (sheet survey, column type, row 4)",
+      "Unknown question type (sheet survey, column type, row 4)",
     );
   });
 
@@ -84,12 +84,10 @@ describe("API error handling", () => {
 
     expect(getApiErrorStatus(parsed)).toBe(503);
     expect(getApiErrorTitle(parsed)).toBe("Survey validation unavailable");
-    expect(getApiErrorSummary(parsed)).toBe(
-      "[VALIDATOR_UNAVAILABLE] Validator unavailable",
-    );
+    expect(getApiErrorSummary(parsed)).toBe("Validator unavailable");
   });
 
-  it("formats legacy strings and structured issue locations", () => {
+  it("formats legacy strings and retains fields absent from issue messages", () => {
     expect(
       formatValidationIssues([
         "legacy warning",
@@ -98,12 +96,29 @@ describe("API error handling", () => {
           layer: "compatibility",
           severity: "error",
           message: "Invalid name",
-          field: "name",
+          field: "household_name",
         },
       ]),
     ).toEqual([
       "legacy warning",
-      "[XML_NAME_INVALID] Invalid name (field name)",
+      "Invalid name (field household_name)",
+    ]);
+  });
+
+  it("omits a field location duplicated in the issue message", () => {
+    expect(
+      formatValidationIssues([
+        {
+          code: "EXTERNAL_FILE_MISSING",
+          layer: "compatibility",
+          severity: "error",
+          message:
+            "External file 'test_fail_missing_choices.csv' could not be found.",
+          field: "test_fail_missing_choices.csv",
+        },
+      ]),
+    ).toEqual([
+      "External file 'test_fail_missing_choices.csv' could not be found.",
     ]);
   });
 
