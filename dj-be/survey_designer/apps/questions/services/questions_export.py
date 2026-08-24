@@ -8,7 +8,6 @@ from modules.models import Indicator, Submodule, SubmoduleRequiredGroup
 from openpyxl import Workbook
 from openpyxl.comments import Comment
 from openpyxl.styles import Font
-from openpyxl.writer.excel import save_virtual_workbook
 from questions.models import (
     BaseQuestion,
     Choice,
@@ -28,6 +27,8 @@ from questions.serializers import (
     RootQuestionExportSerializer,
     SubQuestionExportSerializer,
 )
+
+from .workbook import save_virtual_workbook
 
 
 class QuestionsExport:

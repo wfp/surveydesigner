@@ -1189,6 +1189,34 @@ export interface UserProjectListAPIResponse {
 
 export interface UploadResponse {
   preview_url?: string;
+  artifact_hash?: string;
+  warnings?: ValidationIssue[];
+  validator?: ValidationValidator;
+}
+
+export interface ValidationIssue {
+  code: string;
+  layer: string;
+  severity: "error" | "warning" | string;
+  message: string;
+  owner?: Record<string, unknown>;
+  field?: string;
+  sheet?: string;
+  column?: string;
+  row?: number;
+}
+
+export interface ValidationValidator {
+  pyxform: string;
+  compatibility: string;
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  artifact_hash: string;
+  errors: ValidationIssue[];
+  warnings: ValidationIssue[];
+  validator: ValidationValidator;
 }
 
 export interface SuffixDict {

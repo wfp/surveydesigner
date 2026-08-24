@@ -16,7 +16,6 @@ from modules.models import (
 )
 from openpyxl import Workbook
 from openpyxl.styles import Font
-from openpyxl.writer.excel import save_virtual_workbook
 from questions.const import QuestionType
 from questions.models import (
     BaseQuestion,
@@ -31,6 +30,8 @@ from questions.models import (
     SubQuestionTranslation,
 )
 from survey_designer import ___version___ as SURVEY_DESIGNER_VERSION
+
+from .workbook import save_virtual_workbook
 
 
 class XLSForm:

@@ -1393,13 +1393,13 @@ files = [
 
 [[package]]
 name = "openpyxl"
-version = "3.0.9"
+version = "3.1.5"
 description = "A Python library to read/write Excel 2010 xlsx/xlsm files"
 optional = false
-python-versions = ">=3.6"
+python-versions = ">=3.8"
 files = [
-    {file = "openpyxl-3.0.9-py2.py3-none-any.whl", hash = "sha256:8f3b11bd896a95468a4ab162fc4fcd260d46157155d1f8bfaabb99d88cfcf79f"},
-    {file = "openpyxl-3.0.9.tar.gz", hash = "sha256:40f568b9829bf9e446acfffce30250ac1fa39035124d55fc024025c41481c90f"},
+    {file = "openpyxl-3.1.5-py2.py3-none-any.whl", hash = "sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2"},
+    {file = "openpyxl-3.1.5.tar.gz", hash = "sha256:cf0e3cf56142039133628b5acffe8ef0c12bc902d2aadd3e0fe5878dc08d1050"},
 ]
 
 [package.dependencies]
@@ -1790,18 +1790,18 @@ files = [
 
 [[package]]
 name = "pyxform"
-version = "1.12.2"
+version = "4.5.0"
 description = "A Python package to create XForms for ODK Collect."
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.8"
 files = [
-    {file = "pyxform-1.12.2-py3-none-any.whl", hash = "sha256:27ceb648a9f2a49e40f30a625bf82557a0ee01d6febf749b0d81614bb6544ac8"},
-    {file = "pyxform-1.12.2.tar.gz", hash = "sha256:fb67cee3e89fb21329d5efa6acb87518cbdffe835224f7dbae16bf7e84b519f7"},
+    {file = "pyxform-4.5.0-py3-none-any.whl", hash = "sha256:f6bc546d6b53c54a2b505f50850aaa45e7e306eb37d9c5141745eae17bfe9a94"},
+    {file = "pyxform-4.5.0.tar.gz", hash = "sha256:c2b7744b52fb4ca2f05353cab846891690f7a33ac89c1443e7703dafd223755e"},
 ]
 
 [package.dependencies]
 defusedxml = "0.7.1"
-openpyxl = "3.0.9"
+openpyxl = "3.1.5"
 xlrd = "2.0.1"
 
 [[package]]
@@ -2330,4 +2330,4 @@ test = ["big-O", "jaraco.functools", "jaraco.itertools", "jaraco.test", "more-it
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "e4f0a49890e0d9fea7633d4d944ceaa30736b0892a9e440fc2a0d2dcb5a27852"
+content-hash = "767dc63a4fe9b9dd72029ec82a809cd4377d0cc322611ca6c3d70a2144c20a14"

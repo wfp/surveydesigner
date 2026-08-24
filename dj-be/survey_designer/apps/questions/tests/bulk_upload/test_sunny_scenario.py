@@ -6,7 +6,6 @@ from django.test import TestCase
 from modules.factories import ModuleFactory, SubmoduleFactory
 from modules.models import Module, Submodule
 from openpyxl import Workbook, load_workbook
-from openpyxl.writer.excel import save_virtual_workbook
 from organization.models import Organization
 from organization.tests.factories import OrganizationFactory
 from questions.const import QuestionType
@@ -16,6 +15,7 @@ from questions.services.questions_import.recall_period import RecallPeriodImport
 from questions.services.questions_import.submodule_required_group import (
     SubmoduleRequiredGroupImport,
 )
+from questions.services.workbook import save_virtual_workbook
 
 
 def test_sunny_scenario(admin):

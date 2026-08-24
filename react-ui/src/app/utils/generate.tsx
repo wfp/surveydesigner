@@ -6,7 +6,13 @@ import { downloadFile } from "./download";
 import { notificationsActions } from "../redux/reducers/notificationReducer";
 import { docFetcherActions } from "../redux/reducers/docFetcherReducer";
 import { AppDispatch } from "../redux/store";
-import { renderApiErrorMessage } from "./apiError";
+import {
+  formatValidationIssues,
+  getApiErrorTitle,
+  parseApiError,
+  parseValidationWarningsHeader,
+  renderApiErrorMessage,
+} from "./apiError";
 
 export function getOrderedSubmodules(
   surveyForm: any,
@@ -106,12 +112,25 @@ export const getXLS = (
       }
 
       downloadFile(res, timestamp, mimeType, extension);
+      const warnings = parseValidationWarningsHeader(
+        res.headers["x-survey-validation-warnings"] ||
+          res.headers["x-validation-warnings"],
+      );
+      if (warnings.length) {
+        dispatch(
+          notificationsActions.setWarnNotification({
+            title: "Download completed with warnings",
+            msg: formatValidationIssues(warnings).join("\n"),
+          }),
+        );
+      }
     })
-    .catch((err) => {
+    .catch(async (err) => {
+      const parsedError = await parseApiError(err);
       dispatch(
         notificationsActions.setErrorNotification({
-          msg: renderApiErrorMessage(err, "Error getting XLS file."),
-          title: "Error getting XLS file.",
+          msg: renderApiErrorMessage(parsedError, "Error getting XLS file."),
+          title: getApiErrorTitle(parsedError, "Error getting XLS file."),
         }),
       );
     });
