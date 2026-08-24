@@ -68,6 +68,8 @@ function Review({
     errors: Array<ValidationIssue | string>;
     warnings: Array<ValidationIssue | string>;
   } | null>(null);
+  const [previewNotificationVersion, setPreviewNotificationVersion] =
+    useState(0);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [APIError, setAPIError] = useState<ApiError | null>(null);
   const modulesData = useModules();
@@ -162,10 +164,11 @@ function Review({
     next((proceed) => {
       handleSubmit((data) => {
         data.submodules = getOrderedSubmodules(surveyForm, modulesData);
-        data.modules_order = modulesData.current.modules_order.filter((moduleId) =>
-          modulesData.current.submodules_order[moduleId].some((submoduleId) =>
-            data.submodules.includes(submoduleId),
-          ),
+        data.modules_order = modulesData.current.modules_order.filter(
+          (moduleId) =>
+            modulesData.current.submodules_order[moduleId].some((submoduleId) =>
+              data.submodules.includes(submoduleId),
+            ),
         );
         data.submodules_order = data.submodules;
         data.indicator_areas_order = [
@@ -216,6 +219,7 @@ function Review({
     })
       .then((res) => {
         setPreviewData(res.data);
+        setPreviewNotificationVersion((version) => version + 1);
         setAPIError(null);
         // eslint-disable-next-line no-console
         console.log("warnings", res.data.warnings);
@@ -228,6 +232,7 @@ function Review({
       })
       .catch(async (err) => {
         setAPIError(await parseApiError(err));
+        setPreviewNotificationVersion((version) => version + 1);
         setIsPreviewing(false);
       });
   }
@@ -360,6 +365,7 @@ function Review({
       <div style={{ position: "fixed", bottom: 20, right: 20, zIndex: 2 }}>
         {APIError && (
           <Callout
+            key={`preview-api-error-${previewNotificationVersion}`}
             iconDescription="close"
             kind="error"
             lowContrast
@@ -377,6 +383,7 @@ function Review({
 
         {previewData && previewData.errors && previewData.errors.length > 0 && (
           <ToastNotification
+            key={`preview-errors-${previewNotificationVersion}`}
             iconDescription="close"
             kind="error"
             lowContrast
@@ -395,6 +402,7 @@ function Review({
           previewData.warnings &&
           previewData.warnings.length > 0 && (
             <Callout
+              key={`preview-warnings-${previewNotificationVersion}`}
               iconDescription="close"
               kind="warning"
               lowContrast

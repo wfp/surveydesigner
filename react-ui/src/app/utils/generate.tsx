@@ -84,6 +84,24 @@ export function getDataForGeneration(
   };
 }
 
+type SurveyFormOrganizations = {
+  organizations?: Array<{ id: number | string }>;
+};
+
+const getOrganizationHeaders = (
+  surveyForm: SurveyFormOrganizations | null | undefined,
+): Record<string, string> => {
+  if (!surveyForm?.organizations?.length) {
+    return {};
+  }
+
+  return {
+    "Survey-Designer-Organizations": surveyForm.organizations
+      .map(({ id }) => id)
+      .join(","),
+  };
+};
+
 export const getXLS = (
   dispatch: AppDispatch,
   surveyForm: any,
@@ -98,6 +116,7 @@ export const getXLS = (
     responseType: "blob",
     headers: {
       "X-CSRFToken": csrfToken,
+      ...getOrganizationHeaders(surveyForm),
     },
   })
     .then((res) => {
@@ -148,6 +167,7 @@ export const generateDoc = (
   API.post("/generate-doc/", data, {
     headers: {
       "X-CSRFToken": csrfToken,
+      ...getOrganizationHeaders(surveyForm),
     },
   })
     .then((res) => {
