@@ -9,6 +9,7 @@ from questions.services.form_validation import (
     compute_artifact_hash,
     materialize_external_files,
     validate_generated_artifact,
+    validate_xml_compatibility,
 )
 from questions.services.xml_conversion import XMLConversion
 
@@ -26,14 +27,20 @@ def test_build_generated_artifact_generates_and_reads_each_external_file_once():
     class ReadOnceFile:
         def __init__(self, content):
             self.content = content
+            self.open_mode = None
             self.read_count = 0
+            self.close_count = 0
+
+        def open(self, mode):
+            self.open_mode = mode
+            return self
 
         def read(self):
             self.read_count += 1
             return self.content
 
-        def seek(self, position):
-            assert position == 0
+        def close(self):
+            self.close_count += 1
 
     external = ReadOnceFile(b"name\nvalue\n")
 
@@ -54,14 +61,32 @@ def test_build_generated_artifact_generates_and_reads_each_external_file_once():
     assert artifact.xlsx_bytes == b"xlsx-bytes"
     assert artifact.external_files == {"choices.csv": b"name\nvalue\n"}
     assert form.generate_count == 1
+    assert external.open_mode == "rb"
     assert external.read_count == 1
+    assert external.close_count == 1
 
 
-def test_validation_result_normalizes_compatibility_issues(monkeypatch):
-    monkeypatch.setattr(
-        "questions.services.form_validation.PYXFORM_INSTALLED_VERSION", "4.5.0"
+def test_materialize_external_files_accepts_already_materialized_bytes():
+    assert materialize_external_files({"choices.csv": b"name\nvalue\n"}) == {
+        "choices.csv": b"name\nvalue\n"
+    }
+
+
+def test_compatibility_requires_referenced_csv_in_exact_artifact():
+    xml = (
+        '<h:html xmlns:h="http://www.w3.org/1999/xhtml" '
+        'xmlns:xf="http://www.w3.org/2002/xforms">'
+        "<h:head><xf:model><xf:instance><data/></xf:instance>"
+        '<xf:instance id="choices" src="jr://file-csv/choices.csv"/>'
+        "</xf:model></h:head><h:body/></h:html>"
     )
 
+    issues = validate_xml_compatibility(xml)
+    assert [issue.code for issue in issues] == ["EXTERNAL_FILE_MISSING"]
+    assert validate_xml_compatibility(xml, {"choices.csv": b"data"}) == []
+
+
+def test_validation_result_normalizes_compatibility_issues():
     class Conversion:
         def __init__(self, xlsx_file):
             self.xlsx_file = xlsx_file
@@ -93,11 +118,7 @@ def test_validation_result_normalizes_compatibility_issues(monkeypatch):
     }
 
 
-def test_missing_xform_is_an_invalid_artifact(monkeypatch):
-    monkeypatch.setattr(
-        "questions.services.form_validation.PYXFORM_INSTALLED_VERSION", "4.5.0"
-    )
-
+def test_missing_xform_is_an_invalid_artifact():
     class Conversion:
         errors = []
         warnings = []
@@ -118,7 +139,7 @@ def test_missing_xform_is_an_invalid_artifact(monkeypatch):
 
 def test_empty_external_file_is_a_structured_input_error():
     with pytest.raises(ArtifactInputError) as raised:
-        materialize_external_files({"choices.csv": io.BytesIO()})
+        materialize_external_files({"choices.csv": b""})
 
     assert isinstance(raised.value.issue, ValidationIssue)
     assert raised.value.issue.code == "EXTERNAL_FILE_EMPTY"

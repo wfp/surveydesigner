@@ -12,33 +12,16 @@ import hashlib
 import io
 import re
 from dataclasses import dataclass, field, replace
-from importlib.metadata import PackageNotFoundError, version as package_version
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 from xml.etree import ElementTree as ET
-
-import pyxform
-
-
-def _installed_pyxform_version() -> str | None:
-    version_from_module = getattr(pyxform, "__version__", None)
-    if version_from_module:
-        return str(version_from_module)
-    try:
-        return package_version("pyxform")
-    except PackageNotFoundError:
-        return None
-
-
-PYXFORM_INSTALLED_VERSION = _installed_pyxform_version()
 
 PYXFORM_VERSION = "4.5.0"
 COMPATIBILITY_VERSION = "1.0"
 _EMPTY_ARTIFACT_HASH = "sha256:" + hashlib.sha256(b"").hexdigest()
 _XFORMS_NS = "http://www.w3.org/2002/xforms"
 _XHTML_NS = "http://www.w3.org/1999/xhtml"
-_EXTERNAL_REFERENCE = re.compile(r"jr://(?:file-csv|images)/([^/]+)$")
-_NCNAME = re.compile(r"^[A-Za-z_][A-Za-z0-9._-]*$")
+_EXTERNAL_REFERENCE = re.compile(r"jr://file-csv/([^/]+)$")
 
 
 class ArtifactInputError(Exception):
@@ -211,19 +194,14 @@ def _normalise_messages(
     ]
 
 
-def _local_name(tag: str) -> str:
-    return tag.rsplit("}", 1)[-1]
-
-
 def validate_xml_compatibility(
     xml: str | bytes, external_files: Mapping[str, bytes] | None = None
 ) -> list[ValidationIssue]:
-    """Run the intentionally small, no-Java XML structure compatibility check.
+    """Check minimal pyxform output and exact-artifact file references.
 
-    This is not presented as a JavaRosa implementation.  It checks the stable
-    structural contract that must hold before XML is stored or sent to Enketo,
-    and is an extension seam for compatibility rules learned from the target
-    deployment.
+    This is not a JavaRosa or ODK Validate replacement. Pyxform performs the
+    XLSForm checks; this seam only confirms the generated XForm shell and that
+    referenced CSV files are present in the materialized artifact.
     """
 
     try:
@@ -280,21 +258,6 @@ def validate_xml_compatibility(
             )
         )
 
-    # Empty bind paths are never useful to the renderer and usually indicate a
-    # malformed emitted row.  Leave expression grammar to pyxform/compatibility
-    # extensions rather than trying to reproduce the target validator here.
-    for bind in root.findall(f".//{{{_XFORMS_NS}}}bind"):
-        if not (bind.get("nodeset") or "").strip():
-            issues.append(
-                _issue(
-                    "XML_BIND_PATH_MISSING",
-                    "compatibility",
-                    "Every xforms bind must identify a nodeset.",
-                    sheet="survey",
-                    column="bind",
-                )
-            )
-
     available_files = set((external_files or {}).keys())
     for element in root.iter():
         for attribute in ("src", "href"):
@@ -312,44 +275,6 @@ def validate_xml_compatibility(
                         field=match.group(1),
                     )
                 )
-
-    # Names in the primary instance are the stable part of the generated
-    # structure.  Duplicate sibling names and invalid NCNames are deterministic
-    # publication errors, while identical names in separate repeat scopes are
-    # intentionally left to the target validator.
-    for parent in instances:
-        for element in parent.iter():
-            child_names = [
-                _local_name(child.tag)
-                for child in list(element)
-                if child.tag is not ET.Comment
-            ]
-            duplicates = sorted(
-                name for name in set(child_names) if child_names.count(name) > 1
-            )
-            for name in duplicates:
-                issues.append(
-                    _issue(
-                        "XML_DUPLICATE_NODE_NAME",
-                        "compatibility",
-                        f"Generated XForm has duplicate sibling node name '{name}'.",
-                        sheet="survey",
-                        column="name",
-                    )
-                )
-
-    for element in root.iter():
-        name = element.get("name")
-        if name and not _NCNAME.fullmatch(name):
-            issues.append(
-                _issue(
-                    "XML_NAME_INVALID",
-                    "compatibility",
-                    f"Generated XForm name '{name}' is not a valid XML name.",
-                    sheet="survey",
-                    column="name",
-                )
-            )
     return issues
 
 
@@ -381,33 +306,14 @@ def materialize_external_files(
             )
 
         try:
-            close = None
-            if isinstance(file_obj, (bytes, bytearray, memoryview)):
-                content = bytes(file_obj)
-            elif hasattr(file_obj, "open"):
-                opened = file_obj.open("rb")
-                reader = getattr(file_obj, "read", None) or getattr(
-                    opened, "read", None
-                )
-                if reader is None:
-                    raise TypeError("external file has no readable stream")
-                close = getattr(file_obj, "close", None)
-                try:
-                    content = reader()
-                finally:
-                    if close:
-                        close()
+            if isinstance(file_obj, bytes):
+                content = file_obj
             else:
-                reader = getattr(file_obj, "read", None)
-                if reader is None:
-                    raise TypeError("external file has no readable stream")
-                content = reader()
-                seek = getattr(file_obj, "seek", None)
-                if seek:
-                    seek(0)
-            if isinstance(content, str):
-                content = content.encode("utf-8")
-            content = bytes(content)
+                stream = file_obj.open("rb")
+                try:
+                    content = stream.read()
+                finally:
+                    stream.close()
         except FileNotFoundError:
             raise ArtifactInputError(
                 _issue(
@@ -417,13 +323,9 @@ def materialize_external_files(
                     field=filename,
                 )
             )
-        except (OSError, IOError) as exc:
+        except OSError as exc:
             raise ArtifactInfrastructureError(
                 f"Unable to read external file '{filename}': {exc}"
-            ) from exc
-        except Exception as exc:
-            raise ArtifactInfrastructureError(
-                f"Unable to materialize external file '{filename}': {exc}"
             ) from exc
 
         if not content:
@@ -444,19 +346,14 @@ def build_generated_artifact(xlsx_form: Any) -> GeneratedSurveyArtifact:
 
     try:
         xlsx_bytes = xlsx_form.generate()
-        if hasattr(xlsx_bytes, "getvalue"):
-            xlsx_bytes = xlsx_bytes.getvalue()
-        xlsx_bytes = bytes(xlsx_bytes)
     except Exception as exc:
         raise ArtifactInfrastructureError(f"Unable to generate XLSX: {exc}") from exc
 
-    external_files = materialize_external_files(
-        getattr(xlsx_form, "external_files", {})
-    )
+    external_files = materialize_external_files(xlsx_form.external_files)
     return GeneratedSurveyArtifact(
         xlsx_bytes=xlsx_bytes,
         external_files=external_files,
-        form_name=str(getattr(xlsx_form, "id_name", "survey") or "survey"),
+        form_name=str(xlsx_form.id_name or "survey"),
     )
 
 
@@ -466,11 +363,6 @@ def validate_generated_artifact(
     converter_cls: Any | None = None,
 ) -> ValidationResult:
     """Convert and validate one exact artifact without generating it again."""
-
-    if str(PYXFORM_INSTALLED_VERSION) != PYXFORM_VERSION:
-        raise ValidatorInfrastructureError(
-            f"Expected pyxform {PYXFORM_VERSION}, found {PYXFORM_INSTALLED_VERSION}."
-        )
 
     if converter_cls is None:
         from .xml_conversion import XMLConversion
@@ -485,8 +377,8 @@ def validate_generated_artifact(
             f"pyxform conversion failed internally: {exc}"
         ) from exc
 
-    errors = _normalise_messages(getattr(conversion, "errors", []), warning=False)
-    warnings = _normalise_messages(getattr(conversion, "warnings", []), warning=True)
+    errors = _normalise_messages(conversion.errors, warning=False)
+    warnings = _normalise_messages(conversion.warnings, warning=True)
     if xml is None and not errors:
         errors.append(
             _issue(
@@ -496,12 +388,7 @@ def validate_generated_artifact(
             )
         )
     if xml is not None and not errors:
-        try:
-            errors.extend(validate_xml_compatibility(xml, artifact.external_files))
-        except Exception as exc:
-            raise ValidatorInfrastructureError(
-                f"Compatibility validation failed internally: {exc}"
-            ) from exc
+        errors.extend(validate_xml_compatibility(xml, artifact.external_files))
 
     validated_artifact = replace(artifact, xml=xml)
     return ValidationResult(
