@@ -195,7 +195,7 @@ def _normalise_messages(
 
 
 def validate_xml_compatibility(
-    xml: str | bytes, external_files: Mapping[str, bytes] | None = None
+    xml: str | bytes | None, external_files: Mapping[str, bytes] | None = None
 ) -> list[ValidationIssue]:
     """Check minimal pyxform output and exact-artifact file references.
 
@@ -286,34 +286,12 @@ def materialize_external_files(
     materialized: dict[str, bytes] = {}
     for filename, file_obj in (external_files or {}).items():
         filename = str(filename)
-        if not filename:
-            raise ArtifactInputError(
-                _issue(
-                    "EXTERNAL_FILE_NAME_MISSING",
-                    "composition",
-                    "An external file has no filename.",
-                    sheet="survey",
-                )
-            )
-        if file_obj is None:
-            raise ArtifactInputError(
-                _issue(
-                    "EXTERNAL_FILE_MISSING",
-                    "composition",
-                    f"External file '{filename}' could not be materialized.",
-                    field=filename,
-                )
-            )
-
         try:
-            if isinstance(file_obj, bytes):
-                content = file_obj
-            else:
-                stream = file_obj.open("rb")
-                try:
-                    content = stream.read()
-                finally:
-                    stream.close()
+            stream = file_obj.open("rb")
+            try:
+                content = stream.read()
+            finally:
+                stream.close()
         except FileNotFoundError:
             raise ArtifactInputError(
                 _issue(
@@ -379,15 +357,7 @@ def validate_generated_artifact(
 
     errors = _normalise_messages(conversion.errors, warning=False)
     warnings = _normalise_messages(conversion.warnings, warning=True)
-    if xml is None and not errors:
-        errors.append(
-            _issue(
-                "PYXFORM_NO_XML",
-                "pyxform",
-                "pyxform did not produce an XForm for the generated XLSX artifact.",
-            )
-        )
-    if xml is not None and not errors:
+    if not errors:
         errors.extend(validate_xml_compatibility(xml, artifact.external_files))
 
     validated_artifact = replace(artifact, xml=xml)
