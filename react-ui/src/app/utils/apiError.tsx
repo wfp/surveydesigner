@@ -61,7 +61,9 @@ export function getApiErrorMessages(
 
   collectMessages(responseData ?? fallbackMessage, messages);
 
-  return [...new Set(messages.filter(Boolean))];
+  const uniqueMessages = [...new Set(messages.filter(Boolean))];
+
+  return uniqueMessages.length > 0 ? uniqueMessages : [fallbackMessage];
 }
 
 export function renderApiErrorMessage(
