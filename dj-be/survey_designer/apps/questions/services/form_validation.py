@@ -16,12 +16,15 @@ from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 from xml.etree import ElementTree as ET
 
+from openpyxl import load_workbook
+
 PYXFORM_VERSION = "4.5.0"
 COMPATIBILITY_VERSION = "1.0"
 _EMPTY_ARTIFACT_HASH = "sha256:" + hashlib.sha256(b"").hexdigest()
 _XFORMS_NS = "http://www.w3.org/2002/xforms"
 _XHTML_NS = "http://www.w3.org/1999/xhtml"
 _EXTERNAL_REFERENCE = re.compile(r"jr://file-csv/([^/]+)$")
+_INTERNAL_SELECT_TYPES = ("select_one", "select_multiple")
 
 
 class ArtifactInputError(Exception):
@@ -319,6 +322,94 @@ def materialize_external_files(
     return materialized
 
 
+def _sheet_rows_by_header(
+    worksheet: Any,
+) -> tuple[dict[str, int], list[tuple[Any, ...]]]:
+    rows = list(worksheet.iter_rows(values_only=True))
+    if not rows:
+        return {}, []
+
+    headers = {
+        str(value).strip(): index
+        for index, value in enumerate(rows[0])
+        if value is not None and str(value).strip()
+    }
+    return headers, rows[1:]
+
+
+def _row_value(row: tuple[Any, ...], headers: Mapping[str, int], column: str) -> str:
+    index = headers.get(column)
+    if index is None or index >= len(row) or row[index] is None:
+        return ""
+    return str(row[index]).strip()
+
+
+def validate_codebook_integrity(xlsx_bytes: bytes) -> list[ValidationIssue]:
+    """Validate internal select declarations against the exact emitted choices."""
+
+    workbook = load_workbook(io.BytesIO(xlsx_bytes), read_only=True, data_only=True)
+    try:
+        if "survey" not in workbook.sheetnames or "choices" not in workbook.sheetnames:
+            return []
+
+        survey_headers, survey_rows = _sheet_rows_by_header(workbook["survey"])
+        choices_headers, choices_rows = _sheet_rows_by_header(workbook["choices"])
+        emitted_list_column = (
+            "list_name" if "list_name" in choices_headers else "choice_list"
+        )
+        emitted_lists = {
+            _row_value(row, choices_headers, emitted_list_column)
+            for row in choices_rows
+            if _row_value(row, choices_headers, emitted_list_column)
+        }
+
+        issues: list[ValidationIssue] = []
+        for row_number, row in enumerate(survey_rows, start=2):
+            declaration = _row_value(row, survey_headers, "type")
+            question_type, _, inline_list_name = declaration.partition(" ")
+            if question_type not in _INTERNAL_SELECT_TYPES:
+                continue
+
+            list_column = "choice_list" if "choice_list" in survey_headers else "type"
+            list_name = (
+                _row_value(row, survey_headers, "choice_list")
+                if "choice_list" in survey_headers
+                else inline_list_name.strip()
+            )
+            question_name = _row_value(row, survey_headers, "name")
+            owner = {"model": "question", "name": question_name}
+
+            if not list_name:
+                issues.append(
+                    _issue(
+                        "CODEBOOK_CHOICE_LIST_MISSING",
+                        "composition",
+                        f"Question '{question_name}' uses {question_type} but does not specify a choice list.",
+                        owner=owner,
+                        field="choices",
+                        sheet="survey",
+                        column=list_column,
+                        row=row_number,
+                    )
+                )
+            elif list_name not in emitted_lists:
+                issues.append(
+                    _issue(
+                        "CODEBOOK_CHOICE_LIST_NOT_EMITTED",
+                        "composition",
+                        f"Question '{question_name}' references choice list '{list_name}', but that list has no emitted choices.",
+                        owner=owner,
+                        field="choices",
+                        sheet="survey",
+                        column=list_column,
+                        row=row_number,
+                    )
+                )
+        return issues
+    finally:
+        workbook.close()
+
+
 def build_generated_artifact(xlsx_form: Any) -> GeneratedSurveyArtifact:
     """Generate a workbook once and materialize its external files once."""
 
@@ -341,6 +432,21 @@ def validate_generated_artifact(
     converter_cls: Any | None = None,
 ) -> ValidationResult:
     """Convert and validate one exact artifact without generating it again."""
+
+    try:
+        composition_errors = validate_codebook_integrity(artifact.xlsx_bytes)
+    except Exception as exc:
+        raise ValidatorInfrastructureError(
+            f"Unable to inspect the generated XLSX codebook: {exc}"
+        ) from exc
+
+    if composition_errors:
+        return ValidationResult(
+            valid=False,
+            artifact_hash=artifact.artifact_hash,
+            errors=composition_errors,
+            artifact=artifact,
+        )
 
     if converter_cls is None:
         from .xml_conversion import XMLConversion
@@ -389,6 +495,7 @@ __all__ = [
     "compute_artifact_hash",
     "failed_validation_result",
     "materialize_external_files",
+    "validate_codebook_integrity",
     "validate_generated_artifact",
     "validate_xml_compatibility",
 ]
