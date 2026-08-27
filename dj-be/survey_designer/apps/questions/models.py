@@ -195,7 +195,10 @@ class RootQuestion(BaseWFPModelMixin, QuestionFieldsMixin):
         super().clean()
 
     def get_xls_type(self):
-        if self.type in (QuestionType.SELECT_ONE, QuestionType.SELECT_MULTIPLE):
+        if (
+            self.type in (QuestionType.SELECT_ONE, QuestionType.SELECT_MULTIPLE)
+            and self.choices
+        ):
             return f"{self.type} {self.choices.name}"
         elif self.type in (
             QuestionType.SELECT_ONE_FROM_FILE,
