@@ -20,6 +20,7 @@ from modules.models import (
     SubmoduleRequiredGroup,
 )
 from modules.views import generate_docx
+from openpyxl import Workbook
 from questions.const import QuestionType
 from questions.models import (
     RootQuestion,
@@ -49,15 +50,29 @@ class FakeFieldFile:
             self.file.seek(0)
 
 
+def build_minimal_xlsx():
+    workbook = Workbook()
+    survey = workbook.active
+    survey.title = "survey"
+    survey.append(["type", "name"])
+    survey.append(["text", "stub_question"])
+    choices = workbook.create_sheet("choices")
+    choices.append(["list_name", "name", "label"])
+    output = io.BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
 def build_stub_xls_form(external_files):
     class StubXLSForm:
         id_name = "test-form-id"
 
         def __init__(self, files):
             self.external_files = files
+            self.xlsx_bytes = build_minimal_xlsx()
 
         def generate(self):
-            return b"fake-xlsx"
+            return self.xlsx_bytes
 
     return StubXLSForm(external_files)
 
@@ -74,6 +89,40 @@ def mock_successful_xml_conversion(mocker, xml=None):
     conversion.errors = []
     mocker.patch("modules.views.XMLConversion", return_value=conversion)
     return conversion
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["/api/validate/", "/api/generate/", "/api/preview/", "/api/upload/"],
+)
+def test_final_survey_actions_block_internal_select_without_emitted_choices(
+    url,
+    logged_admin_client,
+    moda_api_key,
+    submodule_1,
+    root_question_2,
+    choices_1,
+):
+    choices_1.choices.update(is_active=False)
+    payload = {
+        "name": "Invalid choices",
+        "submodules": [submodule_1.id],
+        "submodules_order": [submodule_1.id],
+        "sub_questions": [],
+        "languages": [],
+        "id": moda_api_key.id,
+        "project_id": 99,
+    }
+
+    response = logged_admin_client.post(
+        url, json.dumps(payload), content_type="application/json"
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    body = response.json()
+    assert body["valid"] is False
+    assert body["errors"][0]["code"] == "CODEBOOK_CHOICE_LIST_NOT_EMITTED", body
+    assert body["errors"][0]["owner"]["name"] == root_question_2.name
 
 
 @pytest.fixture(autouse=True)
@@ -598,12 +647,9 @@ def test_preview_xls_form_with_external_media(
     submodule_1,
 ):
     csv_content = b"name,color\nbanana,yellow\n"
-    stub_form = mocker.Mock()
-    stub_form.name = "preview_form"
-    stub_form.generate.return_value = b"fake-xlsx"
-    stub_form.external_files = {
-        "fruits.csv": ContentFile(csv_content, name="fruits.csv")
-    }
+    stub_form = build_stub_xls_form(
+        {"fruits.csv": ContentFile(csv_content, name="fruits.csv")}
+    )
 
     mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
 
@@ -650,7 +696,9 @@ def test_preview_xls_form_with_external_media(
         "languages": [],
     }
 
-    response = logged_admin_client.post("/api/preview/", data, follow=True)
+    response = logged_admin_client.post(
+        "/api/preview/", json.dumps(data), content_type="application/json"
+    )
     assert response.status_code == status.HTTP_200_OK
     payload = response.json()
 
@@ -672,13 +720,12 @@ def test_preview_xls_form_rewrites_external_file_links(
 ):
     csv_content = b"name,color\nbanana,yellow\n"
     img_content = b"png"
-    stub_form = mocker.Mock()
-    stub_form.name = "preview_form"
-    stub_form.generate.return_value = b"fake-xlsx"
-    stub_form.external_files = {
-        "fruits.csv": ContentFile(csv_content, name="fruits.csv"),
-        "logo.png": ContentFile(img_content, name="logo.png"),
-    }
+    stub_form = build_stub_xls_form(
+        {
+            "fruits.csv": ContentFile(csv_content, name="fruits.csv"),
+            "logo.png": ContentFile(img_content, name="logo.png"),
+        }
+    )
 
     mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
 
@@ -732,7 +779,9 @@ def test_preview_xls_form_rewrites_external_file_links(
         "languages": [],
     }
 
-    response = logged_admin_client.post("/api/preview/", data, follow=True)
+    response = logged_admin_client.post(
+        "/api/preview/", json.dumps(data), content_type="application/json"
+    )
     assert response.status_code == status.HTTP_200_OK
 
     xml_path = next(
@@ -947,7 +996,7 @@ def test_upload_xls_form_moda_uploads_metadata(
     assert upload_call.args[0] == upload_url
     assert upload_call.kwargs["headers"] == {"Authorization": "Token test-token"}
     assert upload_call.kwargs["files"]["xls_file"][0] == f"{stub_form.id_name}.xlsx"
-    assert upload_call.kwargs["files"]["xls_file"][1] == b"fake-xlsx"
+    assert upload_call.kwargs["files"]["xls_file"][1] == stub_form.xlsx_bytes
 
     metadata_url = UserAPISiteAPITypes.get_metadata_url(site)
     assert metadata_call.args[0] == metadata_url
