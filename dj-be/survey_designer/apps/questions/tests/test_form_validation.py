@@ -261,6 +261,298 @@ def test_codebook_validation_accepts_numeric_choice_value():
     assert validate_codebook_integrity(xlsx) == []
 
 
+def test_codebook_validation_reports_duplicate_value_in_same_list():
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [
+            ("foods", "rice", "Rice"),
+            ("foods", "rice", "Rice duplicate"),
+        ],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_VALUE_DUPLICATE"]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_CHOICE_VALUE_DUPLICATE",
+        "layer": "composition",
+        "severity": "error",
+        "message": "Choice value 'rice' is duplicated in choice list 'foods'; it was first emitted at row 2.",
+        "owner": {"model": "choice", "name": "rice", "choice_list": "foods"},
+        "field": "name",
+        "sheet": "choices",
+        "column": "name",
+        "row": 3,
+    }
+
+
+def test_codebook_validation_reports_every_duplicate_after_first_row():
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [
+            ("foods", "rice", "Rice"),
+            ("foods", "rice", "Rice duplicate"),
+            ("foods", "rice", "Rice duplicate again"),
+        ],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.row for issue in issues] == [3, 4]
+    assert all("first emitted at row 2" in issue.message for issue in issues)
+
+
+def test_codebook_validation_allows_same_value_in_different_lists():
+    xlsx = _codebook_workbook(
+        [
+            ("select_one foods", "preferred_food"),
+            ("select_one drinks", "preferred_drink"),
+        ],
+        [
+            ("foods", "other", "Other food"),
+            ("drinks", "other", "Other drink"),
+        ],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_codebook_validation_compares_choice_values_case_sensitively():
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [
+            ("foods", "Other", "Uppercase"),
+            ("foods", "other", "Lowercase"),
+        ],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+@pytest.mark.parametrize(
+    "first_value, duplicate_value",
+    [(" rice ", "rice"), (1, "1")],
+)
+def test_codebook_validation_uses_emitted_value_normalization_for_duplicates(
+    first_value,
+    duplicate_value,
+):
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [
+            ("foods", first_value, "First"),
+            ("foods", duplicate_value, "Duplicate"),
+        ],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_VALUE_DUPLICATE"]
+
+
+def test_duplicate_choice_value_blocks_pyxform_conversion():
+    artifact = GeneratedSurveyArtifact(
+        _codebook_workbook(
+            [("select_one foods", "preferred_food")],
+            [
+                ("foods", "rice", "Rice"),
+                ("foods", "rice", "Rice duplicate"),
+            ],
+        )
+    )
+
+    result = validate_generated_artifact(artifact, converter_cls=ConversionMustNotRun)
+
+    assert result.valid is False
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_CHOICE_VALUE_DUPLICATE"
+    ]
+
+
+def test_codebook_export_layout_reports_duplicate_choice_value():
+    xlsx = _codebook_workbook(
+        [("select_one", "preferred_food", "foods")],
+        [
+            ("foods", "rice", "Rice"),
+            ("foods", "rice", "Rice duplicate"),
+        ],
+        export_columns=True,
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_VALUE_DUPLICATE"]
+
+
+@pytest.mark.parametrize(
+    "list_name",
+    ["foods", "_foods", "food-list", "food.list", "food_1", "éfoods"],
+)
+def test_codebook_validation_accepts_compatible_choice_list_names(list_name):
+    xlsx = _codebook_workbook(
+        [(f"select_one {list_name}", "preferred_food")],
+        [(list_name, "rice", "Rice")],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+@pytest.mark.parametrize(
+    "list_name",
+    ["1foods", "food list", "food$list", "food/list", "food:items"],
+)
+def test_codebook_validation_reports_invalid_choice_list_name(list_name):
+    xlsx = _codebook_workbook(
+        [(f"select_one {list_name}", "preferred_food")],
+        [(list_name, "rice", "Rice")],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_LIST_NAME_INVALID"]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_CHOICE_LIST_NAME_INVALID",
+        "layer": "composition",
+        "severity": "error",
+        "message": f"Choice list name '{list_name}' is invalid. Names must begin with a letter or underscore and contain only letters, digits, underscores, hyphens, or periods.",
+        "owner": {"model": "choice_list", "name": list_name},
+        "field": "list_name",
+        "sheet": "choices",
+        "column": "list_name",
+        "row": 2,
+    }
+
+
+def test_invalid_unemitted_choice_list_name_is_reported_at_question():
+    xlsx = _codebook_workbook([("select_one 1foods", "preferred_food")])
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [
+        "CODEBOOK_CHOICE_LIST_NAME_INVALID",
+        "CODEBOOK_CHOICE_LIST_NOT_EMITTED",
+    ]
+    assert issues[0].sheet == "survey"
+    assert issues[0].row == 2
+    assert issues[0].owner == {"model": "question", "name": "preferred_food"}
+
+
+def test_codebook_validation_reports_choice_row_without_list_name():
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [("", "rice", "Rice")],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [
+        "CODEBOOK_CHOICE_LIST_NAME_MISSING",
+        "CODEBOOK_CHOICE_LIST_NOT_EMITTED",
+    ]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_CHOICE_LIST_NAME_MISSING",
+        "layer": "composition",
+        "severity": "error",
+        "message": "An emitted choice row does not specify a choice list name.",
+        "owner": {"model": "choice", "name": "rice"},
+        "field": "list_name",
+        "sheet": "choices",
+        "column": "list_name",
+        "row": 2,
+    }
+
+
+@pytest.mark.parametrize("choice_value", ["with space", "with\tspace"])
+def test_codebook_validation_rejects_whitespace_in_select_multiple_value(
+    choice_value,
+):
+    xlsx = _codebook_workbook(
+        [("select_multiple foods", "preferred_foods")],
+        [("foods", choice_value, "Value")],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_VALUE_INVALID"]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_CHOICE_VALUE_INVALID",
+        "layer": "composition",
+        "severity": "error",
+        "message": f"Choice value '{choice_value}' in choice list 'foods' contains whitespace, which is not supported by select_multiple questions.",
+        "owner": {
+            "model": "choice",
+            "name": choice_value,
+            "choice_list": "foods",
+        },
+        "field": "name",
+        "sheet": "choices",
+        "column": "name",
+        "row": 2,
+    }
+
+
+def test_codebook_validation_allows_whitespace_in_select_one_value():
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [("foods", "white rice", "White rice")],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_codebook_validation_uses_strictest_type_for_shared_choice_list():
+    xlsx = _codebook_workbook(
+        [
+            ("select_one foods", "preferred_food"),
+            ("select_multiple foods", "preferred_foods"),
+        ],
+        [("foods", "white rice", "White rice")],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_VALUE_INVALID"]
+
+
+@pytest.mark.parametrize(
+    "choice_value",
+    ["1", "1.5", "-1", "a-b", "a.b", "a/b", "a:b", "é"],
+)
+def test_codebook_validation_accepts_compatible_select_multiple_values(choice_value):
+    xlsx = _codebook_workbook(
+        [("select_multiple foods", "preferred_foods")],
+        [("foods", choice_value, "Value")],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_choice_value_syntax_validation_supports_codebook_export_layout():
+    xlsx = _codebook_workbook(
+        [("select_multiple", "preferred_foods", "foods")],
+        [("foods", "white rice", "White rice")],
+        export_columns=True,
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_VALUE_INVALID"]
+
+
+def test_invalid_choice_syntax_blocks_pyxform_conversion():
+    artifact = GeneratedSurveyArtifact(
+        _codebook_workbook(
+            [("select_multiple foods", "preferred_foods")],
+            [("foods", "white rice", "White rice")],
+        )
+    )
+
+    result = validate_generated_artifact(artifact, converter_cls=ConversionMustNotRun)
+
+    assert result.valid is False
+    assert [issue.code for issue in result.errors] == ["CODEBOOK_CHOICE_VALUE_INVALID"]
+
+
 def test_codebook_validation_does_not_decide_non_english_label_fallback():
     xlsx = _codebook_workbook(
         [("select_one foods", "preferred_food")],
@@ -385,6 +677,59 @@ def test_generated_survey_reports_blank_english_choice_label(
     assert result.errors[0].owner == {
         "model": "choice",
         "name": choice.name,
+        "choice_list": choices_1.name,
+    }
+
+
+def test_generated_survey_reports_invalid_choice_list_name(
+    submodule_1,
+    root_question_2,
+    choices_1,
+):
+    choices_1.name = "1invalid"
+    choices_1.save(update_fields=["name"])
+    form = XLSForm(
+        name="Invalid choice list name",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_CHOICE_LIST_NAME_INVALID"
+    ]
+    assert result.errors[0].owner == {
+        "model": "choice_list",
+        "name": "1invalid",
+    }
+
+
+def test_generated_select_multiple_reports_choice_value_with_whitespace(
+    submodule_1,
+    root_question_2,
+    choices_1,
+):
+    choice = choices_1.choices.first()
+    choices_1.choices.filter(id=choice.id).update(name="with space")
+    form = XLSForm(
+        name="Invalid choice value",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == ["CODEBOOK_CHOICE_VALUE_INVALID"]
+    assert result.errors[0].owner == {
+        "model": "choice",
+        "name": "with space",
         "choice_list": choices_1.name,
     }
 
