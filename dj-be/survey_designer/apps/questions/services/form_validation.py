@@ -24,6 +24,7 @@ _EMPTY_ARTIFACT_HASH = "sha256:" + hashlib.sha256(b"").hexdigest()
 _XFORMS_NS = "http://www.w3.org/2002/xforms"
 _XHTML_NS = "http://www.w3.org/1999/xhtml"
 _EXTERNAL_REFERENCE = re.compile(r"jr://file-csv/([^/]+)$")
+_ENGLISH_LABEL_COLUMN = re.compile(r"^label::.*\(\s*en\s*\)$", re.IGNORECASE)
 _INTERNAL_SELECT_TYPES = ("select_one", "select_multiple")
 
 
@@ -344,8 +345,16 @@ def _row_value(row: tuple[Any, ...], headers: Mapping[str, int], column: str) ->
     return str(row[index]).strip()
 
 
+def _english_label_column(headers: Mapping[str, int]) -> str | None:
+    if "label" in headers:
+        return "label"
+    return next(
+        (column for column in headers if _ENGLISH_LABEL_COLUMN.match(column)), None
+    )
+
+
 def validate_codebook_integrity(xlsx_bytes: bytes) -> list[ValidationIssue]:
-    """Validate internal select declarations against the exact emitted choices."""
+    """Validate internal select declarations and exact emitted choice rows."""
 
     workbook = load_workbook(io.BytesIO(xlsx_bytes), read_only=True, data_only=True)
     try:
@@ -357,13 +366,53 @@ def validate_codebook_integrity(xlsx_bytes: bytes) -> list[ValidationIssue]:
         emitted_list_column = (
             "list_name" if "list_name" in choices_headers else "choice_list"
         )
-        emitted_lists = {
-            _row_value(row, choices_headers, emitted_list_column)
-            for row in choices_rows
-            if _row_value(row, choices_headers, emitted_list_column)
-        }
-
+        english_label_column = _english_label_column(choices_headers)
+        emitted_lists: set[str] = set()
         issues: list[ValidationIssue] = []
+        for row_number, row in enumerate(choices_rows, start=2):
+            list_name = _row_value(row, choices_headers, emitted_list_column)
+            choice_name = _row_value(row, choices_headers, "name")
+            english_label = (
+                _row_value(row, choices_headers, english_label_column)
+                if english_label_column
+                else ""
+            )
+            if not any((list_name, choice_name, english_label)):
+                continue
+            if list_name:
+                emitted_lists.add(list_name)
+
+            if not choice_name:
+                issues.append(
+                    _issue(
+                        "CODEBOOK_CHOICE_VALUE_MISSING",
+                        "composition",
+                        f"Choice list '{list_name}' has an emitted choice with no value.",
+                        owner={"model": "choice_list", "name": list_name},
+                        field="name",
+                        sheet="choices",
+                        column="name",
+                        row=row_number,
+                    )
+                )
+            if english_label_column and not english_label:
+                issues.append(
+                    _issue(
+                        "CODEBOOK_CHOICE_LABEL_MISSING",
+                        "composition",
+                        f"Choice '{choice_name}' in choice list '{list_name}' has no English label.",
+                        owner={
+                            "model": "choice",
+                            "name": choice_name,
+                            "choice_list": list_name,
+                        },
+                        field="label",
+                        sheet="choices",
+                        column=english_label_column,
+                        row=row_number,
+                    )
+                )
+
         for row_number, row in enumerate(survey_rows, start=2):
             declaration = _row_value(row, survey_headers, "type")
             question_type, _, inline_list_name = declaration.partition(" ")

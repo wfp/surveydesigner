@@ -125,6 +125,36 @@ def test_final_survey_actions_block_internal_select_without_emitted_choices(
     assert body["errors"][0]["owner"]["name"] == root_question_2.name
 
 
+def test_validate_action_blocks_choice_without_english_label(
+    logged_admin_client,
+    submodule_1,
+    root_question_2,
+    choices_1,
+):
+    choice = choices_1.choices.first()
+    choices_1.choices.filter(id=choice.id).update(label="   ")
+    payload = {
+        "name": "Invalid choice label",
+        "submodules": [submodule_1.id],
+        "submodules_order": [submodule_1.id],
+        "sub_questions": [],
+        "languages": ["en"],
+    }
+
+    response = logged_admin_client.post(
+        "/api/validate/", json.dumps(payload), content_type="application/json"
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    body = response.json()
+    assert body["errors"][0]["code"] == "CODEBOOK_CHOICE_LABEL_MISSING"
+    assert body["errors"][0]["owner"] == {
+        "model": "choice",
+        "name": choice.name,
+        "choice_list": choices_1.name,
+    }
+
+
 @pytest.fixture(autouse=True)
 def selected_organization_header(
     logged_admin_client, api_client_authenticated_admin, organization_1
