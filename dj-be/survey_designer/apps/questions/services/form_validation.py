@@ -11,12 +11,14 @@ from __future__ import annotations
 import hashlib
 import io
 import re
+from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 from xml.etree import ElementTree as ET
 
 from openpyxl import load_workbook
+from pyxform.parsing.expression import is_xml_tag
 
 PYXFORM_VERSION = "4.5.0"
 COMPATIBILITY_VERSION = "1.0"
@@ -353,6 +355,27 @@ def _english_label_column(headers: Mapping[str, int]) -> str | None:
     )
 
 
+def _internal_select_declaration(
+    row: tuple[Any, ...], survey_headers: Mapping[str, int]
+) -> tuple[str, str, str] | None:
+    declaration = _row_value(row, survey_headers, "type")
+    question_type, _, inline_list_name = declaration.partition(" ")
+    if question_type not in _INTERNAL_SELECT_TYPES:
+        return None
+
+    list_column = "choice_list" if "choice_list" in survey_headers else "type"
+    list_name = (
+        _row_value(row, survey_headers, "choice_list")
+        if "choice_list" in survey_headers
+        else inline_list_name.strip()
+    )
+    return question_type, list_name, list_column
+
+
+def _is_valid_choice_list_name(value: str) -> bool:
+    return bool(value) and ":" not in value and is_xml_tag(value)
+
+
 def validate_codebook_integrity(xlsx_bytes: bytes) -> list[ValidationIssue]:
     """Validate internal select declarations and exact emitted choice rows."""
 
@@ -367,7 +390,18 @@ def validate_codebook_integrity(xlsx_bytes: bytes) -> list[ValidationIssue]:
             "list_name" if "list_name" in choices_headers else "choice_list"
         )
         english_label_column = _english_label_column(choices_headers)
+        internal_select_types_by_list: dict[str, set[str]] = defaultdict(set)
+        for row in survey_rows:
+            declaration = _internal_select_declaration(row, survey_headers)
+            if declaration:
+                question_type, list_name, _ = declaration
+                if list_name:
+                    internal_select_types_by_list[list_name].add(question_type)
+
         emitted_lists: set[str] = set()
+        first_choice_value_rows: dict[tuple[str, str], int] = {}
+        checked_list_names: set[str] = set()
+        reported_invalid_list_names: set[str] = set()
         issues: list[ValidationIssue] = []
         for row_number, row in enumerate(choices_rows, start=2):
             list_name = _row_value(row, choices_headers, emitted_list_column)
@@ -379,8 +413,37 @@ def validate_codebook_integrity(xlsx_bytes: bytes) -> list[ValidationIssue]:
             )
             if not any((list_name, choice_name, english_label)):
                 continue
-            if list_name:
+            if not list_name:
+                issues.append(
+                    _issue(
+                        "CODEBOOK_CHOICE_LIST_NAME_MISSING",
+                        "composition",
+                        "An emitted choice row does not specify a choice list name.",
+                        owner={"model": "choice", "name": choice_name},
+                        field=emitted_list_column,
+                        sheet="choices",
+                        column=emitted_list_column,
+                        row=row_number,
+                    )
+                )
+            else:
                 emitted_lists.add(list_name)
+                if list_name not in checked_list_names:
+                    checked_list_names.add(list_name)
+                    if not _is_valid_choice_list_name(list_name):
+                        reported_invalid_list_names.add(list_name)
+                        issues.append(
+                            _issue(
+                                "CODEBOOK_CHOICE_LIST_NAME_INVALID",
+                                "composition",
+                                f"Choice list name '{list_name}' is invalid. Names must begin with a letter or underscore and contain only letters, digits, underscores, hyphens, or periods.",
+                                owner={"model": "choice_list", "name": list_name},
+                                field=emitted_list_column,
+                                sheet="choices",
+                                column=emitted_list_column,
+                                row=row_number,
+                            )
+                        )
 
             if not choice_name:
                 issues.append(
@@ -395,6 +458,47 @@ def validate_codebook_integrity(xlsx_bytes: bytes) -> list[ValidationIssue]:
                         row=row_number,
                     )
                 )
+            elif list_name:
+                duplicate_key = (list_name, choice_name)
+                first_row = first_choice_value_rows.setdefault(
+                    duplicate_key, row_number
+                )
+                if first_row != row_number:
+                    issues.append(
+                        _issue(
+                            "CODEBOOK_CHOICE_VALUE_DUPLICATE",
+                            "composition",
+                            f"Choice value '{choice_name}' is duplicated in choice list '{list_name}'; it was first emitted at row {first_row}.",
+                            owner={
+                                "model": "choice",
+                                "name": choice_name,
+                                "choice_list": list_name,
+                            },
+                            field="name",
+                            sheet="choices",
+                            column="name",
+                            row=row_number,
+                        )
+                    )
+                if "select_multiple" in internal_select_types_by_list[
+                    list_name
+                ] and any(character.isspace() for character in choice_name):
+                    issues.append(
+                        _issue(
+                            "CODEBOOK_CHOICE_VALUE_INVALID",
+                            "composition",
+                            f"Choice value '{choice_name}' in choice list '{list_name}' contains whitespace, which is not supported by select_multiple questions.",
+                            owner={
+                                "model": "choice",
+                                "name": choice_name,
+                                "choice_list": list_name,
+                            },
+                            field="name",
+                            sheet="choices",
+                            column="name",
+                            row=row_number,
+                        )
+                    )
             if english_label_column and not english_label:
                 issues.append(
                     _issue(
@@ -414,17 +518,11 @@ def validate_codebook_integrity(xlsx_bytes: bytes) -> list[ValidationIssue]:
                 )
 
         for row_number, row in enumerate(survey_rows, start=2):
-            declaration = _row_value(row, survey_headers, "type")
-            question_type, _, inline_list_name = declaration.partition(" ")
-            if question_type not in _INTERNAL_SELECT_TYPES:
+            declaration = _internal_select_declaration(row, survey_headers)
+            if not declaration:
                 continue
 
-            list_column = "choice_list" if "choice_list" in survey_headers else "type"
-            list_name = (
-                _row_value(row, survey_headers, "choice_list")
-                if "choice_list" in survey_headers
-                else inline_list_name.strip()
-            )
+            question_type, list_name, list_column = declaration
             question_name = _row_value(row, survey_headers, "name")
             owner = {"model": "question", "name": question_name}
 
@@ -441,7 +539,27 @@ def validate_codebook_integrity(xlsx_bytes: bytes) -> list[ValidationIssue]:
                         row=row_number,
                     )
                 )
-            elif list_name not in emitted_lists:
+                continue
+
+            if (
+                not _is_valid_choice_list_name(list_name)
+                and list_name not in reported_invalid_list_names
+            ):
+                reported_invalid_list_names.add(list_name)
+                issues.append(
+                    _issue(
+                        "CODEBOOK_CHOICE_LIST_NAME_INVALID",
+                        "composition",
+                        f"Choice list name '{list_name}' is invalid. Names must begin with a letter or underscore and contain only letters, digits, underscores, hyphens, or periods.",
+                        owner=owner,
+                        field="choices",
+                        sheet="survey",
+                        column=list_column,
+                        row=row_number,
+                    )
+                )
+
+            if list_name not in emitted_lists:
                 issues.append(
                     _issue(
                         "CODEBOOK_CHOICE_LIST_NOT_EMITTED",
