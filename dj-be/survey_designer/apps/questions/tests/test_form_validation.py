@@ -18,7 +18,13 @@ from questions.services.form_validation import (
 from questions.services.xml_conversion import XMLConversion
 
 
-def _codebook_workbook(survey_rows, choice_rows=(), *, export_columns=False):
+def _codebook_workbook(
+    survey_rows,
+    choice_rows=(),
+    *,
+    export_columns=False,
+    label_column="label",
+):
     workbook = Workbook()
     survey = workbook.active
     survey.title = "survey"
@@ -30,9 +36,9 @@ def _codebook_workbook(survey_rows, choice_rows=(), *, export_columns=False):
 
     choices = workbook.create_sheet("choices")
     choices.append(
-        ["choice_list", "name", "label"]
+        ["choice_list", "name", label_column]
         if export_columns
-        else ["list_name", "name", "label"]
+        else ["list_name", "name", label_column]
     )
     for row in choice_rows:
         choices.append(row)
@@ -195,6 +201,76 @@ def test_codebook_validation_uses_export_choice_list_column():
     assert validate_codebook_integrity(xlsx) == []
 
 
+@pytest.mark.parametrize("missing_value", [None, "", "   "])
+def test_codebook_validation_reports_missing_choice_value(missing_value):
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [("foods", missing_value, "Rice")],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_VALUE_MISSING"]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_CHOICE_VALUE_MISSING",
+        "layer": "composition",
+        "severity": "error",
+        "message": "Choice list 'foods' has an emitted choice with no value.",
+        "owner": {"model": "choice_list", "name": "foods"},
+        "field": "name",
+        "sheet": "choices",
+        "column": "name",
+        "row": 2,
+    }
+
+
+@pytest.mark.parametrize("missing_label", [None, "", "   "])
+@pytest.mark.parametrize("label_column", ["label", "label::English (en)"])
+def test_codebook_validation_reports_missing_english_label(
+    missing_label,
+    label_column,
+):
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [("foods", "rice", missing_label)],
+        label_column=label_column,
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_LABEL_MISSING"]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_CHOICE_LABEL_MISSING",
+        "layer": "composition",
+        "severity": "error",
+        "message": "Choice 'rice' in choice list 'foods' has no English label.",
+        "owner": {"model": "choice", "name": "rice", "choice_list": "foods"},
+        "field": "label",
+        "sheet": "choices",
+        "column": label_column,
+        "row": 2,
+    }
+
+
+def test_codebook_validation_accepts_numeric_choice_value():
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [("foods", 0, "None")],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_codebook_validation_does_not_decide_non_english_label_fallback():
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [("foods", "rice", "")],
+        label_column="label::French (fr)",
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
 def test_codebook_validation_ignores_external_selects():
     xlsx = _codebook_workbook([("select_one_from_file foods.csv", "preferred_food")])
 
@@ -259,6 +335,58 @@ def test_generated_survey_reports_choice_group_without_active_choices(
         "CODEBOOK_CHOICE_LIST_NOT_EMITTED"
     ]
     assert f"choice list '{choices_1.name}'" in result.errors[0].message
+
+
+def test_generated_survey_reports_blank_choice_value(
+    submodule_1,
+    root_question_2,
+    choices_1,
+):
+    choice = choices_1.choices.first()
+    choices_1.choices.filter(id=choice.id).update(name="   ")
+    form = XLSForm(
+        name="Blank choice value",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == ["CODEBOOK_CHOICE_VALUE_MISSING"]
+    assert result.errors[0].owner == {
+        "model": "choice_list",
+        "name": choices_1.name,
+    }
+
+
+def test_generated_survey_reports_blank_english_choice_label(
+    submodule_1,
+    root_question_2,
+    choices_1,
+):
+    choice = choices_1.choices.first()
+    choices_1.choices.filter(id=choice.id).update(label="   ")
+    form = XLSForm(
+        name="Blank choice label",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+        languages=["en"],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == ["CODEBOOK_CHOICE_LABEL_MISSING"]
+    assert result.errors[0].owner == {
+        "model": "choice",
+        "name": choice.name,
+        "choice_list": choices_1.name,
+    }
 
 
 def test_empty_external_file_is_a_structured_input_error():
