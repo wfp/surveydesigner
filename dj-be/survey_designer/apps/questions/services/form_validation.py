@@ -28,6 +28,9 @@ _XHTML_NS = "http://www.w3.org/1999/xhtml"
 _EXTERNAL_REFERENCE = re.compile(r"jr://file-csv/([^/]+)$")
 _ENGLISH_LABEL_COLUMN = re.compile(r"^label::.*\(\s*en\s*\)$", re.IGNORECASE)
 _INTERNAL_SELECT_TYPES = ("select_one", "select_multiple")
+_END_SURVEY_ROW_TYPES = frozenset(("end_group", "end_repeat"))
+_RESERVED_SURVEY_NAMES = frozenset(("meta",))
+_SURVEY_METADATA_TYPES = frozenset(("start", "end", "today", "deviceid"))
 
 
 class ArtifactInputError(Exception):
@@ -376,6 +379,110 @@ def _is_valid_choice_list_name(value: str) -> bool:
     return bool(value) and ":" not in value and is_xml_tag(value)
 
 
+def _normalized_survey_row_type(value: str) -> str:
+    return value.lower().replace(" ", "_")
+
+
+def _generated_survey_owner(row_type: str, name: str = "") -> dict[str, Any]:
+    normalized_type = _normalized_survey_row_type(row_type)
+    if normalized_type == "begin_group":
+        model = "group"
+    elif normalized_type == "begin_repeat":
+        model = "repeat"
+    elif normalized_type in _SURVEY_METADATA_TYPES:
+        model = "metadata"
+    else:
+        model = "question"
+
+    owner = {"model": model}
+    if name:
+        owner["name"] = name
+    if row_type:
+        owner["type"] = row_type
+    return owner
+
+
+def _validate_generated_survey_names(
+    survey_headers: Mapping[str, int], survey_rows: Sequence[tuple[Any, ...]]
+) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    first_name_rows: dict[str, tuple[int, Mapping[str, Any]]] = {}
+
+    for row_number, row in enumerate(survey_rows, start=2):
+        row_type = _row_value(row, survey_headers, "type")
+        name = _row_value(row, survey_headers, "name")
+        if not row_type and not name:
+            continue
+
+        normalized_type = _normalized_survey_row_type(row_type)
+        if normalized_type in _END_SURVEY_ROW_TYPES:
+            continue
+
+        owner = _generated_survey_owner(row_type, name)
+        if not name:
+            issues.append(
+                _issue(
+                    "CODEBOOK_GENERATED_NAME_MISSING",
+                    "composition",
+                    f"Survey row {row_number} of type '{row_type}' requires a generated name.",
+                    owner=owner,
+                    field="name",
+                    sheet="survey",
+                    column="name",
+                    row=row_number,
+                )
+            )
+            continue
+
+        if name in _RESERVED_SURVEY_NAMES:
+            issues.append(
+                _issue(
+                    "CODEBOOK_GENERATED_NAME_INVALID",
+                    "composition",
+                    f"Generated {owner['model']} name '{name}' is reserved and cannot be emitted on the survey sheet.",
+                    owner=owner,
+                    field="name",
+                    sheet="survey",
+                    column="name",
+                    row=row_number,
+                )
+            )
+        elif ":" in name or not is_xml_tag(name):
+            issues.append(
+                _issue(
+                    "CODEBOOK_GENERATED_NAME_INVALID",
+                    "composition",
+                    f"Generated {owner['model']} name '{name}' is invalid. Names must begin with a letter or underscore and contain only letters, digits, underscores, hyphens, or periods.",
+                    owner=owner,
+                    field="name",
+                    sheet="survey",
+                    column="name",
+                    row=row_number,
+                )
+            )
+
+        first_name = first_name_rows.setdefault(name, (row_number, owner))
+        first_row, first_owner = first_name
+        if first_row != row_number:
+            duplicate_owner = dict(owner)
+            duplicate_owner["first_model"] = first_owner["model"]
+            duplicate_owner["first_row"] = first_row
+            issues.append(
+                _issue(
+                    "CODEBOOK_GENERATED_NAME_DUPLICATE",
+                    "composition",
+                    f"Generated {owner['model']} name '{name}' duplicates a {first_owner['model']} first emitted at survey row {first_row}.",
+                    owner=duplicate_owner,
+                    field="name",
+                    sheet="survey",
+                    column="name",
+                    row=row_number,
+                )
+            )
+
+    return issues
+
+
 def validate_codebook_integrity(xlsx_bytes: bytes) -> list[ValidationIssue]:
     """Validate internal select declarations and exact emitted choice rows."""
 
@@ -386,6 +493,11 @@ def validate_codebook_integrity(xlsx_bytes: bytes) -> list[ValidationIssue]:
 
         survey_headers, survey_rows = _sheet_rows_by_header(workbook["survey"])
         choices_headers, choices_rows = _sheet_rows_by_header(workbook["choices"])
+        issues = (
+            _validate_generated_survey_names(survey_headers, survey_rows)
+            if "choice_list" not in survey_headers
+            else []
+        )
         emitted_list_column = (
             "list_name" if "list_name" in choices_headers else "choice_list"
         )
@@ -402,7 +514,6 @@ def validate_codebook_integrity(xlsx_bytes: bytes) -> list[ValidationIssue]:
         first_choice_value_rows: dict[tuple[str, str], int] = {}
         checked_list_names: set[str] = set()
         reported_invalid_list_names: set[str] = set()
-        issues: list[ValidationIssue] = []
         for row_number, row in enumerate(choices_rows, start=2):
             list_name = _row_value(row, choices_headers, emitted_list_column)
             choice_name = _row_value(row, choices_headers, "name")
