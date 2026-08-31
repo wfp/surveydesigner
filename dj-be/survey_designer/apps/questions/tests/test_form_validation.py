@@ -553,6 +553,152 @@ def test_invalid_choice_syntax_blocks_pyxform_conversion():
     assert [issue.code for issue in result.errors] == ["CODEBOOK_CHOICE_VALUE_INVALID"]
 
 
+def test_codebook_validation_reports_missing_generated_name():
+    xlsx = _codebook_workbook([("text", "")])
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_GENERATED_NAME_MISSING"]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_GENERATED_NAME_MISSING",
+        "layer": "composition",
+        "severity": "error",
+        "message": "Survey row 2 of type 'text' requires a generated name.",
+        "owner": {"model": "question", "type": "text"},
+        "field": "name",
+        "sheet": "survey",
+        "column": "name",
+        "row": 2,
+    }
+
+
+def test_codebook_validation_allows_unnamed_closing_rows():
+    xlsx = _codebook_workbook(
+        [
+            ("begin_group", "household"),
+            ("end_group", ""),
+            ("begin_repeat", "members"),
+            ("end repeat", ""),
+        ]
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["1question", "question name", "question$name", "question/name", "question:name"],
+)
+def test_codebook_validation_reports_invalid_generated_name(name):
+    xlsx = _codebook_workbook([("text", name)])
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_GENERATED_NAME_INVALID"]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_GENERATED_NAME_INVALID",
+        "layer": "composition",
+        "severity": "error",
+        "message": f"Generated question name '{name}' is invalid. Names must begin with a letter or underscore and contain only letters, digits, underscores, hyphens, or periods.",
+        "owner": {"model": "question", "name": name, "type": "text"},
+        "field": "name",
+        "sheet": "survey",
+        "column": "name",
+        "row": 2,
+    }
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["question", "_question", "question-1", "question.1", "question_1", "équestion"],
+)
+def test_codebook_validation_accepts_compatible_generated_name(name):
+    xlsx = _codebook_workbook([("text", name)])
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_codebook_validation_rejects_reserved_generated_name():
+    xlsx = _codebook_workbook([("text", "meta")])
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_GENERATED_NAME_INVALID"]
+    assert issues[0].message == (
+        "Generated question name 'meta' is reserved and cannot be emitted on the "
+        "survey sheet."
+    )
+
+
+def test_codebook_validation_reports_duplicate_generated_name_across_row_types():
+    xlsx = _codebook_workbook(
+        [
+            ("begin_group", "household"),
+            ("text", "household"),
+            ("end_group", ""),
+        ]
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_GENERATED_NAME_DUPLICATE"]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_GENERATED_NAME_DUPLICATE",
+        "layer": "composition",
+        "severity": "error",
+        "message": "Generated question name 'household' duplicates a group first emitted at survey row 2.",
+        "owner": {
+            "model": "question",
+            "name": "household",
+            "type": "text",
+            "first_model": "group",
+            "first_row": 2,
+        },
+        "field": "name",
+        "sheet": "survey",
+        "column": "name",
+        "row": 3,
+    }
+
+
+def test_codebook_validation_reports_every_generated_name_duplicate_after_first():
+    xlsx = _codebook_workbook(
+        [("text", "shared"), ("integer", "shared"), ("decimal", "shared")]
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.row for issue in issues] == [3, 4]
+    assert all(issue.code == "CODEBOOK_GENERATED_NAME_DUPLICATE" for issue in issues)
+    assert all("first emitted at survey row 2" in issue.message for issue in issues)
+
+
+def test_codebook_validation_compares_generated_names_case_sensitively():
+    xlsx = _codebook_workbook([("text", "Household"), ("text", "household")])
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_questions_export_layout_does_not_apply_final_name_collision_rule():
+    xlsx = _codebook_workbook(
+        [("text", "shared", ""), ("text", "shared", "")],
+        export_columns=True,
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_invalid_generated_name_blocks_pyxform_conversion():
+    artifact = GeneratedSurveyArtifact(_codebook_workbook([("text", "1invalid")]))
+
+    result = validate_generated_artifact(artifact, converter_cls=ConversionMustNotRun)
+
+    assert result.valid is False
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_GENERATED_NAME_INVALID"
+    ]
+
+
 def test_codebook_validation_does_not_decide_non_english_label_fallback():
     xlsx = _codebook_workbook(
         [("select_one foods", "preferred_food")],
@@ -732,6 +878,85 @@ def test_generated_select_multiple_reports_choice_value_with_whitespace(
         "name": "with space",
         "choice_list": choices_1.name,
     }
+
+
+def test_generated_survey_reports_missing_question_name(
+    submodule_1,
+    root_question_1,
+):
+    root_question_1.name = ""
+    root_question_1.save(update_fields=["name"])
+    form = XLSForm(
+        name="Missing generated name",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_GENERATED_NAME_MISSING"
+    ]
+    assert result.errors[0].owner == {"model": "question", "type": "integer"}
+
+
+def test_generated_survey_reports_invalid_question_name(
+    submodule_1,
+    root_question_1,
+):
+    root_question_1.name = "1invalid"
+    root_question_1.save(update_fields=["name"])
+    form = XLSForm(
+        name="Invalid generated name",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_GENERATED_NAME_INVALID"
+    ]
+    assert result.errors[0].owner == {
+        "model": "question",
+        "name": "1invalid",
+        "type": "integer",
+    }
+
+
+def test_generated_survey_reports_root_and_subquestion_name_collision(
+    submodule_1,
+    root_question_1,
+    sub_question_1,
+):
+    type(sub_question_1).objects.filter(id=sub_question_1.id).update(
+        name=root_question_1.name
+    )
+    sub_question_1.refresh_from_db()
+    form = XLSForm(
+        name="Duplicate generated name",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[sub_question_1.id],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_GENERATED_NAME_DUPLICATE"
+    ]
+    assert result.errors[0].owner["model"] == "question"
+    assert result.errors[0].owner["name"] == root_question_1.name
+    assert result.errors[0].owner["first_model"] == "question"
+    assert result.errors[0].owner["first_row"] < result.errors[0].row
 
 
 def test_empty_external_file_is_a_structured_input_error():
