@@ -77,6 +77,6 @@ We use a **monorepo** structure and follow **trunk-based development**. All new 
 
 ## 💬 Communication
 
-If you have questions about the workflow or need to contact an admin regarding an existing issue, please use the project's [Discussion/Contact Method].
+If you have questions about the workflow or need to contact an admin regarding an existing issue, please use this project's issues or reach out to **global.surveydesigner@wfp.org**.
 
 **Thank you for helping us make Survey Designer better!**
