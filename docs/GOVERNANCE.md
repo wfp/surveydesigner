@@ -330,7 +330,7 @@ the nominee once they are onboarded.
 ### Onboarding
 
 After the nomination passes, a TSC member onboards the new collaborator. See
-[the onboarding guide](./ONBOARDING.md) for details of the onboarding
+[the onboarding guide][] for details of the onboarding
 process.
 
 ## Consensus seeking process
@@ -339,5 +339,6 @@ The TSC follows a [Consensus Seeking][] decision-making model per the
 [TSC Charter][].
 
 [Consensus Seeking]: https://en.wikipedia.org/wiki/Consensus-seeking_decision-making
-[TSC Charter]: https://github.com/nodejs/TSC/blob/HEAD/TSC-Charter.md
+[TSC Charter]: ./doc/TSC/TSC_CHARTER.md
 [survey-designer]: https://github.com/wfp/surveydesigner
+[the onboarding guide]: ./ONBOARDING.md
