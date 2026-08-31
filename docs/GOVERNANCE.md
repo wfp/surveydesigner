@@ -19,8 +19,7 @@
 
 ## Triagers
 
-Triagers assess newly-opened issues in the [survey-designer][] and [survey-designer-documentation/help][]
-repositories. The GitHub team for survey-designer triagers is @[placeholder].
+Triagers assess newly-opened issues in the [survey-designer][] repository and [project](https://github.com/orgs/wfp/projects/11). The GitHub team for survey-designer triagers is @[placeholder].
 Triagers are given the "Triage" GitHub role and have:
 
 * Ability to label issues and pull requests
@@ -33,11 +32,11 @@ See:
 
 ## Collaborators
 
-SurveyDesigner core collaborators maintain the [survey-designer][] GitHub repository.
+SurveyDesigner core collaborators maintain the [survey-designer](https://github.com/wfp/surveydesigner) GitHub repository.
 The GitHub team for SurveyDesigner core collaborators is @[placeholder/]survey-designer/collaborators.
 Collaborators have:
 
-* Commit access to the [survey-designer][] repository
+* Commit access to the [survey-designer](https://github.com/wfp/surveydesigner) repository
 * Access to the SurveyDesigner continuous integration (CI) jobs
 
 Both collaborators and non-collaborators may propose changes to the SurveyDesigner
@@ -91,7 +90,7 @@ The current list of TSC members is in
 [the project README](./README.md#current-project-team-members).
 
 The [TSC Charter][] governs the operations of the TSC. All changes to the
-Charter need approval by the Foundation Cross-Project Council (CPC).
+Charter need approval by the director of the department managing the solution.
 
 ### TSC meetings
 
@@ -157,7 +156,7 @@ To clarify, TSC voting members can object to the vote taking place during the
 meeting, but not to the vote itself.
 
 For discussions outside of meetings, the TSC uses
-[the TSC discussions](https://github.com/survey-designer-documentation/TSC/discussions) for public
+[the TSC discussions]() for public
 issues, and the private TSC email list for private matters. The process for
 public issues in the issue tracker is:
 
@@ -228,7 +227,7 @@ but it is important.
 To nominate a new Collaborator:
 
 1. **Optional but strongly recommended**: open a
-   [discussion in the survey-designer-documentation][] repository. Provide a summary of
+   [discussion in the survey-designer](https://github.com/wfp/surveydesigner/) repository. Provide a summary of
    the nominee's contributions (see below for an example).
 2. **Optional but strongly recommended**: After sufficient wait time (e.g. 72
    hours), if the nomination proposal has received some support and no explicit
@@ -238,7 +237,7 @@ To nominate a new Collaborator:
    nomination issue if I don't hear any objections in the next 72 hours".
 3. **Optional but strongly recommended**: Privately contact the nominee to make
    sure they're comfortable with the nomination.
-4. Link relevant issues from the [survey-designer][] repository. Provide a summary of
+4. Link relevant issues from the [survey-designer](https://github.com/wfp/surveydesigner/) repository. Provide a summary of
    the nominee's contributions (see below for an example). Mention
    collaborators in the issue to notify other collaborators about
    the nomination.
@@ -251,19 +250,19 @@ certain the nominee is fine with the public scrutiny.
 
 Example of list of contributions:
 
-* Commits in the [survey-designer][] repository.
-  * Use the link `https://github.com/nodejs/node/commits?author=GITHUB_ID`
-* Pull requests and issues opened in the [survey-designer][] repository.
-  * Use the link `https://github.com/nodejs/node/issues?q=author:GITHUB_ID`
-* Comments on pull requests and issues in the [survey-designer][] repository
-  * Use the link `https://github.com/nodejs/node/issues?q=commenter:GITHUB_ID`
-* Reviews on pull requests in the [survey-designer][] repository
-  * Use the link `https://github.com/nodejs/node/pulls?q=reviewed-by:GITHUB_ID`
+* Commits in the [survey-designer](https://github.com/wfp/surveydesigner/) repository.
+  * Use the link `https://github.com/wfp/surveydesigner/commits?author=GITHUB_ID`
+* Pull requests and issues opened in the [survey-designer](https://github.com/wfp/surveydesigner/) repository.
+  * Use the link `https://github.com/wfp/surveydesigner/issues?q=author:GITHUB_ID`
+* Comments on pull requests and issues in the [survey-designer](https://github.com/wfp/surveydesigner/) repository
+  * Use the link `https://github.com/wfp/surveydesigner/issues?q=commenter:GITHUB_ID`
+* Reviews on pull requests in the [survey-designer](https://github.com/wfp/surveydesigner/) repository
+  * Use the link `https://github.com/wfp/surveydesigner/pulls?q=reviewed-by:GITHUB_ID`
 * Help provided to end-users and novice contributors
 * Pull requests and issues opened throughout the SurveyDesigner projects
-  * Use the link  `https://github.com/search?q=author:GITHUB_ID+org:nodejs`
+  * Use the link  `https://github.com/search?q=author:GITHUB_ID+org:wfp`
 * Comments on pull requests and issues throughout the SurveyDesigner projects
-  * Use the link `https://github.com/search?q=commenter:GITHUB_ID+org:nodejs`
+  * Use the link `https://github.com/search?q=commenter:GITHUB_ID+org:wfp`
 * Participation in other projects, teams, and working groups of the SurveyDesigner
   organization
 * Other participation in the wider SurveyDesigner community
@@ -341,6 +340,4 @@ The TSC follows a [Consensus Seeking][] decision-making model per the
 
 [Consensus Seeking]: https://en.wikipedia.org/wiki/Consensus-seeking_decision-making
 [TSC Charter]: https://github.com/nodejs/TSC/blob/HEAD/TSC-Charter.md
-[discussion in the nodejs/collaborators]: https://github.com/nodejs/collaborators/discussions/categories/collaborator-nominations
-[nodejs/help]: https://github.com/nodejs/help
-[nodejs/node]: https://github.com/nodejs/node
+[survey-designer]: https://github.com/wfp/surveydesigner
