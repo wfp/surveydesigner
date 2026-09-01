@@ -16,7 +16,6 @@ from modules.models import (
     SubmoduleRequiredGroup,
 )
 from openpyxl import load_workbook
-from openpyxl.writer.excel import save_virtual_workbook
 from organization.models import Organization
 from questions.const import QuestionType
 from questions.models import (
@@ -29,6 +28,7 @@ from questions.models import (
     Suffix,
 )
 from questions.services import QuestionsExport
+from questions.services.workbook import save_virtual_workbook
 
 
 def test_submit_change_request_view_get(

@@ -19,7 +19,6 @@ import { surveyFormActions } from "../../redux/reducers/surveyFormReducer";
 import { fetchSubmodules } from "../../redux/actions/submodulesActions";
 import { submodulesActions } from "../../redux/reducers/submodulesReducer";
 import { API } from "../../utils";
-import { getApiErrorSummary } from "../../utils/apiError";
 import { useModules } from "../../contexts/ModulesContext";
 import {
   ChoiceTranslation,
@@ -28,10 +27,17 @@ import {
   SubQuestion,
   Submodule,
   SubmoduleWithQuestions,
+  ValidationIssue,
 } from "../../types/api";
 import { ApiError } from "../../types";
 import { ReviewProps } from "./Review.interface";
 import { getOrderedSubmodules } from "../../utils/generate";
+import {
+  formatValidationIssues,
+  getApiErrorSummary,
+  getApiErrorTitle,
+  parseApiError,
+} from "../../utils/apiError";
 import {
   getSavedSelectionsForSubmoduleItems,
   getSavedSubquestionIdsBySubmodule,
@@ -59,9 +65,11 @@ function Review({
   const [languages, setLanguages] = useState<ChoiceTranslation[]>([]);
   const [subQuestions, setSubQuestions] = useState(surveyForm.sub_questions);
   const [previewData, setPreviewData] = useState<{
-    errors: string[];
-    warnings: string[];
+    errors: Array<ValidationIssue | string>;
+    warnings: Array<ValidationIssue | string>;
   } | null>(null);
+  const [previewNotificationVersion, setPreviewNotificationVersion] =
+    useState(0);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [APIError, setAPIError] = useState<ApiError | null>(null);
   const modulesData = useModules();
@@ -208,6 +216,8 @@ function Review({
     })
       .then((res) => {
         setPreviewData(res.data);
+        setPreviewNotificationVersion((version) => version + 1);
+        setAPIError(null);
         // eslint-disable-next-line no-console
         console.log("warnings", res.data.warnings);
         // eslint-disable-next-line no-console
@@ -217,16 +227,17 @@ function Review({
         }
         setIsPreviewing(false);
       })
-      .catch((err) => {
-        setAPIError(err);
+      .catch(async (err) => {
+        setAPIError(await parseApiError(err));
+        setPreviewNotificationVersion((version) => version + 1);
         setIsPreviewing(false);
       });
   }
 
-  function wrapMessages(messages: string[]) {
+  function wrapMessages(messages: Array<ValidationIssue | string>) {
     return (
       <div style={{ marginBottom: "1rem", marginTop: "1rem" }}>
-        {messages.map((msg) => (
+        {formatValidationIssues(messages).map((msg) => (
           // eslint-disable-next-line react/jsx-key
           <div>{msg}</div>
         ))}
@@ -351,6 +362,7 @@ function Review({
       <div style={{ position: "fixed", bottom: 20, right: 20, zIndex: 2 }}>
         {APIError && (
           <Callout
+            key={`preview-api-error-${previewNotificationVersion}`}
             iconDescription="close"
             kind="error"
             lowContrast
@@ -359,7 +371,7 @@ function Review({
               APIError,
               "The preview could not be generated.",
             )}
-            title="Error"
+            title={getApiErrorTitle(APIError, "Error")}
             // eslint-disable-next-line jsx-a11y/aria-role
             role="api_errors"
             isDismissible={true}
@@ -368,6 +380,7 @@ function Review({
 
         {previewData && previewData.errors && previewData.errors.length > 0 && (
           <ToastNotification
+            key={`preview-errors-${previewNotificationVersion}`}
             iconDescription="close"
             kind="error"
             lowContrast
@@ -386,6 +399,7 @@ function Review({
           previewData.warnings &&
           previewData.warnings.length > 0 && (
             <Callout
+              key={`preview-warnings-${previewNotificationVersion}`}
               iconDescription="close"
               kind="warning"
               lowContrast

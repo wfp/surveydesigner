@@ -1,4 +1,5 @@
 import io
+import json
 import logging
 import os
 import uuid
@@ -59,9 +60,21 @@ from questions.models import (
     RootQuestion,
     SubQuestion,
 )
-from questions.services import DocConversion, XLSForm, XMLConversion
+from questions.services import (
+    ArtifactInfrastructureError,
+    ArtifactInputError,
+    DocConversion,
+    ValidationIssue,
+    ValidationResult,
+    ValidatorInfrastructureError,
+    XLSForm,
+    XMLConversion,
+    build_generated_artifact,
+    failed_validation_result,
+    validate_generated_artifact,
+)
 from rest_framework import serializers, status
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -89,12 +102,134 @@ def generate_docx(data, user):
     return doc_model.id
 
 
-def get_xlsx_from_request(get_serializer, request, as_wb=False):
-    serializer = get_serializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-    data = serializer.validated_data
-    validate_generation_scope(request, data)
-    return get_xlsx_from_data(data, as_wb=as_wb)
+def _validation_issues_from_detail(detail, field=None):
+    if isinstance(detail, dict):
+        issues = []
+        for key, value in detail.items():
+            issues.extend(_validation_issues_from_detail(value, field=str(key)))
+        return issues
+    if isinstance(detail, (list, tuple)):
+        issues = []
+        for value in detail:
+            issues.extend(_validation_issues_from_detail(value, field=field))
+        return issues
+    return [
+        ValidationIssue(
+            code="INPUT_INVALID",
+            layer="composition",
+            severity="error",
+            message=str(detail),
+            field=field,
+        )
+    ]
+
+
+def prepare_validated_artifact(get_serializer, request):
+    """Build and validate one exact artifact before an action has side effects."""
+
+    try:
+        serializer = get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        validate_generation_scope(request, data)
+    except APIException as exc:
+        result = ValidationResult(
+            valid=False,
+            errors=tuple(_validation_issues_from_detail(exc.detail)),
+        )
+        return None, None, result, status.HTTP_400_BAD_REQUEST
+
+    try:
+        xlsx_form = get_xlsx_from_data(data, as_wb=True)
+        artifact = build_generated_artifact(xlsx_form)
+    except ArtifactInputError as exc:
+        return (
+            data,
+            None,
+            failed_validation_result(exc.issue),
+            status.HTTP_400_BAD_REQUEST,
+        )
+    except ArtifactInfrastructureError as exc:
+        issue = ValidationIssue(
+            code="ARTIFACT_UNAVAILABLE",
+            layer="composition",
+            severity="error",
+            message=str(exc),
+        )
+        return (
+            data,
+            None,
+            failed_validation_result(issue),
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    except Exception as exc:
+        issue = ValidationIssue(
+            code="ARTIFACT_GENERATION_FAILED",
+            layer="composition",
+            severity="error",
+            message=f"Unable to generate the survey artifact: {exc}",
+        )
+        return (
+            data,
+            None,
+            failed_validation_result(issue),
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    try:
+        result = validate_generated_artifact(artifact, converter_cls=XMLConversion)
+    except ValidatorInfrastructureError as exc:
+        issue = ValidationIssue(
+            code="VALIDATOR_UNAVAILABLE",
+            layer="validator",
+            severity="error",
+            message=str(exc),
+        )
+        return (
+            data,
+            xlsx_form,
+            failed_validation_result(issue, artifact_hash=artifact.artifact_hash),
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    except Exception as exc:
+        issue = ValidationIssue(
+            code="VALIDATOR_FAILURE",
+            layer="validator",
+            severity="error",
+            message=f"Survey validation could not complete: {exc}",
+        )
+        return (
+            data,
+            xlsx_form,
+            failed_validation_result(issue, artifact_hash=artifact.artifact_hash),
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    return (
+        data,
+        xlsx_form,
+        result,
+        (status.HTTP_200_OK if result.valid else status.HTTP_400_BAD_REQUEST),
+    )
+
+
+def _validation_response(result, http_status):
+    return Response(result.as_dict(), status=http_status)
+
+
+def _validation_payload(result):
+    return result.as_dict()
+
+
+def _add_validation_headers(response, result):
+    warnings = json.dumps(
+        [warning.as_dict() for warning in result.warnings], separators=(",", ":")
+    )
+    response["X-Survey-Validation-Warnings"] = warnings
+    # Keep a short generic alias for clients that do not use the product prefix.
+    response["X-Validation-Warnings"] = warnings
+    response["X-Survey-Artifact-Hash"] = result.artifact_hash
+    return response
 
 
 INDICATOR_ORGANIZATION_RELATIONS = (
@@ -189,7 +324,8 @@ class UploadXLSForm(GenericAPIView):
         try:
             return response.json()
         except (JSONDecodeError, ValueError):
-            return {"response": response.text[:2000] if response.text else ""}
+            response_text = getattr(response, "text", "") or ""
+            return {"response": response_text[:2000]}
 
     def _handle_bad_response(self, response, service_name, action):
         details = self._get_response_error_details(response)
@@ -198,7 +334,7 @@ class UploadXLSForm(GenericAPIView):
             service_name,
             action,
             response.status_code,
-            response.url,
+            getattr(response, "url", ""),
             details,
         )
 
@@ -211,8 +347,8 @@ class UploadXLSForm(GenericAPIView):
             }
         )
 
-    def handle_kobo(self, url, xlsx_form, xlsx_file, token):
-        name = xlsx_form.id_name
+    def handle_kobo(self, url, artifact, token):
+        name = artifact.form_name
 
         response = requests.post(
             f"{url}?format=json",
@@ -229,7 +365,7 @@ class UploadXLSForm(GenericAPIView):
         upload_response = requests.post(
             "https://kobo.humanitarianresponse.info/api/v2/imports/",
             data={"assetUid": uid, "destination": data["url"], "name": name},
-            files={"file": (f"{name}.xlsx", xlsx_file)},
+            files={"file": (f"{name}.xlsx", artifact.xlsx_bytes)},
             headers={"Authorization": f"Token {token}"},
         )
 
@@ -242,10 +378,10 @@ class UploadXLSForm(GenericAPIView):
 
         return Response({"preview_url": preview_url})
 
-    def handle_ona(self, site, url, xlsx_form, xlsx_file, token):
+    def handle_ona(self, site, url, artifact, token):
         response = requests.post(
             url,
-            files={"xls_file": (f"{xlsx_form.id_name}.xlsx", xlsx_file)},
+            files={"xls_file": (f"{artifact.form_name}.xlsx", artifact.xlsx_bytes)},
             headers={"Authorization": f"Token {token}"},
         )
 
@@ -261,7 +397,7 @@ class UploadXLSForm(GenericAPIView):
             "preview_url": data.get("enketo_preview_url", ""),
         }
 
-        external_files = getattr(xlsx_form, "external_files", {})
+        external_files = artifact.external_files
         if site.is_moda and external_files:
             uploaded_files = self._upload_moda_metadata(
                 site, token, data, external_files
@@ -288,46 +424,21 @@ class UploadXLSForm(GenericAPIView):
         }
         uploaded_files = []
 
-        for file_name, field_file in external_files.items():
-            if not field_file:
+        for file_name, file_bytes in external_files.items():
+            if not file_bytes:
                 continue
 
-            try:
-                field_file.open("rb")
-            except FileNotFoundError:
-                logger.warning(
-                    "Moda metadata upload failed because choices file is missing. file=%s",
-                    file_name,
-                )
-                raise ValidationError(
-                    {"message": f"Choices file '{file_name}' could not be found."}
-                )
-            except Exception as exc:
-                logger.exception(
-                    "Moda metadata upload failed while opening choices file. file=%s",
-                    file_name,
-                )
-                raise ValidationError(
-                    {
-                        "message": f"Unable to open choices file '{file_name}' for Moda metadata upload: {exc}"
-                    }
-                )
-
-            try:
-                file_obj = getattr(field_file, "file", field_file)
-                files = {
-                    "xform": (None, str(form_id)),
-                    "data_type": (None, "media"),
-                    "data_value": (None, file_name),
-                    "data_file": (file_name, file_obj, "text/csv"),
-                }
-                response = requests.post(
-                    metadata_url,
-                    headers=headers,
-                    files=files,
-                )
-            finally:
-                field_file.close()
+            files = {
+                "xform": (None, str(form_id)),
+                "data_type": (None, "media"),
+                "data_value": (None, file_name),
+                "data_file": (file_name, io.BytesIO(file_bytes), "text/csv"),
+            }
+            response = requests.post(
+                metadata_url,
+                headers=headers,
+                files=files,
+            )
 
             if not response.ok:
                 self._handle_moda_metadata_error(response, file_name)
@@ -341,7 +452,7 @@ class UploadXLSForm(GenericAPIView):
         logger.warning(
             "Moda metadata upload failed. status=%s url=%s file=%s details=%s",
             response.status_code,
-            response.url,
+            getattr(response, "url", ""),
             file_name,
             details,
         )
@@ -373,12 +484,13 @@ class UploadXLSForm(GenericAPIView):
 
     @extend_schema(responses={200: upload_xls_form_response})
     def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-        validate_generation_scope(request, data)
-        xlsx_form = get_xlsx_from_data(data, as_wb=True)
-        xlsx_file = xlsx_form.generate()
+        data, _, validation, validation_status = prepare_validated_artifact(
+            self.get_serializer, request
+        )
+        if not validation.valid:
+            return _validation_response(validation, validation_status)
+
+        artifact = validation.artifact
 
         api_key_id = data.get("id")
         project_id = data.get("project_id")
@@ -403,18 +515,26 @@ class UploadXLSForm(GenericAPIView):
 
         url = UserAPISiteAPITypes.get_upload_url(site, project_id)
 
-        if not (url or api_configuration):
-            return Response(
-                {"message": "Configuration for that site not found."},
-                status=status.HTTP_400_BAD_REQUEST,
+        if not url:
+            raise ValidationError(
+                {
+                    "message": "The selected publishing site is not configured.",
+                    "details": {
+                        "site": "Select a configured API key before publishing."
+                    },
+                }
             )
 
         token = api_configuration.get_key()
 
         if site.is_kobo:
-            return self.handle_kobo(url, xlsx_form, xlsx_file, token)
+            response = self.handle_kobo(url, artifact, token)
+            response.data.update(_validation_payload(validation))
+            return response
         if site.is_ona:
-            return self.handle_ona(site, url, xlsx_form, xlsx_file, token)
+            response = self.handle_ona(site, url, artifact, token)
+            response.data.update(_validation_payload(validation))
+            return response
 
         raise ValidationError({"message": "Site is not configured."})
 
@@ -511,43 +631,62 @@ class GenerateXLSForm(GenericAPIView):
 
     @extend_schema(responses={200: generate_xls_form_response})
     def post(self, request, *args, **kwargs):
-        xlsx_form = get_xlsx_from_request(self.get_serializer, request, as_wb=True)
-        xlsx_bytes = xlsx_form.generate()
+        _, _, validation, validation_status = prepare_validated_artifact(
+            self.get_serializer, request
+        )
+        if not validation.valid:
+            # Even with responseType=blob, invalid artifacts are always JSON.
+            return _validation_response(validation, validation_status)
 
-        external_files = getattr(xlsx_form, "external_files", {})
+        artifact = validation.artifact
+        external_files = artifact.external_files
         if external_files:
             zip_buffer = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                zip_file.writestr("survey.xlsx", xlsx_bytes)
-                for filename, file_obj in external_files.items():
-                    try:
-                        data = PreviewXLSForm._read_file_content(file_obj)
-                        if data:
-                            zip_file.writestr(filename, data)
-                        else:
-                            return JsonResponse(
-                                {"detail": f"File {filename} read as empty."},
-                                status=status.HTTP_400_BAD_REQUEST,
-                            )
-                    except Exception as e:
-                        return JsonResponse(
-                            {"detail": f"Error reading external file {filename}: {e}"},
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
+            try:
+                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                    zip_file.writestr("survey.xlsx", artifact.xlsx_bytes)
+                    for filename, file_bytes in external_files.items():
+                        zip_file.writestr(filename, file_bytes)
+            except Exception as exc:
+                issue = ValidationIssue(
+                    code="ARTIFACT_SERIALIZATION_FAILURE",
+                    layer="storage",
+                    severity="error",
+                    message=f"Unable to package the validated survey artifact: {exc}",
+                )
+                return _validation_response(
+                    failed_validation_result(
+                        issue, artifact_hash=validation.artifact_hash
+                    ),
+                    status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
 
             response = HttpResponse(
                 zip_buffer.getvalue(),
                 content_type="application/zip",
             )
             response["Content-Disposition"] = "attachment; filename=survey.zip"
-            return response
+            return _add_validation_headers(response, validation)
 
         response = HttpResponse(
-            xlsx_bytes,
+            artifact.xlsx_bytes,
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
         response["Content-Disposition"] = "attachment; filename=survey.xlsx"
-        return response
+        return _add_validation_headers(response, validation)
+
+
+class ValidateXLSForm(GenericAPIView):
+    """Validate the exact generated artifact without storage or network effects."""
+
+    serializer_class = GenerateXLSFormSerializer
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        _, _, validation, validation_status = prepare_validated_artifact(
+            self.get_serializer, request
+        )
+        return _validation_response(validation, validation_status)
 
 
 preview_xls_form_response = OpenApiResponse(
@@ -576,64 +715,40 @@ class PreviewXLSForm(GenericAPIView):
     serializer_class = GenerateXLSFormSerializer
     permission_classes = [IsAuthenticated]
 
-    @staticmethod
-    def _read_file_content(file_obj):
-        """
-        Read file content regardless of whether we received a FieldFile or ContentFile.
-        """
-        if hasattr(file_obj, "open"):
-            file_obj.open("rb")
-            try:
-                data = file_obj.read()
-            finally:
-                file_obj.close()
-        else:
-            data = file_obj.read()
-            if hasattr(file_obj, "seek"):
-                file_obj.seek(0)
-        return data
-
     @extend_schema(responses={200: preview_xls_form_response})
     def post(self, request, *args, **kwargs):
-        xlsx_form = get_xlsx_from_request(self.get_serializer, request, as_wb=True)
-        xlsx_b = io.BytesIO(xlsx_form.generate())
-        xml_conversion = XMLConversion(xlsx_b)
-        xml_data = xml_conversion.run()
+        _, _, validation, validation_status = prepare_validated_artifact(
+            self.get_serializer, request
+        )
+        if not validation.valid:
+            return _validation_response(validation, validation_status)
+
+        artifact = validation.artifact
+        xml_data = artifact.xml
 
         url = ""
         enketo_url = ""
-        external_files = getattr(xlsx_form, "external_files", {})
-        if xml_data:
-            preview_id = uuid.uuid4().hex
-            storage_prefix = os.path.join("previews", preview_id)
+        external_files = artifact.external_files
+        preview_id = uuid.uuid4().hex
+        storage_prefix = os.path.join("previews", preview_id)
+
+        try:
             survey = Survey.objects.create()
             storage = survey.file.storage
 
             file_url_map = {}
-            for filename, file_obj in external_files.items():
-                if not filename or not file_obj:
-                    continue
-                try:
-                    data = self._read_file_content(file_obj)
-                except FileNotFoundError:
-                    continue
-                if data is None:
-                    continue
-
+            for filename, file_bytes in external_files.items():
                 storage_path = storage.save(
-                    f"{storage_prefix}/{filename}", ContentFile(data)
+                    f"{storage_prefix}/{filename}", ContentFile(file_bytes)
                 )
                 file_url_map[filename] = storage.url(storage_path)
 
             xml_input = (
                 xml_data.encode("utf-8") if isinstance(xml_data, str) else xml_data
             )
-            try:
-                root = ET.fromstring(xml_input)
-            except (ET.ParseError, ValueError):
-                root = None
+            root = ET.fromstring(xml_input)
 
-            if root is not None and file_url_map:
+            if file_url_map:
                 ns = {
                     "xf": "http://www.w3.org/2002/xforms",
                     "h": "http://www.w3.org/1999/xhtml",
@@ -661,13 +776,25 @@ class PreviewXLSForm(GenericAPIView):
             survey.file.save(file_name, ContentFile(xml_bytes))
             url = survey.file.url
             enketo_url = survey.get_enketo_preview_url()
+        except Exception as exc:
+            issue = ValidationIssue(
+                code="ARTIFACT_STORAGE_FAILURE",
+                layer="storage",
+                severity="error",
+                message=f"Unable to store the validated preview artifact: {exc}",
+            )
+            return _validation_response(
+                failed_validation_result(issue, artifact_hash=validation.artifact_hash),
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
-        response = {
-            "url": url,
-            "enketo_url": enketo_url,
-            "warnings": xml_conversion.warnings,
-            "errors": xml_conversion.errors,
-        }
+        response = _validation_payload(validation)
+        response.update(
+            {
+                "url": url,
+                "enketo_url": enketo_url,
+            }
+        )
         return Response(response)
 
 
