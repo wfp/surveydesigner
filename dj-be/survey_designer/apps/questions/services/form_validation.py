@@ -28,9 +28,37 @@ _XHTML_NS = "http://www.w3.org/1999/xhtml"
 _EXTERNAL_REFERENCE = re.compile(r"jr://file-csv/([^/]+)$")
 _ENGLISH_LABEL_COLUMN = re.compile(r"^label::.*\(\s*en\s*\)$", re.IGNORECASE)
 _INTERNAL_SELECT_TYPES = ("select_one", "select_multiple")
+_EXTERNAL_SELECT_TYPES = ("select_one_from_file", "select_multiple_from_file")
 _END_SURVEY_ROW_TYPES = frozenset(("end_group", "end_repeat"))
 _RESERVED_SURVEY_NAMES = frozenset(("meta",))
 _SURVEY_METADATA_TYPES = frozenset(("start", "end", "today", "deviceid"))
+_SUPPORTED_GENERATED_TYPES = frozenset(
+    (
+        "acknowledge",
+        "audio",
+        "background-audio",
+        "barcode",
+        "calculate",
+        "date",
+        "dateTime",
+        "decimal",
+        "geopoint",
+        "geoshape",
+        "geotrace",
+        "hidden",
+        "image",
+        "integer",
+        "note",
+        "rank",
+        "select_multiple",
+        "select_multiple_from_file",
+        "select_one",
+        "select_one_from_file",
+        "text",
+        "time",
+        "video",
+    )
+)
 
 
 class ArtifactInputError(Exception):
@@ -105,7 +133,7 @@ class GeneratedSurveyArtifact:
     external_files: Mapping[str, bytes] = field(default_factory=dict)
     artifact_hash: str | None = None
     xml: str | None = None
-    row_source_map: Mapping[str, Any] | None = None
+    row_source_map: Mapping[Any, Any] | None = None
     form_name: str = "survey"
 
     def __post_init__(self) -> None:
@@ -483,7 +511,530 @@ def _validate_generated_survey_names(
     return issues
 
 
-def validate_codebook_integrity(xlsx_bytes: bytes) -> list[ValidationIssue]:
+def _base_question_type(declaration: str) -> str:
+    return declaration.partition(" ")[0]
+
+
+def _validate_generated_survey_types(
+    survey_headers: Mapping[str, int], survey_rows: Sequence[tuple[Any, ...]]
+) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    for row_number, row in enumerate(survey_rows, start=2):
+        declaration = _row_value(row, survey_headers, "type")
+        name = _row_value(row, survey_headers, "name")
+        normalized_type = _normalized_survey_row_type(declaration)
+        if not declaration and name:
+            issues.append(
+                _issue(
+                    "CODEBOOK_GENERATED_TYPE_UNSUPPORTED",
+                    "composition",
+                    f"Generated question '{name}' has no type.",
+                    owner=_generated_survey_owner(declaration, name),
+                    field="type",
+                    sheet="survey",
+                    column="type",
+                    row=row_number,
+                )
+            )
+            continue
+        if (
+            not declaration
+            or normalized_type in _END_SURVEY_ROW_TYPES
+            or normalized_type in ("begin_group", "begin_repeat")
+            or normalized_type in _SURVEY_METADATA_TYPES
+        ):
+            continue
+
+        question_type = _base_question_type(declaration)
+        if question_type not in _SUPPORTED_GENERATED_TYPES:
+            issues.append(
+                _issue(
+                    "CODEBOOK_GENERATED_TYPE_UNSUPPORTED",
+                    "composition",
+                    f"Generated question '{name}' uses unsupported type '{question_type}'.",
+                    owner=_generated_survey_owner(declaration, name),
+                    field="type",
+                    sheet="survey",
+                    column="type",
+                    row=row_number,
+                )
+            )
+    return issues
+
+
+def _split_emitted_names(value: str) -> set[str]:
+    return {name.strip() for name in value.split(",") if name.strip()}
+
+
+def _validate_codebook_export_definitions(
+    workbook: Any,
+    survey_headers: Mapping[str, int],
+    survey_rows: Sequence[tuple[Any, ...]],
+    emitted_lists: set[str],
+) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    suffixes: dict[str, dict[str, Any]] = {}
+    recall_periods: dict[str, dict[str, Any]] = {}
+
+    suffix_headers: Mapping[str, int] = {}
+    suffix_rows: Sequence[tuple[Any, ...]] = ()
+    if "suffixes" in workbook.sheetnames:
+        suffix_headers, suffix_rows = _sheet_rows_by_header(workbook["suffixes"])
+
+    for row_number, row in enumerate(suffix_rows, start=2):
+        name = _row_value(row, suffix_headers, "name")
+        suffix_type = _row_value(row, suffix_headers, "type")
+        choice_list = _row_value(row, suffix_headers, "choicelist")
+        nested_suffixes = _split_emitted_names(
+            _row_value(row, suffix_headers, "suffix")
+        )
+        if not any((name, suffix_type, choice_list, nested_suffixes)):
+            continue
+
+        owner = {"model": "suffix", "name": name} if name else {"model": "suffix"}
+        if not name:
+            issues.append(
+                _issue(
+                    "CODEBOOK_SUFFIX_NAME_MISSING",
+                    "composition",
+                    "An emitted suffix definition has no name.",
+                    owner=owner,
+                    field="name",
+                    sheet="suffixes",
+                    column="name",
+                    row=row_number,
+                )
+            )
+        else:
+            if ":" in name or not is_xml_tag(name):
+                issues.append(
+                    _issue(
+                        "CODEBOOK_SUFFIX_NAME_INVALID",
+                        "composition",
+                        f"Suffix name '{name}' is invalid. Names must begin with a letter or underscore and contain only letters, digits, underscores, hyphens, or periods.",
+                        owner=owner,
+                        field="name",
+                        sheet="suffixes",
+                        column="name",
+                        row=row_number,
+                    )
+                )
+            if name in suffixes:
+                issues.append(
+                    _issue(
+                        "CODEBOOK_SUFFIX_NAME_DUPLICATE",
+                        "composition",
+                        f"Suffix '{name}' is duplicated; it was first emitted at row {suffixes[name]['row']}.",
+                        owner={
+                            "model": "suffix",
+                            "name": name,
+                            "first_row": suffixes[name]["row"],
+                        },
+                        field="name",
+                        sheet="suffixes",
+                        column="name",
+                        row=row_number,
+                    )
+                )
+            else:
+                suffixes[name] = {
+                    "type": suffix_type,
+                    "choice_list": choice_list,
+                    "nested_suffixes": nested_suffixes,
+                    "row": row_number,
+                }
+
+        if suffix_type not in _SUPPORTED_GENERATED_TYPES:
+            issues.append(
+                _issue(
+                    "CODEBOOK_SUFFIX_TYPE_UNSUPPORTED",
+                    "composition",
+                    f"Suffix '{name}' uses unsupported type '{suffix_type}'.",
+                    owner=owner,
+                    field="type",
+                    sheet="suffixes",
+                    column="type",
+                    row=row_number,
+                )
+            )
+        elif suffix_type in _INTERNAL_SELECT_TYPES:
+            if not choice_list:
+                issues.append(
+                    _issue(
+                        "CODEBOOK_SUFFIX_CHOICE_LIST_MISSING",
+                        "composition",
+                        f"Suffix '{name}' uses {suffix_type} but has no choice list.",
+                        owner=owner,
+                        field="choices",
+                        sheet="suffixes",
+                        column="choicelist",
+                        row=row_number,
+                    )
+                )
+            elif choice_list not in emitted_lists:
+                issues.append(
+                    _issue(
+                        "CODEBOOK_SUFFIX_CHOICE_LIST_NOT_EMITTED",
+                        "composition",
+                        f"Suffix '{name}' references choice list '{choice_list}', but that list has no emitted choices.",
+                        owner=owner,
+                        field="choices",
+                        sheet="suffixes",
+                        column="choicelist",
+                        row=row_number,
+                    )
+                )
+        elif suffix_type not in _EXTERNAL_SELECT_TYPES and choice_list:
+            issues.append(
+                _issue(
+                    "CODEBOOK_SUFFIX_CHOICE_LIST_INCOMPATIBLE",
+                    "composition",
+                    f"Suffix '{name}' has type '{suffix_type}', which cannot use choice list '{choice_list}'.",
+                    owner=owner,
+                    field="choices",
+                    sheet="suffixes",
+                    column="choicelist",
+                    row=row_number,
+                )
+            )
+
+    recall_headers: Mapping[str, int] = {}
+    recall_rows: Sequence[tuple[Any, ...]] = ()
+    if "recall_periods" in workbook.sheetnames:
+        recall_headers, recall_rows = _sheet_rows_by_header(workbook["recall_periods"])
+
+    for row_number, row in enumerate(recall_rows, start=2):
+        name = _row_value(row, recall_headers, "name")
+        description = _row_value(row, recall_headers, "description")
+        if not name and not description:
+            continue
+
+        owner = (
+            {"model": "recall_period", "name": name}
+            if name
+            else {"model": "recall_period"}
+        )
+        if not name:
+            issues.append(
+                _issue(
+                    "CODEBOOK_RECALL_PERIOD_NAME_MISSING",
+                    "composition",
+                    "An emitted recall-period definition has no name.",
+                    owner=owner,
+                    field="name",
+                    sheet="recall_periods",
+                    column="name",
+                    row=row_number,
+                )
+            )
+            continue
+        if ":" in name or not is_xml_tag(name):
+            issues.append(
+                _issue(
+                    "CODEBOOK_RECALL_PERIOD_NAME_INVALID",
+                    "composition",
+                    f"Recall-period name '{name}' is invalid. Names must begin with a letter or underscore and contain only letters, digits, underscores, hyphens, or periods.",
+                    owner=owner,
+                    field="name",
+                    sheet="recall_periods",
+                    column="name",
+                    row=row_number,
+                )
+            )
+        if name in recall_periods:
+            issues.append(
+                _issue(
+                    "CODEBOOK_RECALL_PERIOD_NAME_DUPLICATE",
+                    "composition",
+                    f"Recall period '{name}' is duplicated; it was first emitted at row {recall_periods[name]['row']}.",
+                    owner={
+                        "model": "recall_period",
+                        "name": name,
+                        "first_row": recall_periods[name]["row"],
+                    },
+                    field="name",
+                    sheet="recall_periods",
+                    column="name",
+                    row=row_number,
+                )
+            )
+        else:
+            recall_periods[name] = {"row": row_number}
+
+    for row_number, row in enumerate(survey_rows, start=2):
+        question_name = _row_value(row, survey_headers, "name")
+        suffix_1_name = _row_value(row, survey_headers, "suffix1")
+        suffix_2_name = _row_value(row, survey_headers, "suffix2")
+        recall_period_name = _row_value(row, survey_headers, "recall_period")
+        if not any((suffix_1_name, suffix_2_name, recall_period_name)):
+            continue
+
+        owner = {"model": "question", "name": question_name}
+        suffix_1 = suffixes.get(suffix_1_name)
+        suffix_2 = suffixes.get(suffix_2_name)
+        if suffix_1_name and not suffix_1:
+            issues.append(
+                _issue(
+                    "CODEBOOK_SUFFIX_NOT_EMITTED",
+                    "composition",
+                    f"Question '{question_name}' references suffix '{suffix_1_name}', but that suffix was not emitted.",
+                    owner=owner,
+                    field="suffix1",
+                    sheet="survey",
+                    column="suffix1",
+                    row=row_number,
+                )
+            )
+        if suffix_2_name and not suffix_2:
+            issues.append(
+                _issue(
+                    "CODEBOOK_SUFFIX_NOT_EMITTED",
+                    "composition",
+                    f"Question '{question_name}' references suffix '{suffix_2_name}', but that suffix was not emitted.",
+                    owner=owner,
+                    field="suffix2",
+                    sheet="survey",
+                    column="suffix2",
+                    row=row_number,
+                )
+            )
+        if suffix_2_name and not suffix_1_name:
+            issues.append(
+                _issue(
+                    "CODEBOOK_NESTED_SUFFIX_INVALID",
+                    "composition",
+                    f"Question '{question_name}' uses suffix 2 '{suffix_2_name}' without suffix 1.",
+                    owner=owner,
+                    field="suffix2",
+                    sheet="survey",
+                    column="suffix2",
+                    row=row_number,
+                )
+            )
+        elif suffix_1 and suffix_2 and suffix_2_name not in suffix_1["nested_suffixes"]:
+            issues.append(
+                _issue(
+                    "CODEBOOK_NESTED_SUFFIX_INVALID",
+                    "composition",
+                    f"Question '{question_name}' uses suffix 2 '{suffix_2_name}', which is not nested under suffix 1 '{suffix_1_name}'.",
+                    owner=owner,
+                    field="suffix2",
+                    sheet="survey",
+                    column="suffix2",
+                    row=row_number,
+                )
+            )
+
+        if recall_period_name and recall_period_name not in recall_periods:
+            issues.append(
+                _issue(
+                    "CODEBOOK_RECALL_PERIOD_NOT_EMITTED",
+                    "composition",
+                    f"Question '{question_name}' references recall period '{recall_period_name}', but that recall period was not emitted.",
+                    owner=owner,
+                    field="recall_period",
+                    sheet="survey",
+                    column="recall_period",
+                    row=row_number,
+                )
+            )
+
+        effective_suffix = suffix_2 or suffix_1
+        if not effective_suffix:
+            continue
+        emitted_type = _row_value(row, survey_headers, "type")
+        emitted_choice_list = _row_value(row, survey_headers, "choice_list")
+        if emitted_type != effective_suffix["type"]:
+            issues.append(
+                _issue(
+                    "CODEBOOK_SUFFIX_TYPE_INCOMPATIBLE",
+                    "composition",
+                    f"Question '{question_name}' emits type '{emitted_type}', but its effective suffix requires type '{effective_suffix['type']}'.",
+                    owner=owner,
+                    field="type",
+                    sheet="survey",
+                    column="type",
+                    row=row_number,
+                )
+            )
+        if (
+            effective_suffix["type"] in _INTERNAL_SELECT_TYPES
+            and emitted_choice_list != effective_suffix["choice_list"]
+        ):
+            issues.append(
+                _issue(
+                    "CODEBOOK_SUFFIX_CHOICE_LIST_INCOMPATIBLE",
+                    "composition",
+                    f"Question '{question_name}' emits choice list '{emitted_choice_list}', but its effective suffix requires '{effective_suffix['choice_list']}'.",
+                    owner=owner,
+                    field="choices",
+                    sheet="survey",
+                    column="choice_list",
+                    row=row_number,
+                )
+            )
+
+    return issues
+
+
+def _source_for_survey_row(
+    row_source_map: Mapping[Any, Any] | None, row_number: int
+) -> Mapping[str, Any] | None:
+    if not row_source_map:
+        return None
+    return row_source_map.get(("survey", row_number)) or row_source_map.get(
+        f"survey:{row_number}"
+    )
+
+
+def _validate_final_source_context(
+    survey_headers: Mapping[str, int],
+    survey_rows: Sequence[tuple[Any, ...]],
+    row_source_map: Mapping[Any, Any] | None,
+) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    for row_number, row in enumerate(survey_rows, start=2):
+        source = _source_for_survey_row(row_source_map, row_number)
+        if not source or source.get("model") != "SubQuestion":
+            continue
+
+        owner = {
+            key: source[key]
+            for key in ("model", "id", "name")
+            if source.get(key) is not None
+        }
+        suffix_1 = source.get("suffix")
+        suffix_2 = source.get("suffix_2")
+        recall_period = source.get("recall_period")
+        if suffix_2 and not suffix_1:
+            issues.append(
+                _issue(
+                    "CODEBOOK_NESTED_SUFFIX_INVALID",
+                    "composition",
+                    f"Question '{source.get('name', '')}' uses suffix 2 '{suffix_2.get('name', '')}' without suffix 1.",
+                    owner=owner,
+                    field="suffix_2",
+                    sheet="survey",
+                    column="name",
+                    row=row_number,
+                )
+            )
+        elif (
+            suffix_1
+            and suffix_2
+            and suffix_2.get("name") not in suffix_1.get("nested_suffixes", ())
+        ):
+            issues.append(
+                _issue(
+                    "CODEBOOK_NESTED_SUFFIX_INVALID",
+                    "composition",
+                    f"Question '{source.get('name', '')}' uses suffix 2 '{suffix_2.get('name', '')}', which is not nested under suffix 1 '{suffix_1.get('name', '')}'.",
+                    owner=owner,
+                    field="suffix_2",
+                    sheet="survey",
+                    column="name",
+                    row=row_number,
+                )
+            )
+
+        for reference, missing_code, invalid_code, field_name, label in (
+            (
+                suffix_1,
+                "CODEBOOK_SUFFIX_NAME_MISSING",
+                "CODEBOOK_SUFFIX_NAME_INVALID",
+                "suffix",
+                "Suffix 1",
+            ),
+            (
+                suffix_2,
+                "CODEBOOK_SUFFIX_NAME_MISSING",
+                "CODEBOOK_SUFFIX_NAME_INVALID",
+                "suffix_2",
+                "Suffix 2",
+            ),
+            (
+                recall_period,
+                "CODEBOOK_RECALL_PERIOD_NAME_MISSING",
+                "CODEBOOK_RECALL_PERIOD_NAME_INVALID",
+                "recall_period",
+                "Recall period",
+            ),
+        ):
+            if reference is not None and not reference.get("name"):
+                issues.append(
+                    _issue(
+                        missing_code,
+                        "composition",
+                        f"{label} for question '{source.get('name', '')}' has no name.",
+                        owner=owner,
+                        field=field_name,
+                        sheet="survey",
+                        column="name",
+                        row=row_number,
+                    )
+                )
+            elif reference is not None and (
+                ":" in reference["name"] or not is_xml_tag(reference["name"])
+            ):
+                reference_owner = {
+                    key: reference[key]
+                    for key in ("model", "id", "name")
+                    if reference.get(key) is not None
+                }
+                issues.append(
+                    _issue(
+                        invalid_code,
+                        "composition",
+                        f"{label} name '{reference['name']}' is invalid.",
+                        owner=reference_owner,
+                        field="name",
+                        sheet="survey",
+                        column="name",
+                        row=row_number,
+                    )
+                )
+
+        expected_type = source.get("effective_type", "")
+        emitted_declaration = _row_value(row, survey_headers, "type")
+        emitted_type = _base_question_type(emitted_declaration)
+        if expected_type and emitted_type != expected_type:
+            issues.append(
+                _issue(
+                    "CODEBOOK_SUFFIX_TYPE_INCOMPATIBLE",
+                    "composition",
+                    f"Question '{source.get('name', '')}' emits type '{emitted_type}', but its selected suffix context requires '{expected_type}'.",
+                    owner=owner,
+                    field="type",
+                    sheet="survey",
+                    column="type",
+                    row=row_number,
+                )
+            )
+
+        expected_choice_list = source.get("effective_choice_list", "")
+        declaration = _internal_select_declaration(row, survey_headers)
+        if declaration and expected_choice_list:
+            _, emitted_choice_list, list_column = declaration
+            if emitted_choice_list != expected_choice_list:
+                issues.append(
+                    _issue(
+                        "CODEBOOK_SUFFIX_CHOICE_LIST_INCOMPATIBLE",
+                        "composition",
+                        f"Question '{source.get('name', '')}' emits choice list '{emitted_choice_list}', but its selected suffix context requires '{expected_choice_list}'.",
+                        owner=owner,
+                        field="choices",
+                        sheet="survey",
+                        column=list_column,
+                        row=row_number,
+                    )
+                )
+
+    return issues
+
+
+def validate_codebook_integrity(
+    xlsx_bytes: bytes, row_source_map: Mapping[Any, Any] | None = None
+) -> list[ValidationIssue]:
     """Validate internal select declarations and exact emitted choice rows."""
 
     workbook = load_workbook(io.BytesIO(xlsx_bytes), read_only=True, data_only=True)
@@ -493,11 +1044,16 @@ def validate_codebook_integrity(xlsx_bytes: bytes) -> list[ValidationIssue]:
 
         survey_headers, survey_rows = _sheet_rows_by_header(workbook["survey"])
         choices_headers, choices_rows = _sheet_rows_by_header(workbook["choices"])
-        issues = (
-            _validate_generated_survey_names(survey_headers, survey_rows)
-            if "choice_list" not in survey_headers
-            else []
-        )
+        is_codebook_export = "choice_list" in survey_headers
+        issues: list[ValidationIssue] = []
+        if not is_codebook_export:
+            issues.extend(_validate_generated_survey_names(survey_headers, survey_rows))
+            issues.extend(_validate_generated_survey_types(survey_headers, survey_rows))
+            issues.extend(
+                _validate_final_source_context(
+                    survey_headers, survey_rows, row_source_map
+                )
+            )
         emitted_list_column = (
             "list_name" if "list_name" in choices_headers else "choice_list"
         )
@@ -628,6 +1184,13 @@ def validate_codebook_integrity(xlsx_bytes: bytes) -> list[ValidationIssue]:
                     )
                 )
 
+        if is_codebook_export:
+            issues.extend(
+                _validate_codebook_export_definitions(
+                    workbook, survey_headers, survey_rows, emitted_lists
+                )
+            )
+
         for row_number, row in enumerate(survey_rows, start=2):
             declaration = _internal_select_declaration(row, survey_headers)
             if not declaration:
@@ -700,6 +1263,7 @@ def build_generated_artifact(xlsx_form: Any) -> GeneratedSurveyArtifact:
     return GeneratedSurveyArtifact(
         xlsx_bytes=xlsx_bytes,
         external_files=external_files,
+        row_source_map=getattr(xlsx_form, "row_source_map", None),
         form_name=str(xlsx_form.id_name or "survey"),
     )
 
@@ -712,7 +1276,9 @@ def validate_generated_artifact(
     """Convert and validate one exact artifact without generating it again."""
 
     try:
-        composition_errors = validate_codebook_integrity(artifact.xlsx_bytes)
+        composition_errors = validate_codebook_integrity(
+            artifact.xlsx_bytes, artifact.row_source_map
+        )
     except Exception as exc:
         raise ValidatorInfrastructureError(
             f"Unable to inspect the generated XLSX codebook: {exc}"
