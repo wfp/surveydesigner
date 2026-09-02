@@ -94,6 +94,7 @@ class XLSForm:
         self.bold_font = Font(bold=True)
         self.processed_questions = set()
         self.external_files = {}
+        self.row_source_map = {}
 
         self.wb = Workbook()
         self.survey_sheet = self.wb.active
@@ -144,7 +145,10 @@ class XLSForm:
             "sub_questions",
             queryset=SubQuestion.objects.select_related(
                 "suffix__choices", "suffix_2__choices", "recall_period"
-            ).prefetch_related(sub_questions_translations_prefetch),
+            ).prefetch_related(
+                sub_questions_translations_prefetch,
+                "suffix__nested_suffixes",
+            ),
         )
 
         root_questions_translations_prefetch = Prefetch(
@@ -298,8 +302,44 @@ class XLSForm:
         if file_name and file_name not in self.external_files:
             self.external_files[file_name] = file_field
 
+    @staticmethod
+    def _reference_source(instance):
+        if instance is None:
+            return None
+        return {
+            "model": instance.__class__.__name__,
+            "id": instance.id,
+            "name": instance.name,
+        }
+
+    def _record_question_source(self, question):
+        source = {
+            "model": question.__class__.__name__,
+            "id": question.id,
+            "name": question.name,
+        }
+        if isinstance(question, SubQuestion):
+            suffix = self._reference_source(question.suffix)
+            if suffix:
+                suffix["nested_suffixes"] = tuple(
+                    nested.name for nested in question.suffix.nested_suffixes.all()
+                )
+            source.update(
+                {
+                    "suffix": suffix,
+                    "suffix_2": self._reference_source(question.suffix_2),
+                    "recall_period": self._reference_source(question.recall_period),
+                    "effective_type": question.type,
+                    "effective_choice_list": (
+                        question.choices.name if question.choices else ""
+                    ),
+                }
+            )
+        self.row_source_map[("survey", self.current_row_index)] = source
+
     def add_question_row(self, question):
         self.increment_row_index()
+        self._record_question_source(question)
         self.fill_cell("type", question.get_xls_type())
         self.fill_cell("name", question.name)
         self.fill_cell("constraint", question.constraint)

@@ -3,7 +3,7 @@ import io
 import pytest
 from django.core.files.base import ContentFile
 from openpyxl import Workbook
-from questions.services import XLSForm
+from questions.services import QuestionsExport, XLSForm
 from questions.services.form_validation import (
     ArtifactInputError,
     GeneratedSurveyArtifact,
@@ -24,12 +24,23 @@ def _codebook_workbook(
     *,
     export_columns=False,
     label_column="label",
+    suffix_rows=(),
+    recall_period_rows=(),
 ):
     workbook = Workbook()
     survey = workbook.active
     survey.title = "survey"
     survey.append(
-        ["type", "name", "choice_list"] if export_columns else ["type", "name"]
+        [
+            "type",
+            "name",
+            "choice_list",
+            "suffix1",
+            "suffix2",
+            "recall_period",
+        ]
+        if export_columns
+        else ["type", "name"]
     )
     for row in survey_rows:
         survey.append(row)
@@ -42,6 +53,18 @@ def _codebook_workbook(
     )
     for row in choice_rows:
         choices.append(row)
+
+    if export_columns or suffix_rows:
+        suffixes = workbook.create_sheet("suffixes")
+        suffixes.append(["name", "description", "type", "choicelist", "suffix"])
+        for row in suffix_rows:
+            suffixes.append(row)
+
+    if export_columns or recall_period_rows:
+        recall_periods = workbook.create_sheet("recall_periods")
+        recall_periods.append(["name", "description"])
+        for row in recall_period_rows:
+            recall_periods.append(row)
 
     output = io.BytesIO()
     workbook.save(output)
@@ -699,6 +722,298 @@ def test_invalid_generated_name_blocks_pyxform_conversion():
     ]
 
 
+def test_codebook_export_accepts_valid_suffix_and_recall_period_composition():
+    xlsx = _codebook_workbook(
+        [("select_one", "food_adult_male_7d", "yes_no", "_adult", "_male", "_7d")],
+        [("yes_no", "yes", "Yes")],
+        export_columns=True,
+        suffix_rows=[
+            ("_adult", "Adult", "text", "", "_male"),
+            ("_male", "Male", "select_one", "yes_no", ""),
+        ],
+        recall_period_rows=[("_7d", "Last seven days")],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_real_codebook_export_with_suffix_and_recall_period_passes(
+    sub_question_1,
+    sub_question_2,
+):
+    base_question_model = type(sub_question_1.base_question)
+    export = QuestionsExport(languages=[("en", "English")])
+    xlsx = export.generate_from_questions(
+        base_question_model.objects.filter(
+            id__in=[
+                sub_question_1.base_question.id,
+                sub_question_2.base_question.id,
+            ]
+        )
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+@pytest.mark.parametrize(
+    "survey_row, expected_code, expected_field",
+    [
+        (
+            ("text", "food_missing", "", "_missing", "", ""),
+            "CODEBOOK_SUFFIX_NOT_EMITTED",
+            "suffix1",
+        ),
+        (
+            ("text", "food_7d", "", "", "", "_7d"),
+            "CODEBOOK_RECALL_PERIOD_NOT_EMITTED",
+            "recall_period",
+        ),
+    ],
+)
+def test_codebook_export_reports_non_emitted_generated_reference(
+    survey_row,
+    expected_code,
+    expected_field,
+):
+    xlsx = _codebook_workbook([survey_row], export_columns=True)
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [expected_code]
+    assert issues[0].field == expected_field
+    assert issues[0].owner == {"model": "question", "name": survey_row[1]}
+
+
+def test_codebook_export_reports_suffix_2_without_suffix_1():
+    xlsx = _codebook_workbook(
+        [("text", "food_male", "", "", "_male", "")],
+        export_columns=True,
+        suffix_rows=[("_male", "Male", "text", "", "")],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_NESTED_SUFFIX_INVALID"]
+    assert "without suffix 1" in issues[0].message
+
+
+def test_codebook_export_reports_incompatible_nested_suffix():
+    xlsx = _codebook_workbook(
+        [("text", "food_adult_male", "", "_adult", "_male", "")],
+        export_columns=True,
+        suffix_rows=[
+            ("_adult", "Adult", "text", "", "_female"),
+            ("_male", "Male", "text", "", ""),
+        ],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_NESTED_SUFFIX_INVALID"]
+    assert "not nested under suffix 1 '_adult'" in issues[0].message
+
+
+@pytest.mark.parametrize(
+    "suffix_row, expected_code",
+    [
+        (("_adult", "Adult", "same", "", ""), "CODEBOOK_SUFFIX_TYPE_UNSUPPORTED"),
+        (
+            ("_adult", "Adult", "select_one", "", ""),
+            "CODEBOOK_SUFFIX_CHOICE_LIST_MISSING",
+        ),
+        (
+            ("_adult", "Adult", "select_one", "missing", ""),
+            "CODEBOOK_SUFFIX_CHOICE_LIST_NOT_EMITTED",
+        ),
+        (
+            ("_adult", "Adult", "text", "yes_no", ""),
+            "CODEBOOK_SUFFIX_CHOICE_LIST_INCOMPATIBLE",
+        ),
+    ],
+)
+def test_codebook_export_reports_invalid_suffix_definition(
+    suffix_row,
+    expected_code,
+):
+    xlsx = _codebook_workbook(
+        [],
+        export_columns=True,
+        suffix_rows=[suffix_row],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [expected_code]
+    assert issues[0].owner["model"] == "suffix"
+
+
+def test_codebook_export_reports_effective_suffix_type_mismatch():
+    xlsx = _codebook_workbook(
+        [("integer", "food_adult", "", "_adult", "", "")],
+        export_columns=True,
+        suffix_rows=[("_adult", "Adult", "text", "", "")],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_SUFFIX_TYPE_INCOMPATIBLE"]
+
+
+def test_codebook_export_reports_effective_suffix_choice_list_mismatch():
+    xlsx = _codebook_workbook(
+        [("select_one", "food_adult", "list_b", "_adult", "", "")],
+        [("list_a", "yes", "Yes"), ("list_b", "yes", "Yes")],
+        export_columns=True,
+        suffix_rows=[("_adult", "Adult", "select_one", "list_a", "")],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [
+        "CODEBOOK_SUFFIX_CHOICE_LIST_INCOMPATIBLE"
+    ]
+
+
+@pytest.mark.parametrize(
+    "suffix_rows, expected_code",
+    [
+        (
+            [("", "Description", "text", "", "")],
+            "CODEBOOK_SUFFIX_NAME_MISSING",
+        ),
+        (
+            [("1invalid", "Description", "text", "", "")],
+            "CODEBOOK_SUFFIX_NAME_INVALID",
+        ),
+        (
+            [
+                ("_adult", "First", "text", "", ""),
+                ("_adult", "Second", "text", "", ""),
+            ],
+            "CODEBOOK_SUFFIX_NAME_DUPLICATE",
+        ),
+    ],
+)
+def test_codebook_export_reports_invalid_suffix_name(suffix_rows, expected_code):
+    xlsx = _codebook_workbook(
+        [],
+        export_columns=True,
+        suffix_rows=suffix_rows,
+    )
+
+    assert [issue.code for issue in validate_codebook_integrity(xlsx)] == [
+        expected_code
+    ]
+
+
+@pytest.mark.parametrize(
+    "recall_rows, expected_code",
+    [
+        ([("", "Last seven days")], "CODEBOOK_RECALL_PERIOD_NAME_MISSING"),
+        ([("7 days", "Last seven days")], "CODEBOOK_RECALL_PERIOD_NAME_INVALID"),
+        (
+            [("_7d", "First"), ("_7d", "Second")],
+            "CODEBOOK_RECALL_PERIOD_NAME_DUPLICATE",
+        ),
+    ],
+)
+def test_codebook_export_reports_invalid_recall_period_name(
+    recall_rows,
+    expected_code,
+):
+    xlsx = _codebook_workbook(
+        [],
+        export_columns=True,
+        recall_period_rows=recall_rows,
+    )
+
+    assert [issue.code for issue in validate_codebook_integrity(xlsx)] == [
+        expected_code
+    ]
+
+
+def test_final_artifact_reports_unsupported_generated_type():
+    xlsx = _codebook_workbook([("same", "food_adult")])
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_GENERATED_TYPE_UNSUPPORTED"]
+    assert issues[0].owner == {
+        "model": "question",
+        "name": "food_adult",
+        "type": "same",
+    }
+
+
+def test_final_artifact_reports_missing_generated_type():
+    xlsx = _codebook_workbook([("", "food_adult")])
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_GENERATED_TYPE_UNSUPPORTED"]
+    assert "has no type" in issues[0].message
+
+
+def test_final_artifact_uses_source_context_for_nested_suffix_validation():
+    xlsx = _codebook_workbook([("text", "food_adult_male")])
+    source_map = {
+        ("survey", 2): {
+            "model": "SubQuestion",
+            "id": 42,
+            "name": "food_adult_male",
+            "suffix": {
+                "model": "Suffix",
+                "id": 10,
+                "name": "_adult",
+                "nested_suffixes": (),
+            },
+            "suffix_2": {"model": "Suffix", "id": 11, "name": "_male"},
+            "recall_period": None,
+            "effective_type": "text",
+            "effective_choice_list": "",
+        }
+    }
+
+    issues = validate_codebook_integrity(xlsx, source_map)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_NESTED_SUFFIX_INVALID"]
+    assert issues[0].owner == {
+        "model": "SubQuestion",
+        "id": 42,
+        "name": "food_adult_male",
+    }
+
+
+def test_final_artifact_reports_invalid_suffix_name_with_suffix_owner():
+    xlsx = _codebook_workbook([("text", "food_adult")])
+    source_map = {
+        ("survey", 2): {
+            "model": "SubQuestion",
+            "id": 42,
+            "name": "food_adult",
+            "suffix": {
+                "model": "Suffix",
+                "id": 10,
+                "name": "bad suffix",
+                "nested_suffixes": (),
+            },
+            "suffix_2": None,
+            "recall_period": None,
+            "effective_type": "text",
+            "effective_choice_list": "",
+        }
+    }
+
+    issues = validate_codebook_integrity(xlsx, source_map)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_SUFFIX_NAME_INVALID"]
+    assert issues[0].owner == {
+        "model": "Suffix",
+        "id": 10,
+        "name": "bad suffix",
+    }
+
+
 def test_codebook_validation_does_not_decide_non_english_label_fallback():
     xlsx = _codebook_workbook(
         [("select_one foods", "preferred_food")],
@@ -957,6 +1272,103 @@ def test_generated_survey_reports_root_and_subquestion_name_collision(
     assert result.errors[0].owner["name"] == root_question_1.name
     assert result.errors[0].owner["first_model"] == "question"
     assert result.errors[0].owner["first_row"] < result.errors[0].row
+
+
+def test_generated_survey_reports_invalid_nested_suffix_relationship(
+    submodule_1,
+    sub_question_4,
+):
+    sub_question_4.suffix.nested_suffixes.remove(sub_question_4.suffix_2)
+    form = XLSForm(
+        name="Invalid nested suffix",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[sub_question_4.id],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == ["CODEBOOK_NESTED_SUFFIX_INVALID"]
+    assert result.errors[0].owner == {
+        "model": "SubQuestion",
+        "id": sub_question_4.id,
+        "name": sub_question_4.name,
+    }
+
+
+def test_generated_survey_accepts_valid_nested_suffix_relationship(
+    submodule_1,
+    sub_question_4,
+):
+    sub_question_4.suffix.nested_suffixes.add(sub_question_4.suffix_2)
+    form = XLSForm(
+        name="Valid nested suffix",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[sub_question_4.id],
+        submodules_order=[submodule_1.id],
+    )
+
+    artifact = build_generated_artifact(form)
+
+    assert artifact.row_source_map
+    assert (
+        validate_codebook_integrity(artifact.xlsx_bytes, artifact.row_source_map) == []
+    )
+
+
+def test_generated_survey_keeps_automatic_other_suffix_behavior(
+    submodule_1,
+    sub_question_1,
+):
+    sub_question_1.suffix.name = "_oth"
+    sub_question_1.suffix.save(update_fields=["name"])
+    sub_question_1.save()
+    form = XLSForm(
+        name="Automatic other suffix",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    artifact = build_generated_artifact(form)
+    emitted_sources = list(artifact.row_source_map.values())
+
+    assert any(
+        source.get("model") == "SubQuestion" and source.get("id") == sub_question_1.id
+        for source in emitted_sources
+    )
+    assert (
+        validate_codebook_integrity(artifact.xlsx_bytes, artifact.row_source_map) == []
+    )
+
+
+def test_generated_survey_reports_recall_period_without_name(
+    submodule_1,
+    sub_question_2,
+    recall_period_1,
+):
+    type(recall_period_1).objects.filter(id=recall_period_1.id).update(name="")
+    form = XLSForm(
+        name="Missing recall-period name",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[sub_question_2.id],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_RECALL_PERIOD_NAME_MISSING"
+    ]
+    assert result.errors[0].owner == {
+        "model": "SubQuestion",
+        "id": sub_question_2.id,
+        "name": sub_question_2.name,
+    }
 
 
 def test_empty_external_file_is_a_structured_input_error():
