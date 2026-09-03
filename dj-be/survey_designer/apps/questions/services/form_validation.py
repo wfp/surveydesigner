@@ -498,7 +498,7 @@ def _expression_question_references(expression: str) -> set[str]:
     return references
 
 
-def _validate_reference_case(
+def _validate_survey_references(
     survey_headers: Mapping[str, int],
     survey_rows: Sequence[tuple[Any, ...]],
     row_source_map: Mapping[Any, Any] | None,
@@ -533,11 +533,22 @@ def _validate_reference_case(
                 available = sorted(
                     emitted_names_by_casefold.get(referenced_name.casefold(), ())
                 )
+                owner_label = owner.get("name") or owner_name
                 if not available:
-                    # Fully missing references are handled by selected-scope validation.
+                    issues.append(
+                        _issue(
+                            "CODEBOOK_REFERENCE_NOT_EMITTED",
+                            "composition",
+                            f"{owner['model']} '{owner_label}' field '{column}' references '{referenced_name}', but that name is not emitted in the generated survey.",
+                            owner=owner,
+                            field=column,
+                            sheet="survey",
+                            column=column,
+                            row=row_number,
+                        )
+                    )
                     continue
                 rendered_available = ", ".join(f"'{name}'" for name in available)
-                owner_label = owner.get("name") or owner_name
                 issues.append(
                     _issue(
                         "CODEBOOK_REFERENCE_CASE_MISMATCH",
@@ -1419,7 +1430,7 @@ def validate_codebook_integrity(
                 )
             )
             issues.extend(
-                _validate_reference_case(survey_headers, survey_rows, row_source_map)
+                _validate_survey_references(survey_headers, survey_rows, row_source_map)
             )
         emitted_list_column = (
             "list_name" if "list_name" in choices_headers else "choice_list"
