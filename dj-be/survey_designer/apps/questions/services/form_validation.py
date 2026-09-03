@@ -18,7 +18,7 @@ from typing import Any, Mapping, Sequence
 from xml.etree import ElementTree as ET
 
 from openpyxl import load_workbook
-from pyxform.parsing.expression import is_xml_tag
+from pyxform.parsing.expression import is_xml_tag, parse_expression
 
 PYXFORM_VERSION = "4.5.0"
 COMPATIBILITY_VERSION = "1.0"
@@ -401,6 +401,301 @@ def _internal_select_declaration(
         else inline_list_name.strip()
     )
     return question_type, list_name, list_column
+
+
+def _choice_filter_references(
+    expression: str,
+) -> tuple[set[str], set[str], set[tuple[str, str]]]:
+    """Return emitted columns, question references, and direct correlations."""
+
+    tokens = [
+        token for token in parse_expression(expression) if token.type != "WHITESPACE"
+    ]
+    columns: set[str] = set()
+    questions: set[str] = set()
+
+    for index, token in enumerate(tokens):
+        value = str(token)
+        if token.type == "PYXFORM_REF":
+            question_name = value[2:-1]
+            if not question_name.startswith("last-saved#"):
+                questions.add(question_name)
+        elif token.type in ("NAME", "XPATH_PRED_START"):
+            if index and tokens[index - 1].type == "PATH_SEP":
+                continue
+            columns.add(value[:-1] if token.type == "XPATH_PRED_START" else value)
+
+    correlations: set[tuple[str, str]] = set()
+    for index, token in enumerate(tokens):
+        if token.type != "OPS_COMP" or str(token) != "=":
+            continue
+        if index == 0 or index == len(tokens) - 1:
+            continue
+
+        left, right = tokens[index - 1], tokens[index + 1]
+        if left.type == "NAME" and right.type == "PYXFORM_REF":
+            question_name = str(right)[2:-1]
+            if not question_name.startswith("last-saved#"):
+                correlations.add((str(left), question_name))
+        elif left.type == "PYXFORM_REF" and right.type == "NAME":
+            question_name = str(left)[2:-1]
+            if not question_name.startswith("last-saved#"):
+                correlations.add((str(right), question_name))
+
+    for index, token in enumerate(tokens):
+        if token.type != "FUNC_CALL" or str(token) not in (
+            "selected(",
+            "contains(",
+        ):
+            continue
+        if index + 4 >= len(tokens):
+            continue
+        first, comma, second, close = tokens[index + 1 : index + 5]
+        if comma.type != "COMMA" or close.type != "CLOSE_PAREN":
+            continue
+        if first.type == "PYXFORM_REF" and second.type == "NAME":
+            question_name = str(first)[2:-1]
+            if not question_name.startswith("last-saved#"):
+                correlations.add((str(second), question_name))
+        elif first.type == "NAME" and second.type == "PYXFORM_REF":
+            question_name = str(second)[2:-1]
+            if not question_name.startswith("last-saved#"):
+                correlations.add((str(first), question_name))
+
+    # This covers common function forms such as selected(${parent}, filter_column).
+    if not correlations and len(columns) == 1 and len(questions) == 1:
+        correlations.add((next(iter(columns)), next(iter(questions))))
+
+    return columns, questions, correlations
+
+
+def _survey_row_owner(
+    row_type: str,
+    name: str,
+    row_number: int,
+    row_source_map: Mapping[Any, Any] | None,
+) -> dict[str, Any]:
+    source = _source_for_survey_row(row_source_map, row_number)
+    if not source:
+        return _generated_survey_owner(row_type, name)
+    return {
+        key: source[key]
+        for key in ("model", "id", "name")
+        if source.get(key) is not None
+    }
+
+
+def _select_list_name(declaration: str) -> tuple[str, str] | None:
+    question_type, _, list_name = declaration.partition(" ")
+    if question_type not in _INTERNAL_SELECT_TYPES + _EXTERNAL_SELECT_TYPES:
+        return None
+    return question_type, list_name.strip()
+
+
+def _validate_choice_filters(
+    survey_headers: Mapping[str, int],
+    survey_rows: Sequence[tuple[Any, ...]],
+    choices_headers: Mapping[str, int],
+    choice_values_by_list: Mapping[str, Mapping[str, set[str]]],
+    row_source_map: Mapping[Any, Any] | None,
+) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    questions: dict[str, dict[str, Any]] = {}
+    questions_by_casefold: dict[str, set[str]] = defaultdict(set)
+
+    for row_number, row in enumerate(survey_rows, start=2):
+        declaration = _row_value(row, survey_headers, "type")
+        name = _row_value(row, survey_headers, "name")
+        normalized_type = _normalized_survey_row_type(declaration)
+        if (
+            not name
+            or normalized_type in _END_SURVEY_ROW_TYPES
+            or normalized_type in ("begin_group", "begin_repeat")
+            or normalized_type in _SURVEY_METADATA_TYPES
+        ):
+            continue
+        questions[name] = {
+            "declaration": declaration,
+            "row": row_number,
+        }
+        questions_by_casefold[name.casefold()].add(name)
+
+    columns_by_casefold: dict[str, set[str]] = defaultdict(set)
+    for column in choices_headers:
+        columns_by_casefold[column.casefold()].add(column)
+
+    for row_number, row in enumerate(survey_rows, start=2):
+        expression = _row_value(row, survey_headers, "choice_filter")
+        if not expression:
+            continue
+
+        declaration = _row_value(row, survey_headers, "type")
+        select = _select_list_name(declaration)
+        if not select or select[0] in _EXTERNAL_SELECT_TYPES:
+            continue
+
+        _, list_name = select
+        question_name = _row_value(row, survey_headers, "name")
+        owner = _survey_row_owner(
+            declaration, question_name, row_number, row_source_map
+        )
+        source = _source_for_survey_row(row_source_map, row_number) or {}
+        columns, referenced_questions, correlations = _choice_filter_references(
+            expression
+        )
+
+        valid_columns: set[str] = set()
+        for column in sorted(columns):
+            if column in choices_headers:
+                valid_columns.add(column)
+                if not choice_values_by_list.get(list_name, {}).get(column):
+                    issues.append(
+                        _issue(
+                            "CODEBOOK_CHOICE_FILTER_COLUMN_VALUES_MISSING",
+                            "composition",
+                            f"Question '{question_name}' filters choice list '{list_name}' by column '{column}', but that column has no emitted values for the list.",
+                            owner=owner,
+                            field="choice_filter",
+                            sheet="survey",
+                            column="choice_filter",
+                            row=row_number,
+                        )
+                    )
+                continue
+
+            available = sorted(columns_by_casefold.get(column.casefold(), ()))
+            if available:
+                code = "CODEBOOK_CHOICE_FILTER_COLUMN_CASE_MISMATCH"
+                detail = f"; available column: '{available[0]}'"
+            else:
+                code = "CODEBOOK_CHOICE_FILTER_COLUMN_NOT_EMITTED"
+                detail = ""
+            issues.append(
+                _issue(
+                    code,
+                    "composition",
+                    f"Question '{question_name}' choice filter references column '{column}', but that exact column is not emitted for choice list '{list_name}'{detail}.",
+                    owner=owner,
+                    field="choice_filter",
+                    sheet="survey",
+                    column="choice_filter",
+                    row=row_number,
+                )
+            )
+
+        valid_questions: set[str] = set()
+        for referenced_name in sorted(referenced_questions):
+            if referenced_name in questions:
+                valid_questions.add(referenced_name)
+                continue
+
+            available = sorted(
+                questions_by_casefold.get(referenced_name.casefold(), ())
+            )
+            if available:
+                code = "CODEBOOK_CHOICE_FILTER_QUESTION_CASE_MISMATCH"
+                detail = f"; available question: '{available[0]}'"
+            else:
+                code = "CODEBOOK_CHOICE_FILTER_QUESTION_NOT_EMITTED"
+                detail = ""
+            issues.append(
+                _issue(
+                    code,
+                    "composition",
+                    f"Question '{question_name}' choice filter references question '{referenced_name}', but that exact question is not available in the generated survey{detail}.",
+                    owner=owner,
+                    field="choice_filter",
+                    sheet="survey",
+                    column="choice_filter",
+                    row=row_number,
+                )
+            )
+
+        if columns and referenced_questions and not correlations:
+            issues.append(
+                _issue(
+                    "CODEBOOK_CHOICE_FILTER_UNCORRELATED",
+                    "composition",
+                    f"Question '{question_name}' choice filter does not clearly correlate its emitted choice columns with its referenced questions.",
+                    owner=owner,
+                    field="choice_filter",
+                    sheet="survey",
+                    column="choice_filter",
+                    row=row_number,
+                )
+            )
+
+        configured_filter_list = source.get("choice_filter_list")
+        if referenced_questions and "choice_filter_list" in source:
+            if not configured_filter_list:
+                issues.append(
+                    _issue(
+                        "CODEBOOK_CHOICE_FILTER_SOURCE_LIST_MISSING",
+                        "composition",
+                        f"Question '{question_name}' has a choice filter but choice list '{list_name}' does not define the source choice list used by that filter.",
+                        owner=owner,
+                        field="choice_filter",
+                        sheet="survey",
+                        column="choice_filter",
+                        row=row_number,
+                    )
+                )
+
+        for filter_column, referenced_name in sorted(correlations):
+            if (
+                filter_column not in valid_columns
+                or referenced_name not in valid_questions
+            ):
+                continue
+            referenced_select = _select_list_name(
+                questions[referenced_name]["declaration"]
+            )
+            if not referenced_select or referenced_select[0] in _EXTERNAL_SELECT_TYPES:
+                continue
+
+            referenced_list = referenced_select[1]
+            if (
+                configured_filter_list
+                and referenced_list != configured_filter_list.get("name")
+            ):
+                issues.append(
+                    _issue(
+                        "CODEBOOK_CHOICE_FILTER_SOURCE_LIST_INCOMPATIBLE",
+                        "composition",
+                        f"Question '{question_name}' filters with question '{referenced_name}', which emits choice list '{referenced_list}', but choice list '{list_name}' requires source list '{configured_filter_list.get('name', '')}'.",
+                        owner=owner,
+                        field="choice_filter",
+                        sheet="survey",
+                        column="choice_filter",
+                        row=row_number,
+                    )
+                )
+                continue
+            available_values = choice_values_by_list.get(referenced_list, {}).get(
+                "name", set()
+            )
+            filter_values = choice_values_by_list.get(list_name, {}).get(
+                filter_column, set()
+            )
+            unavailable_values = sorted(filter_values - available_values)
+            if unavailable_values:
+                rendered_values = ", ".join(
+                    f"'{value}'" for value in unavailable_values
+                )
+                issues.append(
+                    _issue(
+                        "CODEBOOK_CHOICE_FILTER_VALUE_NOT_EMITTED",
+                        "composition",
+                        f"Question '{question_name}' choice filter column '{filter_column}' contains {rendered_values}, which are not emitted by question '{referenced_name}' choice list '{referenced_list}'.",
+                        owner=owner,
+                        field="choice_filter",
+                        sheet="survey",
+                        column="choice_filter",
+                        row=row_number,
+                    )
+                )
+
+    return issues
 
 
 def _is_valid_choice_list_name(value: str) -> bool:
@@ -1067,6 +1362,9 @@ def validate_codebook_integrity(
                     internal_select_types_by_list[list_name].add(question_type)
 
         emitted_lists: set[str] = set()
+        choice_values_by_list: dict[str, dict[str, set[str]]] = defaultdict(
+            lambda: defaultdict(set)
+        )
         first_choice_value_rows: dict[tuple[str, str], int] = {}
         checked_list_names: set[str] = set()
         reported_invalid_list_names: set[str] = set()
@@ -1095,6 +1393,10 @@ def validate_codebook_integrity(
                 )
             else:
                 emitted_lists.add(list_name)
+                for choice_column in choices_headers:
+                    value = _row_value(row, choices_headers, choice_column)
+                    if value:
+                        choice_values_by_list[list_name][choice_column].add(value)
                 if list_name not in checked_list_names:
                     checked_list_names.add(list_name)
                     if not _is_valid_choice_list_name(list_name):
@@ -1188,6 +1490,16 @@ def validate_codebook_integrity(
             issues.extend(
                 _validate_codebook_export_definitions(
                     workbook, survey_headers, survey_rows, emitted_lists
+                )
+            )
+        else:
+            issues.extend(
+                _validate_choice_filters(
+                    survey_headers,
+                    survey_rows,
+                    choices_headers,
+                    choice_values_by_list,
+                    row_source_map,
                 )
             )
 
