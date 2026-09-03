@@ -25,7 +25,14 @@ ENV = environ.get("ENV", "local")
 # Base domain
 BASE_DOMAIN = environ.get("BASE_DOMAIN", "localhost")
 
-FRONTEND_BASE_DOMAIN = environ.get("FRONTEND_BASE_DOMAIN", "http://localhost:3000")
+FRONTEND_BASE_DOMAIN = (
+    environ.get("FRONTEND_BASE_DOMAIN", "http://localhost:3000").strip()
+    or "http://localhost:3000"
+)
+
+
+def split_semicolon_env(value):
+    return [item.strip().rstrip("/") for item in value.split(";") if item.strip()]
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
@@ -112,9 +119,17 @@ MIDDLEWARE = [
     "core.middleware.OrganizationMiddleware",
 ]
 
-CSRF_TRUSTED_ORIGINS = [
-    FRONTEND_BASE_DOMAIN,
+LOCAL_FRONTEND_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
 ]
+
+CSRF_TRUSTED_ORIGINS = [FRONTEND_BASE_DOMAIN]
+if ENV == "local" or DEBUG:
+    CSRF_TRUSTED_ORIGINS.extend(LOCAL_FRONTEND_ORIGINS)
+CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(CSRF_TRUSTED_ORIGINS))
 
 
 ROOT_URLCONF = "survey_designer.urls"
@@ -360,7 +375,11 @@ RQ_QUEUES = {
 }
 
 # CORS headers
-CORS_ALLOWED_ORIGINS = environ.get("CORS_ALLOWED_ORIGINS", "").split(";")
+CORS_ALLOWED_ORIGINS = split_semicolon_env(environ.get("CORS_ALLOWED_ORIGINS", ""))
+if ENV == "local" or DEBUG:
+    CORS_ALLOWED_ORIGINS = list(
+        dict.fromkeys([*CORS_ALLOWED_ORIGINS, *LOCAL_FRONTEND_ORIGINS])
+    )
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-csrftoken",
