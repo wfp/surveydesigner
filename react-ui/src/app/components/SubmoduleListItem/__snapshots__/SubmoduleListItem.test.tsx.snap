@@ -9,6 +9,7 @@ exports[`SubmoduleListItem > should match snapshot 1`] = `
     data-rbd-drag-handle-draggable-id="submodule-0"
     data-rbd-draggable-context-id="0"
     data-rbd-draggable-id="submodule-0"
+    data-testid="submodule-draggable-0"
     draggable="false"
     role="button"
     tabindex="0"

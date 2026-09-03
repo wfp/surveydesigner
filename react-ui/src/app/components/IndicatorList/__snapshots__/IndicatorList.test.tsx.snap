@@ -9,6 +9,7 @@ exports[`IndicatorList > should match snapshot 1`] = `
     data-rbd-drag-handle-draggable-id="indicator-0"
     data-rbd-draggable-context-id="0"
     data-rbd-draggable-id="indicator-0"
+    data-testid="indicator-draggable-0"
     draggable="false"
     role="button"
     tabindex="0"
