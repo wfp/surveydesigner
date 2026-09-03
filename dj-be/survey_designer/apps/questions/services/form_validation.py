@@ -32,6 +32,7 @@ _EXTERNAL_SELECT_TYPES = ("select_one_from_file", "select_multiple_from_file")
 _END_SURVEY_ROW_TYPES = frozenset(("end_group", "end_repeat"))
 _RESERVED_SURVEY_NAMES = frozenset(("meta",))
 _SURVEY_METADATA_TYPES = frozenset(("start", "end", "today", "deviceid"))
+_REFERENCE_CASE_IGNORED_COLUMNS = frozenset(("type", "name", "choice_filter"))
 _SUPPORTED_GENERATED_TYPES = frozenset(
     (
         "acknowledge",
@@ -483,6 +484,73 @@ def _survey_row_owner(
         for key in ("model", "id", "name")
         if source.get(key) is not None
     }
+
+
+def _expression_question_references(expression: str) -> set[str]:
+    references: set[str] = set()
+    for token in parse_expression(expression):
+        if token.type != "PYXFORM_REF":
+            continue
+        name = str(token)[2:-1]
+        if not name.startswith("last-saved#"):
+            references.add(name)
+    return references
+
+
+def _validate_reference_case(
+    survey_headers: Mapping[str, int],
+    survey_rows: Sequence[tuple[Any, ...]],
+    row_source_map: Mapping[Any, Any] | None,
+) -> list[ValidationIssue]:
+    emitted_names = {
+        _row_value(row, survey_headers, "name")
+        for row in survey_rows
+        if _row_value(row, survey_headers, "name")
+    }
+    emitted_names_by_casefold: dict[str, set[str]] = defaultdict(set)
+    for name in emitted_names:
+        emitted_names_by_casefold[name.casefold()].add(name)
+
+    issues: list[ValidationIssue] = []
+    expression_columns = [
+        column
+        for column in survey_headers
+        if column not in _REFERENCE_CASE_IGNORED_COLUMNS
+    ]
+    for row_number, row in enumerate(survey_rows, start=2):
+        declaration = _row_value(row, survey_headers, "type")
+        owner_name = _row_value(row, survey_headers, "name")
+        owner = _survey_row_owner(declaration, owner_name, row_number, row_source_map)
+
+        for column in expression_columns:
+            expression = _row_value(row, survey_headers, column)
+            if "${" not in expression:
+                continue
+            for referenced_name in sorted(_expression_question_references(expression)):
+                if referenced_name in emitted_names:
+                    continue
+                available = sorted(
+                    emitted_names_by_casefold.get(referenced_name.casefold(), ())
+                )
+                if not available:
+                    # Fully missing references are handled by selected-scope validation.
+                    continue
+                rendered_available = ", ".join(f"'{name}'" for name in available)
+                owner_label = owner.get("name") or owner_name
+                issues.append(
+                    _issue(
+                        "CODEBOOK_REFERENCE_CASE_MISMATCH",
+                        "composition",
+                        f"{owner['model']} '{owner_label}' field '{column}' references '{referenced_name}', but references are case-sensitive; available exact name: {rendered_available}.",
+                        owner=owner,
+                        field=column,
+                        sheet="survey",
+                        column=column,
+                        row=row_number,
+                    )
+                )
+
+    return issues
 
 
 def _select_list_name(declaration: str) -> tuple[str, str] | None:
@@ -1348,6 +1416,9 @@ def validate_codebook_integrity(
                 _validate_final_source_context(
                     survey_headers, survey_rows, row_source_map
                 )
+            )
+            issues.extend(
+                _validate_reference_case(survey_headers, survey_rows, row_source_map)
             )
         emitted_list_column = (
             "list_name" if "list_name" in choices_headers else "choice_list"
