@@ -492,8 +492,9 @@ def _expression_question_references(expression: str) -> set[str]:
         if token.type != "PYXFORM_REF":
             continue
         name = str(token)[2:-1]
-        if not name.startswith("last-saved#"):
-            references.add(name)
+        if name.startswith("last-saved#"):
+            name = name.partition("#")[2]
+        references.add(name)
     return references
 
 
