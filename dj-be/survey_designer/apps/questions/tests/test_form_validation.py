@@ -3,6 +3,7 @@ import io
 import pytest
 from django.core.files.base import ContentFile
 from openpyxl import Workbook
+from questions.models import ChoiceGroup
 from questions.services import QuestionsExport, XLSForm
 from questions.services.form_validation import (
     ArtifactInputError,
@@ -26,11 +27,13 @@ def _codebook_workbook(
     label_column="label",
     suffix_rows=(),
     recall_period_rows=(),
+    survey_columns=None,
+    choice_columns=None,
 ):
     workbook = Workbook()
     survey = workbook.active
     survey.title = "survey"
-    survey.append(
+    default_survey_columns = (
         [
             "type",
             "name",
@@ -42,15 +45,17 @@ def _codebook_workbook(
         if export_columns
         else ["type", "name"]
     )
+    survey.append(survey_columns or default_survey_columns)
     for row in survey_rows:
         survey.append(row)
 
     choices = workbook.create_sheet("choices")
-    choices.append(
+    default_choice_columns = (
         ["choice_list", "name", label_column]
         if export_columns
         else ["list_name", "name", label_column]
     )
+    choices.append(choice_columns or default_choice_columns)
     for row in choice_rows:
         choices.append(row)
 
@@ -69,6 +74,59 @@ def _codebook_workbook(
     output = io.BytesIO()
     workbook.save(output)
     return output.getvalue()
+
+
+def _choice_filter_workbook(
+    expression,
+    *,
+    source_question="region",
+    source_values=("north",),
+    emitted_filter_column="choice_filter_name",
+    filter_values=("north",),
+):
+    choice_rows = [("regions", value, "", f"Region {value}") for value in source_values]
+    choice_rows.extend(
+        ("cities", f"city_{index}", value, f"City {index}")
+        for index, value in enumerate(filter_values, start=1)
+    )
+    return _codebook_workbook(
+        [
+            ("select_one regions", source_question, ""),
+            ("select_one cities", "city", expression),
+        ],
+        choice_rows,
+        survey_columns=["type", "name", "choice_filter"],
+        choice_columns=[
+            "list_name",
+            "name",
+            emitted_filter_column,
+            "label",
+        ],
+    )
+
+
+def _configure_generated_choice_filter(
+    source_question,
+    filtered_question,
+    source_choices,
+    filtered_choices,
+):
+    source_question.type = "select_one"
+    source_question.choices = source_choices
+    source_question.save(update_fields=["type", "choices"])
+    filtered_question.type = "select_one"
+    filtered_question.choices = filtered_choices
+    filtered_question.choice_filter = f"choice_filter_name=${{{source_question.name}}}"
+    filtered_question.save(update_fields=["type", "choices", "choice_filter"])
+    filtered_choices.choice_filter_list = source_choices
+    filtered_choices.save(update_fields=["choice_filter_list"])
+
+    source_values = list(source_choices.choices.order_by("order", "id"))
+    for choice, source_value in zip(
+        filtered_choices.choices.order_by("order", "id"), source_values
+    ):
+        choice.choice_filter_name = source_value
+        choice.save(update_fields=["choice_filter_name"])
 
 
 class ConversionMustNotRun:
@@ -1030,6 +1088,135 @@ def test_codebook_validation_ignores_external_selects():
     assert validate_codebook_integrity(xlsx) == []
 
 
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "choice_filter_name=${region}",
+        "${region}=choice_filter_name",
+        "selected(${region}, choice_filter_name)",
+    ],
+)
+def test_codebook_validation_accepts_emitted_choice_filter_schema(expression):
+    xlsx = _choice_filter_workbook(expression)
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_codebook_validation_reports_unknown_choice_filter_column():
+    xlsx = _choice_filter_workbook("unknown_column=${region}")
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [
+        "CODEBOOK_CHOICE_FILTER_COLUMN_NOT_EMITTED"
+    ]
+    assert issues[0].owner == {
+        "model": "question",
+        "name": "city",
+        "type": "select_one cities",
+    }
+
+
+def test_codebook_validation_reports_choice_filter_column_case_mismatch():
+    xlsx = _choice_filter_workbook(
+        "choice_filter_name=${region}",
+        emitted_filter_column="Choice_Filter_Name",
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [
+        "CODEBOOK_CHOICE_FILTER_COLUMN_CASE_MISMATCH"
+    ]
+    assert "available column: 'Choice_Filter_Name'" in issues[0].message
+
+
+def test_codebook_validation_reports_empty_choice_filter_column():
+    xlsx = _choice_filter_workbook("choice_filter_name=${region}", filter_values=("",))
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [
+        "CODEBOOK_CHOICE_FILTER_COLUMN_VALUES_MISSING"
+    ]
+
+
+def test_codebook_validation_reports_unavailable_choice_filter_question():
+    xlsx = _choice_filter_workbook("choice_filter_name=${not_selected}")
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [
+        "CODEBOOK_CHOICE_FILTER_QUESTION_NOT_EMITTED"
+    ]
+
+
+def test_codebook_validation_reports_choice_filter_question_case_mismatch():
+    xlsx = _choice_filter_workbook(
+        "choice_filter_name=${region}", source_question="Region"
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [
+        "CODEBOOK_CHOICE_FILTER_QUESTION_CASE_MISMATCH"
+    ]
+    assert "available question: 'Region'" in issues[0].message
+
+
+def test_codebook_validation_reports_unavailable_choice_filter_value():
+    xlsx = _choice_filter_workbook(
+        "choice_filter_name=${region}", filter_values=("south",)
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [
+        "CODEBOOK_CHOICE_FILTER_VALUE_NOT_EMITTED"
+    ]
+    assert "'south'" in issues[0].message
+
+
+def test_codebook_validation_reports_uncorrelated_choice_filter():
+    xlsx = _codebook_workbook(
+        [
+            ("select_one regions", "region", ""),
+            ("select_one districts", "district", ""),
+            (
+                "select_one cities",
+                "city",
+                "concat(${region}, ${district}) = concat(region_code, district_code)",
+            ),
+        ],
+        [
+            ("regions", "north", "", "", "North"),
+            ("districts", "central", "", "", "Central"),
+            ("cities", "city_1", "north", "central", "City 1"),
+        ],
+        survey_columns=["type", "name", "choice_filter"],
+        choice_columns=[
+            "list_name",
+            "name",
+            "region_code",
+            "district_code",
+            "label",
+        ],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_FILTER_UNCORRELATED"]
+
+
+def test_codebook_validation_skips_external_choice_filter_schema():
+    xlsx = _codebook_workbook(
+        [("select_one_from_file cities.csv", "city", "unknown=${missing}")],
+        survey_columns=["type", "name", "choice_filter"],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
 def test_composition_errors_block_pyxform_conversion():
     artifact = GeneratedSurveyArtifact(
         _codebook_workbook([("select_one foods", "preferred_food")])
@@ -1369,6 +1556,121 @@ def test_generated_survey_reports_recall_period_without_name(
         "id": sub_question_2.id,
         "name": sub_question_2.name,
     }
+
+
+def test_generated_survey_accepts_valid_choice_filter(
+    submodule_1,
+    root_question_1,
+    root_question_2,
+    choices_1,
+    choices_2,
+):
+    _configure_generated_choice_filter(
+        root_question_1, root_question_2, choices_2, choices_1
+    )
+    form = XLSForm(
+        name="Valid choice filter",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+    artifact = build_generated_artifact(form)
+
+    result = validate_generated_artifact(artifact)
+
+    assert result.valid is True
+    assert result.errors == ()
+
+
+def test_generated_survey_reports_choice_filter_without_configured_source_list(
+    submodule_1,
+    root_question_1,
+    root_question_2,
+    choices_1,
+    choices_2,
+):
+    _configure_generated_choice_filter(
+        root_question_1, root_question_2, choices_2, choices_1
+    )
+    choices_1.choice_filter_list = None
+    choices_1.save(update_fields=["choice_filter_list"])
+    form = XLSForm(
+        name="Missing filter source list",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_CHOICE_FILTER_SOURCE_LIST_MISSING"
+    ]
+    assert result.errors[0].owner == {
+        "model": "RootQuestion",
+        "id": root_question_2.id,
+        "name": root_question_2.name,
+    }
+
+
+def test_generated_survey_reports_incompatible_choice_filter_source_list(
+    submodule_1,
+    root_question_1,
+    root_question_2,
+    choices_1,
+    choices_2,
+):
+    _configure_generated_choice_filter(
+        root_question_1, root_question_2, choices_2, choices_1
+    )
+    choices_1.choice_filter_list = ChoiceGroup.objects.create(name="OtherSourceList")
+    choices_1.save(update_fields=["choice_filter_list"])
+    form = XLSForm(
+        name="Incompatible filter source list",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_CHOICE_FILTER_SOURCE_LIST_INCOMPATIBLE"
+    ]
+
+
+def test_generated_survey_reports_unavailable_choice_filter_value(
+    submodule_1,
+    root_question_1,
+    root_question_2,
+    choices_1,
+    choices_2,
+):
+    _configure_generated_choice_filter(
+        root_question_1, root_question_2, choices_2, choices_1
+    )
+    source_choice = choices_2.choices.order_by("order", "id").first()
+    source_choice.is_active = False
+    source_choice.save(update_fields=["is_active"])
+    form = XLSForm(
+        name="Unavailable filter value",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_CHOICE_FILTER_VALUE_NOT_EMITTED"
+    ]
+    assert f"'{source_choice.name}'" in result.errors[0].message
 
 
 def test_empty_external_file_is_a_structured_input_error():
