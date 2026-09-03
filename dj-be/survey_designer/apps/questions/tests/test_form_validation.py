@@ -1217,6 +1217,64 @@ def test_codebook_validation_skips_external_choice_filter_schema():
     assert validate_codebook_integrity(xlsx) == []
 
 
+@pytest.mark.parametrize(
+    "expression_column",
+    [
+        "relevant",
+        "constraint",
+        "calculation",
+        "repeat_count",
+        "required",
+        "default",
+        "read_only",
+        "disabled",
+        "parameters",
+        "label",
+        "hint",
+    ],
+)
+def test_codebook_validation_reports_general_reference_case_mismatch(
+    expression_column,
+):
+    xlsx = _codebook_workbook(
+        [
+            ("integer", "Age", ""),
+            ("calculate", "result", "${age}"),
+        ],
+        survey_columns=["type", "name", expression_column],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_REFERENCE_CASE_MISMATCH"]
+    assert issues[0].field == expression_column
+    assert issues[0].owner == {
+        "model": "question",
+        "name": "result",
+        "type": "calculate",
+    }
+    assert "references 'age'" in issues[0].message
+    assert "available exact name: 'Age'" in issues[0].message
+
+
+def test_codebook_validation_accepts_exact_case_reference():
+    xlsx = _codebook_workbook(
+        [("integer", "Age", ""), ("calculate", "result", "${Age}")],
+        survey_columns=["type", "name", "calculation"],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_general_case_validation_leaves_missing_reference_for_scope_validator():
+    xlsx = _codebook_workbook(
+        [("calculate", "result", "${not_emitted}")],
+        survey_columns=["type", "name", "calculation"],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
 def test_composition_errors_block_pyxform_conversion():
     artifact = GeneratedSurveyArtifact(
         _codebook_workbook([("select_one foods", "preferred_food")])
@@ -1671,6 +1729,64 @@ def test_generated_survey_reports_unavailable_choice_filter_value(
         "CODEBOOK_CHOICE_FILTER_VALUE_NOT_EMITTED"
     ]
     assert f"'{source_choice.name}'" in result.errors[0].message
+
+
+def test_generated_survey_reports_reference_case_mismatch_with_question_owner(
+    submodule_1,
+    root_question_1,
+    root_question_2,
+):
+    root_question_2.relevant = f"${{{root_question_1.name.lower()}}} > 0"
+    root_question_2.save(update_fields=["relevant"])
+    form = XLSForm(
+        name="Question reference case mismatch",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_REFERENCE_CASE_MISMATCH"
+    ]
+    assert result.errors[0].owner == {
+        "model": "RootQuestion",
+        "id": root_question_2.id,
+        "name": root_question_2.name,
+    }
+    assert result.errors[0].field == "relevant"
+
+
+def test_generated_survey_reports_reference_case_mismatch_with_module_owner(
+    submodule_1,
+    root_question_1,
+):
+    module = submodule_1.module
+    module.relevant = f"${{{root_question_1.name.lower()}}} > 0"
+    module.save(update_fields=["relevant"])
+    form = XLSForm(
+        name="Module reference case mismatch",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_REFERENCE_CASE_MISMATCH"
+    ]
+    assert result.errors[0].owner == {
+        "model": "Module",
+        "id": module.id,
+        "name": module.name,
+    }
+    assert result.errors[0].field == "relevant"
 
 
 def test_empty_external_file_is_a_structured_input_error():

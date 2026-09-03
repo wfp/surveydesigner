@@ -316,6 +316,11 @@ class XLSForm:
             "name": instance.name,
         }
 
+    def _record_row_source(self, instance):
+        self.row_source_map[("survey", self.current_row_index)] = (
+            self._reference_source(instance)
+        )
+
     def _record_question_source(self, question):
         source = {
             "model": question.__class__.__name__,
@@ -393,6 +398,7 @@ class XLSForm:
 
     def add_repeat_section(self, repeat_section):
         self.increment_row_index()
+        self._record_row_source(repeat_section)
         self.fill_cell("type", "begin_repeat", bold=True)
         self.fill_cell("name", repeat_section.name)
         self.fill_cell("relevant", repeat_section.relevant)
@@ -510,6 +516,7 @@ class XLSForm:
             cell.font = self.bold_font
 
     def fill_submodule_start(self, submodule):
+        self._record_row_source(submodule)
         self.fill_cell("type", "begin_group", bold=True)
         self.fill_cell("name", f"{submodule.name}_submodule")
         self.fill_cell("appearance", submodule.appearance)
@@ -528,6 +535,7 @@ class XLSForm:
             self.fill_cell("label", submodule.label)
 
     def fill_module_start(self, module):
+        self._record_row_source(module)
         self.fill_cell("type", "begin_group", bold=True)
         self.fill_cell("name", f"{module.name}_module")
         self.fill_cell("relevant", module.relevant)
