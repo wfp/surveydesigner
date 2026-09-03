@@ -125,6 +125,46 @@ def test_final_survey_actions_block_internal_select_without_emitted_choices(
     assert body["errors"][0]["owner"]["name"] == root_question_2.name
 
 
+@pytest.mark.parametrize(
+    "url",
+    ["/api/validate/", "/api/generate/", "/api/preview/", "/api/upload/"],
+)
+def test_final_survey_actions_block_reference_to_unselected_question(
+    url,
+    logged_admin_client,
+    moda_api_key,
+    submodule_1,
+    root_question_1,
+    root_question_3,
+):
+    root_question_1.relevant = f"${{{root_question_3.name}}} > 0"
+    root_question_1.save(update_fields=["relevant"])
+    payload = {
+        "name": "Unselected question reference",
+        "submodules": [submodule_1.id],
+        "submodules_order": [submodule_1.id],
+        "sub_questions": [],
+        "languages": [],
+        "id": moda_api_key.id,
+        "project_id": 99,
+    }
+
+    response = logged_admin_client.post(
+        url, json.dumps(payload), content_type="application/json"
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    body = response.json()
+    assert body["valid"] is False
+    assert body["errors"][0]["code"] == "CODEBOOK_REFERENCE_NOT_EMITTED"
+    assert body["errors"][0]["owner"] == {
+        "model": "RootQuestion",
+        "id": root_question_1.id,
+        "name": root_question_1.name,
+    }
+    assert root_question_3.name in body["errors"][0]["message"]
+
+
 def test_validate_action_blocks_choice_without_english_label(
     logged_admin_client,
     submodule_1,

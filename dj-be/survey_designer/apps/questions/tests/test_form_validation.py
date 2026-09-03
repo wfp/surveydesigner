@@ -1294,13 +1294,50 @@ def test_codebook_validation_checks_last_saved_reference_case():
     assert "references 'age'" in issues[0].message
 
 
-def test_general_case_validation_leaves_missing_reference_for_scope_validator():
+def test_codebook_validation_reports_missing_reference():
     xlsx = _codebook_workbook(
         [("calculate", "result", "${not_emitted}")],
         survey_columns=["type", "name", "calculation"],
     )
 
-    assert validate_codebook_integrity(xlsx) == []
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_REFERENCE_NOT_EMITTED"]
+    assert issues[0].owner == {
+        "model": "question",
+        "name": "result",
+        "type": "calculate",
+    }
+    assert issues[0].field == "calculation"
+    assert "references 'not_emitted'" in issues[0].message
+
+
+def test_generated_survey_blocks_reference_to_unselected_question(
+    submodule_1,
+    root_question_1,
+    root_question_3,
+):
+    root_question_1.relevant = f"${{{root_question_3.name}}} > 0"
+    root_question_1.save(update_fields=["relevant"])
+    form = XLSForm(
+        name="Unselected question reference",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == ["CODEBOOK_REFERENCE_NOT_EMITTED"]
+    assert result.errors[0].owner == {
+        "model": "RootQuestion",
+        "id": root_question_1.id,
+        "name": root_question_1.name,
+    }
+    assert result.errors[0].field == "relevant"
+    assert root_question_3.name in result.errors[0].message
 
 
 def test_composition_errors_block_pyxform_conversion():
