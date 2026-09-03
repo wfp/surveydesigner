@@ -144,7 +144,11 @@ class XLSForm:
         sub_questions_prefetch = Prefetch(
             "sub_questions",
             queryset=SubQuestion.objects.select_related(
-                "suffix__choices", "suffix_2__choices", "recall_period"
+                "suffix__choices",
+                "suffix__choices__choice_filter_list",
+                "suffix_2__choices",
+                "suffix_2__choices__choice_filter_list",
+                "recall_period",
             ).prefetch_related(
                 sub_questions_translations_prefetch,
                 "suffix__nested_suffixes",
@@ -163,7 +167,7 @@ class XLSForm:
             queryset=RootQuestion.objects.prefetch_related(
                 sub_questions_prefetch, root_questions_translations_prefetch
             )
-            .select_related("choices")
+            .select_related("choices", "choices__choice_filter_list")
             .filter(base_question__repeat_sections=None),
         )
 
@@ -318,6 +322,11 @@ class XLSForm:
             "id": question.id,
             "name": question.name,
         }
+        choices = question.choices
+        if isinstance(choices, ChoiceGroup):
+            source["choice_filter_list"] = self._reference_source(
+                choices.choice_filter_list
+            )
         if isinstance(question, SubQuestion):
             suffix = self._reference_source(question.suffix)
             if suffix:
