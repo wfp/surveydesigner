@@ -1266,6 +1266,34 @@ def test_codebook_validation_accepts_exact_case_reference():
     assert validate_codebook_integrity(xlsx) == []
 
 
+def test_codebook_validation_reports_all_case_variant_candidates():
+    xlsx = _codebook_workbook(
+        [
+            ("integer", "Age", ""),
+            ("integer", "age", ""),
+            ("calculate", "result", "${AGE}"),
+        ],
+        survey_columns=["type", "name", "calculation"],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_REFERENCE_CASE_MISMATCH"]
+    assert "available exact name: 'Age', 'age'" in issues[0].message
+
+
+def test_codebook_validation_checks_last_saved_reference_case():
+    xlsx = _codebook_workbook(
+        [("integer", "Age", ""), ("calculate", "result", "${last-saved#age}")],
+        survey_columns=["type", "name", "calculation"],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_REFERENCE_CASE_MISMATCH"]
+    assert "references 'age'" in issues[0].message
+
+
 def test_general_case_validation_leaves_missing_reference_for_scope_validator():
     xlsx = _codebook_workbook(
         [("calculate", "result", "${not_emitted}")],
@@ -1787,6 +1815,62 @@ def test_generated_survey_reports_reference_case_mismatch_with_module_owner(
         "name": module.name,
     }
     assert result.errors[0].field == "relevant"
+
+
+def test_generated_survey_reports_reference_case_mismatch_with_submodule_owner(
+    submodule_1,
+    root_question_1,
+):
+    submodule_1.relevant = f"${{{root_question_1.name.lower()}}} > 0"
+    submodule_1.save(update_fields=["relevant"])
+    form = XLSForm(
+        name="Submodule reference case mismatch",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_REFERENCE_CASE_MISMATCH"
+    ]
+    assert result.errors[0].owner == {
+        "model": "Submodule",
+        "id": submodule_1.id,
+        "name": submodule_1.name,
+    }
+
+
+def test_generated_survey_reports_reference_case_mismatch_with_repeat_owner(
+    submodule_1,
+    root_question_1,
+    repeat_section_1,
+):
+    repeat_section_1.repeat_count = f"${{{root_question_1.name.lower()}}}"
+    repeat_section_1.save(update_fields=["repeat_count"])
+    form = XLSForm(
+        name="Repeat reference case mismatch",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_REFERENCE_CASE_MISMATCH"
+    ]
+    assert result.errors[0].owner == {
+        "model": "RepeatSection",
+        "id": repeat_section_1.id,
+        "name": repeat_section_1.name,
+    }
+    assert result.errors[0].field == "repeat_count"
 
 
 def test_empty_external_file_is_a_structured_input_error():
