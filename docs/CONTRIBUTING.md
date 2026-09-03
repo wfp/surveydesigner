@@ -15,7 +15,7 @@ By contributing to this project, you agree that your contributions will be licen
 If you discover a security-related bug:
 
 1. **Do not** create a GitHub issue.
-2. **Email:** Send a detailed report to **leandro.bravo@wfp.org**.
+2. **Email:** Send a detailed report to **global.surveydesigner@wfp.org**.
 3. **Template:** Please use the standard security reporting template in your email.
 
 ---
@@ -42,10 +42,20 @@ We use a **monorepo** structure and follow **trunk-based development**. All new 
 1. **Develop:** Work on your changes within your designated branch.
 2. **Pull Request:** Create a PR targeting the main trunk. **Crucial:** Ensure the PR description **contains a direct link to the relevant GitHub issue** and explicitly mentions your branch name.
 3. **Testing & Security:** We require manual testing before submitting a PR.
-   - **Frontend:** Run `pnpm test:ci` to execute the frontend tests.
-   - **Backend:** Run `docker compose run api test-ci` to execute the backend tests.
+   - **Frontend:** Run `pnpm test:ci` to execute the frontend tests with coverage.
+   - **Backend:** Run `docker compose run api test-ci` to execute the backend tests with coverage.
+   - **Branch coverage:** Every change must keep **branch coverage above 85%**.
+     Coverage is collected with branch coverage enabled for both applications
+     (`@vitest/coverage-v8` for the frontend and `--cov` with `branch = True`
+     for the backend). See
+     [Technical Values & Development Principles](doc/contributing/TECHNICAL_VALUES.md#test-automation--ci-compliance)
+     for the exact commands and configuration.
+   - **End-to-end:** Where your change affects user-facing flows, run the
+     Playwright suite with `pnpm e2e:ci` (see
+     [`react-ui/e2e/README.md`](../react-ui/e2e/README.md)).
    - **Security:** Run a Trivy scan to ensure there are no security vulnerabilities.
-   - **Note:** You must fix any failing tests or security issues before your PR can be merged.
+   - **Note:** You must fix any failing tests, coverage regressions, or security
+     issues before your PR can be merged.
 4. **Approval:** Maintainers will review the code. If changes are requested, add comments and push updates to your branch.
 
 ### 4. Merging

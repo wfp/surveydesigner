@@ -14,10 +14,12 @@ Survey Designer is built around a modern, scalable, and decoupled architecture d
 graph TD
     subgraph Client-Side (Local Runtime)
         React[ReactJS + Vite SPA]
+        I18n[i18next locales]
     end
 
     subgraph Service-Side (Docker Containerized)
         Backend[Django Backend]
+        Worker[RQ Worker]
         DB[(PostgreSQL)]
         Cache[(Redis Cache)]
         Storage[(MinIO Storage)]
@@ -25,11 +27,20 @@ graph TD
         Mail[Maildev SMTP]
     end
 
+    subgraph Build-Time Tooling
+        TransCLI[translationcli.py + deep_translator]
+    end
+
     React <-->|REST APIs / JSON| Backend
+    React --> I18n
     Backend <--> DB
     Backend <--> Cache
     Backend <--> Storage
-    Backend <--> Auth
+    Backend <-->|OIDC| Auth
+    Backend <--> Mail
+    Worker <--> Cache
+    Auth <--> DB
+    TransCLI -->|generates locale JSON| I18n
 ```
 
 ### Decoupled Architecture
@@ -39,6 +50,69 @@ graph TD
 ### Monorepo Approach
 * **Single Source of Truth:** Both the frontend (`react-ui`) and backend (`dj-be`) reside in a single repository. This enables atomic commits across layers, facilitates co-dependent changes, and simplifies repository discovery.
 * **Unified Tooling & Guidelines:** All documentation, licensing, security protocols, and shared developer environments are consolidated, simplifying onboarding and ensuring compliance.
+
+### Full Service Topology
+The backend stack is orchestrated by `dj-be/docker-compose.yml`. Each service
+has a distinct responsibility and a documented reason for being part of the
+architecture.
+
+| Service | Image / Tech | Local Port | Responsibility | Why it is used |
+| :--- | :--- | :--- | :--- | :--- |
+| `api` | Django 5.2 + DRF | `8080` | REST API, Django admin, static assets | Core application runtime and single API surface for the SPA. |
+| `worker` | Django RQ | — | Background/async jobs off the request path | Keeps long-running work (e.g. generation, e-mail) out of the request cycle. |
+| `postgres` | `postgres:16` | `5432` | Primary datastore for the app **and** Keycloak | A single managed relational store; a dedicated `keycloak` DB is created by `init-keycloak-db.sh` to isolate IDP data. |
+| `redis` | `redis:6` | — | Cache and RQ broker | Fast cache plus the queue backend the worker consumes. |
+| `minio` | MinIO (S3-compatible) | `9000`/`9001` | Object storage for media uploads | Local, S3-compatible storage so file handling matches production S3 without an AWS dependency. |
+| `keycloak` | `quay.io/keycloak/keycloak:22.0.1` | `8081` | Identity Provider (OIDC) | Externalizes authentication so the app never stores credentials itself (see Authentication below). |
+| `maildev` | `maildev/maildev` | `1080` | Local SMTP + web mail inbox | Lets developers exercise transactional e-mail flows without sending real mail. |
+
+### Authentication: Keycloak & OIDC
+Authentication is delegated to **Keycloak** over **OpenID Connect (OIDC)**;
+the application never manages passwords directly.
+
+* **Container:** The `keycloak` service runs `start-dev` on `:8081` with a
+  Postgres backend (`KC_DB=postgres`, database `keycloak`). The default
+  bootstrap admin is `admin` / `admin` for local development only.
+* **Pluggable provider:** `survey_designer/settings.py` selects the auth
+  backend from the `IDENTITY_PROVIDER` environment variable. The default is
+  `core.auth.backends.OIDCAuthenticationBackend` (Keycloak); setting
+  `IDENTITY_PROVIDER=CIAM` switches to
+  `core.auth.backends.OIDCAuthenticationBackendCIAM`.
+* **Configuration:** The OIDC integration is driven entirely by environment
+  variables (see `dj-be/.env.sample`):
+  `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_ENDPOINT` (token introspection),
+  `OIDC_AUTHORIZATION_ENDPOINT`, `OIDC_TOKEN_ENDPOINT`, `OIDC_JWKS_ENDPOINT`,
+  `OIDC_CONFIGURATION_ENDPOINT`, `OIDC_USERINFO_ENDPOINT`, and
+  `OIDC_CALLBACK_URL`. These point at a realm such as
+  `https://keycloak.domain.org/realms/survey-designer/...`.
+* **Why Keycloak / OIDC is used:** It provides standards-based SSO, keeps
+  credential handling out of the application, and — through the pluggable
+  backend — lets the same codebase authenticate against either a
+  self-hosted Keycloak realm or WFP's CIAM without code changes.
+
+### Localization Pipeline (i18next + `translationcli.py`)
+Multi-language support is handled **on the frontend** and the translation files
+live in the repository — there is no runtime translation service.
+
+* **Runtime:** The SPA uses **i18next** (`react-ui/src/locales/i18n.ts`) with
+  `i18next-http-backend` and `i18next-browser-languagedetector`. English is the
+  `fallbackLng`. Supported locales: `en`, `es`, `fr`, `ar`, `pt`, `ru`, each
+  with its own `translations.json`.
+* **Source of truth:** `en/translations.json` is authored by hand. Every other
+  locale is generated from it.
+* **Generation:** `pnpm translate` (see `react-ui/package.json`) installs
+  `deep_translator` + `tabulate` and runs `dj-be/translationcli.py`, which loads
+  the English JSON and, using `deep_translator`'s `GoogleTranslator`,
+  recursively translates every string into each language in
+  `CURRENT_SUPPORTED_LANGUAGES`, writing one `translations.json` per locale.
+  The script then runs `pnpm run build`.
+* **Why this approach is used:** Keeping locale JSON in-repo means translations
+  are versioned, reviewable in pull requests, and shipped as static assets with
+  the build — no external translation platform or network dependency at
+  runtime. Machine translation via `translationcli.py` gives contributors a
+  fast, zero-cost baseline for all supported languages from a single
+  hand-maintained English source, which can then be refined by hand where
+  needed.
 
 ---
 
@@ -104,6 +178,36 @@ No code should be merged without validation. Run tests locally prior to pushing 
 | :--- | :--- | :--- |
 | **Frontend** | `pnpm test:ci` | Vitest / Testing Library |
 | **Backend** | `docker compose run api test-ci` | Django Unit Tests / Pytest |
+| **End-to-end** | `pnpm e2e:ci` | Playwright (real Django stack) |
+
+#### Branch Coverage Requirement
+
+> [!IMPORTANT]
+> **Branch coverage must be greater than 85%** for every change. Coverage is
+> collected with *branch* coverage enabled so that both sides of each
+> conditional are exercised, not just line coverage.
+
+* **Frontend:** `pnpm test:ci` runs `vitest run --coverage` using
+  `@vitest/coverage-v8`. Coverage is reported to the `coverage/` directory
+  (`text` and `cobertura` reporters).
+* **Backend:** `pytest` runs with `--cov survey_designer` and `branch = True`
+  (see `dj-be/setup.cfg`), producing XML, HTML, and terminal reports.
+
+> [!WARNING]
+> **Current configuration does not yet enforce the 85% target automatically.**
+> At present the backend gate is `--cov-fail-under 70` in `dj-be/setup.cfg`, and
+> the frontend (`react-ui/vite.config.js`) sets no coverage threshold at all.
+> Until these are aligned, reviewers must verify the 85% branch-coverage
+> requirement manually. To enforce it automatically, raise the backend gate to
+> `--cov-fail-under 85` and add a Vitest `coverage.thresholds` block (for
+> example `{ branches: 85 }`). Changing these gates can cause currently passing
+> pipelines to fail if existing coverage is below 85%, so coordinate the change
+> with the maintainers.
+
+* **End-to-end:** Playwright drives the frontend against the real local Django
+  stack (the API is not mocked). See
+  [`react-ui/e2e/README.md`](../../../react-ui/e2e/README.md) for setup,
+  authentication via `POST /auth/e2e-login/`, and CI details.
 
 ### GNU AGPL-3.0 License Compliance
 Survey Designer is open-source software licensed under the **GNU Affero General Public License v3**.
@@ -114,7 +218,7 @@ Survey Designer is open-source software licensed under the **GNU Affero General 
 ### Security-First Defaults
 * **Secure Communications:** Standardized authentication via **Keycloak (OIDC)** is integrated into the core login flow.
 * **Vulnerability Scanning:** Security checks (e.g., Trivy container scans) are periodically run to identify and resolve CVEs early.
-* **Vulnerability Disclosure:** In the event of a security discovery, do **not** open a public issue. Email the details directly to **leandro.bravo@wfp.org**.
+* **Vulnerability Disclosure:** In the event of a security discovery, do **not** open a public issue. Email the details directly to **global.surveydesigner@wfp.org**.
 
 ---
 

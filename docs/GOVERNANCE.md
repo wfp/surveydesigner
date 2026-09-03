@@ -1,4 +1,3 @@
-
 # SurveyDesigner Project Governance
 
 <!-- TOC -->
@@ -6,8 +5,8 @@
 * [Triagers](#triagers)
 * [Collaborators](#collaborators)
   * [Collaborator activities](#collaborator-activities)
-* [Technical steering committee](#technical-steering-committee)
-  * [TSC meetings](#tsc-meetings)
+* [The SurveyDesigner maintainers team](#the-surveydesigner-maintainers-team)
+* [Decision-making](#decision-making)
 * [Collaborator nominations](#collaborator-nominations)
   * [Who can nominate Collaborators?](#who-can-nominate-collaborators)
   * [Ideal Nominees](#ideal-nominees)
@@ -19,7 +18,7 @@
 
 ## Triagers
 
-Triagers assess newly-opened issues in the [survey-designer][] repository and [project](https://github.com/orgs/wfp/projects/11). The GitHub team for survey-designer triagers is @[placeholder].
+Triagers assess newly-opened issues in the [survey-designer][] repository and [project](https://github.com/orgs/wfp/projects/11). The GitHub team for survey-designer triagers is @wfp/surveydesigner.
 Triagers are given the "Triage" GitHub role and have:
 
 * Ability to label issues and pull requests
@@ -27,13 +26,12 @@ Triagers are given the "Triage" GitHub role and have:
 
 See:
 
-* [List of triagers](./README.md#triagers)
-* [A guide for triagers](./doc/contributing/issues.md#triaging-a-bug-report)
+* [A guide for contributors](./CONTRIBUTING.md)
 
 ## Collaborators
 
 SurveyDesigner core collaborators maintain the [survey-designer](https://github.com/wfp/surveydesigner) GitHub repository.
-The GitHub team for SurveyDesigner core collaborators is @[placeholder/]survey-designer/collaborators.
+The GitHub team for SurveyDesigner core collaborators is @wfp/surveydesigner.
 Collaborators have:
 
 * Commit access to the [survey-designer](https://github.com/wfp/surveydesigner) repository
@@ -49,15 +47,15 @@ than 7 days.) Approving a pull request indicates that the collaborator accepts
 responsibility for the change. Approval must be from collaborators who are not
 authors of the change.
 
-If a collaborator opposes a proposed change, then the change cannot land. The
-exception is if the TSC votes to approve the change despite the opposition.
-Usually, involving the TSC is unnecessary. Often, discussions or further changes
-result in collaborators removing their opposition.
+If a collaborator opposes a proposed change, then the change cannot land.
+Usually the opposition is resolved through discussion or further changes. If the
+maintainers cannot reach consensus, the project admin makes the final call (see
+[Decision-making](#decision-making)).
 
 See:
 
-* [List of collaborators](./README.md#current-project-team-members)
-* [A guide for collaborators](./doc/contributing/collaborator-guide.md)
+* [A guide for contributors](./CONTRIBUTING.md)
+* [The onboarding guide for new collaborators](./ONBOARDING.md)
 
 ### Collaborator activities
 
@@ -67,17 +65,20 @@ See:
 * Participation in working groups
 * Merging pull requests
 
-The TSC can remove inactive collaborators or provide them with _emeritus_
-status. Emeriti may request that the TSC restore them to active status.
+The maintainers team can remove inactive collaborators or provide them with
+_emeritus_ status. Emeriti may request that the maintainers team restore them to
+active status.
 
 A collaborator is automatically made emeritus (and removed from active
 collaborator status) if it has been more than 12 months since the collaborator
 has authored or approved a commit that has landed.
 
-## Technical Steering Committee
+## The SurveyDesigner maintainers team
 
-A subset of the collaborators forms the Technical Steering Committee (TSC).
-The TSC has final authority over this project, including:
+The project is governed by **the SurveyDesigner maintainers team** — the
+collaborators in the [@wfp/surveydesigner GitHub team](https://github.com/orgs/wfp/teams/surveydesigner).
+There is no separate steering committee; the maintainers team holds final
+authority over the project, including:
 
 * Technical direction
 * Project governance and process (including this policy)
@@ -86,85 +87,32 @@ The TSC has final authority over this project, including:
 * Conduct guidelines
 * Maintaining the list of collaborators
 
-The current list of TSC members is in
-[the project README](./README.md#current-project-team-members).
+One maintainer acts as the project **admin**. The admin is responsible for
+organization-level administration (repository and team settings, access
+management) and breaks ties when the maintainers cannot reach consensus.
 
-The [TSC Charter][] governs the operations of the TSC. All changes to the
-Charter need approval by the director of the department managing the solution.
+Changes to this governance policy are proposed as pull requests and follow the
+[Consensus seeking process](#consensus-seeking-process). Changes that affect the
+project's relationship with its host department also require approval by the
+director of the department managing the solution.
 
-### TSC meetings
+## Decision-making
 
-The TSC meets in a video conference call. Each year, the TSC elects a chair to
-run the meetings. The TSC streams its meetings for public viewing on YouTube.
+The maintainers team makes decisions by **consensus**:
 
-TSC meetings may consist of a public portion and a private portion. The private
-portion is used to discuss sensitive topics, such as personnel issues,
-security vulnerabilities, or other confidential matters. Private discussions
-should be avoided as much as possible, and the TSC should strive to keep
-discussions in the public portion of the meeting, but there are times when
-private discussions are necessary.
+* Most decisions are made directly on GitHub through pull request review and
+  issue discussion. Routine changes do not need any special process beyond the
+  normal two-approval rule described under [Collaborators](#collaborators).
+* When a decision cannot be made through normal review — for example a
+  disagreement about direction or an issue at an impasse — any maintainer may
+  open an issue describing the question and mention the maintainers team. The
+  proposal is adopted if, after a reasonable period (typically 72 hours), there
+  is support from the maintainers and no sustained, unresolved opposition.
+* If consensus still cannot be reached, the **admin makes the final decision**
+  and records the rationale in the relevant issue or pull request.
 
-The TSC agenda includes issues that are at an impasse. The intention of the
-agenda is not to review or approve all patches. Collaborators review and approve
-patches on GitHub. The preference is to minimize the need for TSC meetings to
-make decisions that can otherwise be made by collaborators on GitHub.
-
-Any community member can create a GitHub issue asking that the TSC review
-something. If consensus-seeking fails for an issue, a collaborator may apply the
-`tsc-agenda` label. That will add it to the TSC meeting agenda.
-
-Before each TSC meeting, the meeting chair will share the agenda with members of
-the TSC. TSC members can also add items to the agenda at the beginning of each
-meeting. The meeting chair and the TSC cannot veto or remove items.
-
-The TSC may invite people to take part in a non-voting capacity in either the
-public or private portions of the meeting.
-
-During the public portion of the meeting, the TSC chair ensures that someone
-takes minutes that include a summary of the discussion and any
-decisions made. After the meeting, the TSC chair ensures that someone opens a
-public pull request with the minutes from the public portion of the meeting.
-
-The public portion of the TSC meeting is expected to be recorded and made
-available for live streaming during the meeting or download by anyone after.
-This expectation is to be announced to all participants at the start of the
-each meeting before the recording is started. Continued participation in the
-public portion of the meeting after this announcement is interpreted as consent to the
-recording.
-
-For the private portion of the meeting, the TSC chair ensures that someone
-produces a summary of the discussions, gets it reviewed by the attendees,
-and shares it to all the TSC members once approved by the attendees via a
-private discussion channel such as the TSC private mailing list. The summary
-may be made public if there is consensus within the TSC and the non-TSC
-attendees to make it public.
-
-Recording the private portion of a meeting or maintaining or publishing a
-detailed transcript is only permitted when all participants present during the
-private portion of the meeting explicitly agree to the recording and/or
-transcript, in order to comply to privacy regulations.
-
-All discussions made during meetings are considered provisional, receiving no
-objections from folks at the TSC meeting to take an action is not equivalent to
-the TSC endorsing that action.
-
-If a quorum of TSC voting members is present, it is possible to call for an
-explicit vote, and take the vote immediately if there are no objections. The
-decision is considered confirmed once the rest of the TSC voting members have
-been informed and no objection for taking that vote has been raised in 48 hours.
-To clarify, TSC voting members can object to the vote taking place during the
-meeting, but not to the vote itself.
-
-For discussions outside of meetings, the TSC uses
-[the TSC discussions]() for public
-issues, and the private TSC email list for private matters. The process for
-public issues in the issue tracker is:
-
-* A TSC member opens a thread explaining the proposal/issue and mentions the TSC group.
-* The proposal passes if, after 72 hours, there are two or more TSC voting
-  member approvals and no TSC voting member opposition.
-* If there is an extended impasse, a TSC member may ask for the issue to be
-  added to the TSC agenda, or make a motion for a vote.
+Any community member can open a GitHub issue asking the maintainers team to
+review something.
 
 ## Collaborator nominations
 
@@ -174,7 +122,7 @@ Existing Collaborators can nominate someone to become a Collaborator.
 
 ### Ideal Nominees
 
-Nominees should have significant and valuable contributions across the Node.js
+Nominees should have significant and valuable contributions across the SurveyDesigner
 organization.
 
 Contributions can be:
@@ -217,10 +165,10 @@ It is not uncommon for malicious actors to attempt to gain commit access to
 open-source projects in order to inject malicious code or for other nefarious
 purposes. The SurveyDesigner project has a number of mechanisms in place to prevent
 this, but it is important to be vigilant. If you have concerns about the
-authenticity of a contributor, please raise them with the TSC. Anyone nominating
-a new collaborator should take reasonable steps to verify that the contributions
-of the nominee are authentic and made in good faith. This is not always easy,
-but it is important.
+authenticity of a contributor, please raise them with the maintainers team.
+Anyone nominating a new collaborator should take reasonable steps to verify that
+the contributions of the nominee are authentic and made in good faith. This is
+not always easy, but it is important.
 
 ### Nominating a new Collaborator
 
@@ -268,13 +216,14 @@ Example of list of contributions:
 * Other participation in the wider SurveyDesigner community
 
 The nomination passes if no collaborators oppose it (as described in the
-following section) after one week. In the case of an objection, the TSC is
-responsible for working with the individuals involved and finding a resolution.
-The TSC may, following typical TSC consensus seeking processes, choose to
-advance a nomination that has otherwise failed to reach a natural consensus or
-clear path forward even if there are outstanding objections. The TSC may also
-choose to prevent a nomination from advancing if the TSC determines that any
-objections have not been adequately addressed.
+following section) after one week. In the case of an objection, the maintainers
+team is responsible for working with the individuals involved and finding a
+resolution. Following the [Consensus seeking process](#consensus-seeking-process),
+the maintainers team may choose to advance a nomination that has otherwise
+failed to reach a natural consensus or clear path forward even if there are
+outstanding objections. The maintainers team may also choose to prevent a
+nomination from advancing if it determines that any objections have not been
+adequately addressed.
 
 #### How to review a collaborator nomination
 
@@ -322,23 +271,25 @@ the public issue is opened. Opposition _should_ be paired with clear suggestions
 for positive, concrete, and unambiguous next steps that the nominee can take to
 overcome the objection and allow it to move forward. While such suggestions are
 technically optional, they are _strongly encouraged_ to prevent the nomination
-from stalling indefinitely or objections from being overridden by the TSC.
+from stalling indefinitely or objections from being overridden by the maintainers
+team.
 
 Remember that all private discussions about a nomination will be visible to
 the nominee once they are onboarded.
 
 ### Onboarding
 
-After the nomination passes, a TSC member onboards the new collaborator. See
-[the onboarding guide][] for details of the onboarding
+After the nomination passes, a member of the maintainers team onboards the new
+collaborator. See [the onboarding guide][] for details of the onboarding
 process.
 
 ## Consensus seeking process
 
-The TSC follows a [Consensus Seeking][] decision-making model per the
-[TSC Charter][].
+The SurveyDesigner maintainers team follows a [Consensus Seeking][]
+decision-making model: the team seeks consensus first, and where consensus
+cannot be reached the project admin breaks the tie, as described under
+[Decision-making](#decision-making).
 
 [Consensus Seeking]: https://en.wikipedia.org/wiki/Consensus-seeking_decision-making
-[TSC Charter]: ./doc/TSC/TSC_CHARTER.md
 [survey-designer]: https://github.com/wfp/surveydesigner
 [the onboarding guide]: ./ONBOARDING.md
