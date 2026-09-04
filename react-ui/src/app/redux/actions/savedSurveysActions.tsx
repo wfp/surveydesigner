@@ -7,6 +7,7 @@ import { savedSurveysActions } from "../reducers/savedSurveysReducer";
 import { createAppAsyncThunk } from "../store";
 import { SurveyFormState } from "../reducers/surveyFormReducer";
 import { notificationsActions } from "../reducers/notificationReducer";
+import { getApiErrorSummary } from "../../utils/apiError";
 
 export const fetchSavedSurveys = createAppAsyncThunk(
   "saved_surveys/FETCH_SAVEDSURVEYS",
@@ -55,12 +56,7 @@ const formatSubQuestions = (subquestions: any[]) => {
 
 // Utility function to extract error message
 const extractErrorMessage = (err: ApiError) => {
-  // Check if err.response and err.response.data exist
-  if (err.response && err.response.data && err.response.data.message) {
-    return err.response.data.message;
-  }
-  // Fallback message if above conditions are not met
-  return err.message || "An unknown error occurred";
+  return getApiErrorSummary(err, "An unknown error occurred");
 };
 
 const getDataForSave = (timestamp: string, surveyForm: SurveyFormState) => ({

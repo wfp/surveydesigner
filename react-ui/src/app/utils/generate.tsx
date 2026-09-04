@@ -6,21 +6,21 @@ import { downloadFile } from "./download";
 import { notificationsActions } from "../redux/reducers/notificationReducer";
 import { docFetcherActions } from "../redux/reducers/docFetcherReducer";
 import { AppDispatch } from "../redux/store";
-import axios from "axios";
+import { renderApiErrorMessage } from "./apiError";
 
 export function getOrderedSubmodules(
   surveyForm: any,
-  modulesData: React.MutableRefObject<ModulesData>
+  modulesData: React.MutableRefObject<ModulesData>,
 ) {
   const allOrderedSubmodules: number[] = [];
   if (modulesData) {
     modulesData.current.modules_order.forEach((moduleID) => {
       allOrderedSubmodules.push(
-        ...modulesData.current.submodules_order[moduleID]
+        ...modulesData.current.submodules_order[moduleID],
       );
     });
     return allOrderedSubmodules.filter((submoduleID) =>
-      surveyForm.submodules.includes(submoduleID)
+      surveyForm.submodules.includes(submoduleID),
     );
   }
 
@@ -33,7 +33,7 @@ export function getOrderedSubmodules(
 export function getDataForGeneration(
   surveyForm: any,
   modulesData: React.MutableRefObject<ModulesData>,
-  isSharedSurvey = false
+  isSharedSurvey = false,
 ) {
   const timestamp = new Date().getTime().toString();
 
@@ -44,7 +44,7 @@ export function getDataForGeneration(
 
   if (modulesData && !isSharedSurvey) {
     submodules_order = modulesData.current.modules_order.flatMap(
-      (moduleId) => modulesData.current.submodules_order[moduleId]
+      (moduleId) => modulesData.current.submodules_order[moduleId],
     );
     sub_questions = surveyForm.sub_questions.map((item: any) => item.id);
     sub_questions = sub_questions.filter((sub_question: any) => {
@@ -57,9 +57,9 @@ export function getDataForGeneration(
   } else {
     submodules_order = surveyForm.submodules_order;
     sub_questions = Object.keys(
-      surveyForm.subquestion_submodule_mapping
+      surveyForm.subquestion_submodule_mapping,
     ).flatMap((key: any) =>
-      surveyForm.subquestion_submodule_mapping[key].map((item: any) => item.id)
+      surveyForm.subquestion_submodule_mapping[key].map((item: any) => item.id),
     );
     survey_type = surveyForm.survey_type ? surveyForm.survey_type.id : null;
     // Handle languages directly for shared surveys or fallback
@@ -82,7 +82,7 @@ export const getXLS = (
   dispatch: AppDispatch,
   surveyForm: any,
   modulesData?: any,
-  isSharedSurvey = false
+  isSharedSurvey = false,
 ) => {
   const timestamp = new Date().getTime().toString();
   const data = getDataForGeneration(surveyForm, modulesData, isSharedSurvey);
@@ -108,13 +108,11 @@ export const getXLS = (
       downloadFile(res, timestamp, mimeType, extension);
     })
     .catch((err) => {
-      const errorMessage =
-        err.response?.data?.message || err.message || "Unknown error occurred";
       dispatch(
         notificationsActions.setErrorNotification({
-          msg: errorMessage,
+          msg: renderApiErrorMessage(err, "Error getting XLS file."),
           title: "Error getting XLS file.",
-        })
+        }),
       );
     });
 };
@@ -123,7 +121,7 @@ export const generateDoc = (
   dispatch: AppDispatch,
   surveyForm: any,
   modulesData?: any,
-  isSharedSurvey = false
+  isSharedSurvey = false,
 ) => {
   const data = getDataForGeneration(surveyForm, modulesData, isSharedSurvey);
   const cookies = new Cookies();
@@ -144,17 +142,15 @@ export const generateDoc = (
           jobId: jobIdRes,
           status: statusRes,
           position: positionRes,
-        })
+        }),
       );
     })
     .catch((err) => {
-      const errorMessage =
-        err.response?.data?.message || err.message || "Unknown error occurred";
       dispatch(
         notificationsActions.setErrorNotification({
-          msg: errorMessage,
+          msg: renderApiErrorMessage(err, "Error getting Word file."),
           title: "Error getting Word file.",
-        })
+        }),
       );
     });
 };
