@@ -21,6 +21,7 @@ exports[`Generate > should match snapshot 1`] = `
           >
             <button
               class="wfp--form-controls__next wfp--btn wfp--btn--primary wfp--btn wfp--btn--primary"
+              data-testid="download-xlsx"
               style="margin-bottom: 1rem; background-color: rgb(0, 135, 103); width: 230px;"
               type="button"
             >
@@ -52,6 +53,7 @@ exports[`Generate > should match snapshot 1`] = `
             </button>
             <button
               class="wfp--form-controls__next wfp--btn wfp--btn--primary wfp--btn wfp--btn--primary"
+              data-testid="download-docx"
               style="width: 230px;"
               type="button"
             >
