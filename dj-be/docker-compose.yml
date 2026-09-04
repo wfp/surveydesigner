@@ -8,6 +8,7 @@ x-refs:
       - SECRET_KEY
       - ENV
       - ENABLE_E2E_AUTH
+      - E2E_INIT_DATA
       - E2E_AUTH_TOKEN
       - FRONTEND_BASE_DOMAIN
       - DEBUG

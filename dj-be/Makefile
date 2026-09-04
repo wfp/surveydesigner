@@ -33,6 +33,10 @@ migrate:
 	$(PYTHON) manage.py migrate --noinput
 	$(PYTHON) manage.py init_users
 	$(PYTHON) manage.py generate_data
+# E2E-only seed relations; enabled by the E2E compose environment.
+ifeq ($(E2E_INIT_DATA),true)
+	$(PYTHON) manage.py init_e2e_data
+endif
 	$(PYTHON) manage.py fix_module_ordering
 	$(PYTHON) manage.py init_frontend_content
 	$(PYTHON) manage.py update_group_permissions

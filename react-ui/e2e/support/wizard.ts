@@ -34,9 +34,14 @@ export async function selectReactSelectOption(
 }
 
 export async function dismissBlockingChrome(page: Page) {
-  const rejectAnalytics = page.getByRole("button", { name: /reject analytics/i });
-  if (await rejectAnalytics.isVisible().catch(() => false)) {
-    await rejectAnalytics.click();
+  const hasStoredConsent = await page.evaluate(
+    () => window.localStorage.getItem("cookie-consent.v1") !== null,
+  );
+  if (!hasStoredConsent) {
+    await page
+      .getByRole("button", { name: /reject analytics/i })
+      .click({ timeout: 5_000 })
+      .catch(() => {});
   }
 
   const snoozeMaintenance = page.getByRole("button", { name: /snooze for 1 day/i });
@@ -58,6 +63,42 @@ async function waitForModuleSelection(page: Page) {
 
 export async function waitForReviewReady(page: Page) {
   await expect(page.locator("#id_language_select")).toBeVisible({ timeout: 30_000 });
+}
+async function deselectSubmodule(page: Page, item: Locator) {
+  const checkbox = item.locator('input[type="checkbox"]');
+  if (!(await checkbox.isChecked())) return;
+
+  await item.locator("label").click();
+  const modal = page.locator(".wfp--modal.is-visible");
+  const confirmButton = modal.getByRole("button", { name: "Yes", exact: true });
+  await expect(confirmButton).toBeVisible();
+  await confirmButton.click();
+  await expect(modal).toHaveCount(0);
+}
+
+async function selectCompactSubmodule(page: Page) {
+  // Mandatory defaults are configuration-driven; retain the first available one.
+  const allItems = page.locator(".submodule-item");
+  await expect(allItems.first().locator("label")).toBeVisible();
+
+  let selectedItems = page.locator(
+    '.submodule-item:has(input[type="checkbox"]:checked)',
+  );
+  if ((await selectedItems.count()) === 0) {
+    await allItems.first().locator("label").click();
+    selectedItems = page.locator(
+      '.submodule-item:has(input[type="checkbox"]:checked)',
+    );
+  }
+
+  const keepItem = selectedItems.first();
+  await expect(keepItem.locator("label")).toBeVisible();
+
+  while ((await selectedItems.count()) > 1) {
+    await deselectSubmodule(page, selectedItems.last());
+  }
+
+  await expect(keepItem.locator('input[type="checkbox"]')).toBeChecked();
 }
 
 export async function goToSavedSurveys(page: Page) {
@@ -84,13 +125,15 @@ export async function expectSavedSurveyVisible(page: Page, name: string) {
 }
 
 export async function fillStepOne(page: Page, name: string) {
+  await dismissBlockingChrome(page);
   await page.locator("#id_name_input").fill(name);
   await selectReactSelectOption(page, "id_organizations_select");
+  await page.keyboard.press("Escape");
   await selectReactSelectOption(page, "id_category_select", /monitoring/i);
   await selectReactSelectOption(
     page,
     "id_types_select",
-    "School Based Programme",
+    /post-distribution monitoring|pdm/i,
   );
   await selectReactSelectOption(page, "id_mode_select", /face[- ]?to[- ]?face/i);
 }
@@ -102,17 +145,7 @@ export async function completeSurveyWizard(page: Page, name: string) {
   await expect(page.locator(".survey-module .wfp--module__header")).toContainText(
     /Step:\s*2/i,
   );
-  try {
-    await waitForModuleSelection(page);
-  } catch {
-    await page
-      .locator(".submodule-item")
-      .filter({ has: page.locator("input:not(:checked)") })
-      .locator("label")
-      .first()
-      .click();
-    await waitForModuleSelection(page);
-  }
+  await selectCompactSubmodule(page);
   await goNext(page);
 
   await expect(page.locator(".survey-module .wfp--module__header")).toContainText(
