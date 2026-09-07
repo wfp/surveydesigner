@@ -486,7 +486,7 @@ def _survey_row_owner(
     }
 
 
-def _expression_question_references(expression: str) -> set[str]:
+def expression_question_references(expression: str) -> set[str]:
     references: set[str] = set()
     for token in parse_expression(expression):
         if token.type != "PYXFORM_REF":
@@ -527,7 +527,7 @@ def _validate_survey_references(
             expression = _row_value(row, survey_headers, column)
             if "${" not in expression:
                 continue
-            for referenced_name in sorted(_expression_question_references(expression)):
+            for referenced_name in sorted(expression_question_references(expression)):
                 if referenced_name in emitted_names:
                     continue
                 available = sorted(
@@ -1732,6 +1732,7 @@ __all__ = [
     "ValidationResult",
     "build_generated_artifact",
     "compute_artifact_hash",
+    "expression_question_references",
     "failed_validation_result",
     "materialize_external_files",
     "validate_codebook_integrity",

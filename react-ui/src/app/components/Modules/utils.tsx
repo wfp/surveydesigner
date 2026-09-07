@@ -4,7 +4,9 @@ import "regenerator-runtime/runtime";
 import axios from "axios";
 import _ from "lodash";
 import React from "react";
+import type { ValidationResult } from "../../types/api";
 import { API } from "../../utils";
+import { formatValidationIssues } from "../../utils/apiError";
 
 export async function apiValidation(
   selectedSubmodules: number[],
@@ -29,15 +31,17 @@ export async function apiValidation(
       },
     })
     .then((res) => {
-      let ok = true;
-      let data = null;
-      if (res.data && res.data.length) {
-        ok = false;
-        data = res.data;
+      const response = res.data as ValidationResult | string[];
+      if (Array.isArray(response)) {
+        return {
+          ok: response.length === 0,
+          data: response.length ? response : null,
+        };
       }
+
       return {
-        ok,
-        data,
+        ok: response.valid,
+        data: response.valid ? null : formatValidationIssues(response.errors),
       };
     })
     .catch((error) => ({

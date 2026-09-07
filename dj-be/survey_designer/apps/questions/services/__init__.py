@@ -8,6 +8,7 @@ from .form_validation import (  # noqa
     ValidatorInfrastructureError,
     build_generated_artifact,
     compute_artifact_hash,
+    expression_question_references,
     failed_validation_result,
     materialize_external_files,
     validate_generated_artifact,
