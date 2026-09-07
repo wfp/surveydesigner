@@ -1115,11 +1115,28 @@ class SubmoduleViewSet(ModelViewSet):
 examples = [
     OpenApiExample(
         "Example: submodule_ids=470,508",
-        value=[
-            "Combined (FCS/FCSN) contains questions from: Household Dietary Diversity Score (Combined FCS/FCSN/HDDS). Select only one of these submodules."
-        ],
+        value={
+            "valid": False,
+            "artifact_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "errors": [
+                {
+                    "code": "SELECTED_SCOPE_DEPENDENCY_NOT_EMITTED",
+                    "layer": "composition",
+                    "severity": "error",
+                    "message": "Question 'food_consumption' requires 'household_size', but that question is not emitted by the selected survey.",
+                    "owner": {
+                        "model": "RootQuestion",
+                        "id": 42,
+                        "name": "food_consumption",
+                    },
+                    "field": "relevant",
+                }
+            ],
+            "warnings": [],
+            "validator": {"pyxform": "4.5.0", "compatibility": "1.0"},
+        },
         response_only=True,
-        description="An example response showing error messages for incompatible module combinations.",
+        description="A normalized Step 2 selected-scope validation response.",
     )
 ]
 
@@ -1140,7 +1157,11 @@ def parse_int_list_param(raw_value, param_name):
         200: inline_serializer(
             name="SubmodulesOrderValidationResponse",
             fields={
-                "messages": serializers.ListField(child=serializers.CharField()),
+                "valid": serializers.BooleanField(),
+                "artifact_hash": serializers.CharField(),
+                "errors": serializers.ListField(child=serializers.DictField()),
+                "warnings": serializers.ListField(child=serializers.DictField()),
+                "validator": serializers.DictField(),
             },
         ),
     },
@@ -1149,9 +1170,6 @@ def parse_int_list_param(raw_value, param_name):
 class SubmodulesOrderValidationView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @method_decorator(cache_page(60 * 60))
-    @method_decorator(vary_on_cookie)
-    @method_decorator(vary_on_headers("Survey-Designer-Organizations", "Authorization"))
     def get(self, request, *args, **kwargs):
         organization_ids = get_selected_organization_ids(request)
         submodule_ids = parse_int_list_param(
@@ -1180,16 +1198,18 @@ class SubmodulesOrderValidationView(APIView):
             relations=INDICATOR_ORGANIZATION_RELATIONS,
             field_name="indicator_ids",
         )
-        result = []
+        issues = []
 
         if submodule_ids:
             validator = SubmodulesOrderValidator(
                 submodule_ids, indicator_ids, all_submodule_ids
             )
             validator.process()
-            result = validator.get_messages()
+            issues = validator.get_issues()
 
-        return Response(result)
+        return Response(
+            ValidationResult(valid=not issues, errors=tuple(issues)).as_dict()
+        )
 
 
 @method_decorator(

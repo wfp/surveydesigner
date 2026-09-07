@@ -731,14 +731,7 @@ export interface SubmoduleWithQuestions {
  * @export
  * @interface SubmodulesOrderValidationResponse
  */
-export interface SubmodulesOrderValidationResponse {
-  /**
-   *
-   * @type {Array<string>}
-   * @memberof SubmodulesOrderValidationResponse
-   */
-  messages: Array<string>;
-}
+export type SubmodulesOrderValidationResponse = ValidationResult;
 /**
  *
  * @export

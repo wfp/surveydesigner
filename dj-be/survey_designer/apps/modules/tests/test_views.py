@@ -1276,7 +1276,37 @@ class TestSubmodulesOrderValidationView:
         response = logged_admin_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.json() == []
+        assert response.json()["valid"] is True
+        assert response.json()["errors"] == []
+
+    def test_submodules_order_validation_blocks_unselected_dependency(
+        self,
+        logged_admin_client,
+        submodule_1,
+        submodule_2,
+        root_question_1,
+        root_question_3,
+    ):
+        root_question_1.relevant = f"${{{root_question_3.name}}}"
+        root_question_1.save(update_fields=["relevant"])
+        url = "/api/order-validation/"
+        query_params = {
+            "submodule_ids": str(submodule_1.id),
+            "all_submodule_ids": f"{submodule_1.id} {submodule_2.id}",
+        }
+
+        response = logged_admin_client.get(url, query_params)
+
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert body["valid"] is False
+        assert body["errors"][0]["code"] == ("SELECTED_SCOPE_DEPENDENCY_NOT_EMITTED")
+        assert body["errors"][0]["owner"] == {
+            "model": "RootQuestion",
+            "id": root_question_1.id,
+            "name": root_question_1.name,
+        }
+        assert body["errors"][0]["field"] == "relevant"
 
     def test_submodules_order_validation_view_with_submodule_ids(
         self, logged_admin_client, submodule_1, submodule_2, submodule_3
