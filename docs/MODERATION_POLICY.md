@@ -30,7 +30,7 @@ supported by the Admin team of the Slack organization.
 * *Collaborator* refers to any individual with configured triage role or higher
   in any SurveyDesigner GitHub Project repository. See
   [GitHub's Repository roles documentation][] for more information.
-* *TSC* refers to the [Technical Steering Committee][].
+* *Maintainers team* refers to the [SurveyDesigner maintainers team][].
 * *Post* refers to the content and titles of any issue, pull request, comment,
   discussion, or wiki page.
 * *Moderate* means to modify, lock, or delete one or more Posts to correct or
@@ -77,7 +77,7 @@ to all members of the Moderation Team.
 
 When a request is sent by email to the [global.surveydesigner@wfp.org][] (or directly to a
 Moderation Team member) the moderation team must log the issue internally and
-report it periodically to the TSC.
+report it periodically to the maintainers team.
 
 Requests should contain as much information and context as possible, including
 the URL and a screenshot of the Post in question. Screenshots may be modified
@@ -176,7 +176,7 @@ a Post from Moderation.
   it is possible to hide comments of non-Collaborators. In that case there is
   an exception to the reporting requirement described above.
 * Accounts that are reasonably believed to be bots (other than bots authorized
-  by the TSC) are subject to immediate Blocking.
+  by the maintainers team) are subject to immediate Blocking.
 * Issues, pull requests, discussions, and comments that are spam (job posting,
   service advertising, etc.) are subject to immediate moderation.
 * Issues, pull requests, discussions, and comments that are believed to be
@@ -188,7 +188,7 @@ a Post from Moderation.
   get blocked if they do it again.
 * Collaborators may use the Hide feature in the GitHub interface for off-topic
   posts by non-Collaborators.
-* Moderation Team members and TSC voting members can delete any issues or
+* Moderation Team members and maintainers team members can delete any issues or
   comments posted by accounts that have been deleted by GitHub. These accounts
   show up in the GitHub interface as user `ghost`. There is no need to
   screenshot or document these deletions.
@@ -263,15 +263,16 @@ The SurveyDesigner Moderation Team is tasked with enforcement of this policy.
 Moderation team members have the same expectations as other leadership groups
 as outlined in the [Member expectation][] document.
 At least once per month, the Moderation Team must provide a report of all Moderation
-actions taken by the Moderation Team to the TSC.
+actions taken by the Moderation Team to the maintainers team.
 
 *Nomination*
 
 Moderation team members are Collaborators who self-nominate or are nominated by
-the TSC. Team members must be approved by the TSC with annual
-recertification. If there are no objections after seven days, the nomination is automatically
-accepted. If there are objections to a specific nomination, then a TSC vote
-in favor of the nomination is required.
+the maintainers team. Team members must be approved by the maintainers team with
+annual recertification. If there are no objections after seven days, the
+nomination is automatically accepted. If there are objections to a specific
+nomination, then approval by the maintainers team (by consensus, with the admin
+breaking any tie) is required.
 
 *Onboarding*
 
@@ -284,11 +285,11 @@ New Moderation Team members are onboarded with:
 *Recertification*
 
 An annual recertification vote is required for all Moderation Team members.
-For an individual to be recertified, a TSC vote in favor of recertification is required.
+For an individual to be recertified, approval by the maintainers team is required.
 
 *Departure*
 
-A TSC vote is required to remove a moderator who has not resigned.
+A decision by the maintainers team is required to remove a moderator who has not resigned.
 
 *Resignation*
 
@@ -314,7 +315,7 @@ remove resigning team member from respective permissions and private access.
   **Valerio Giuffrida** <<valerio.giuffrida@wfp.org>> (he/him)
 
 * [hatemgkotb](https://github.com/hatemgkotb) -
-  **Hatem Kotb** <<hatem.kotb@wfp.org> (he/him)
+  **Hatem Kotb** <<hatem.kotb@wfp.org>> (he/him)
 
 ## Escalation of issues
 
@@ -328,27 +329,28 @@ Any code of conduct report, and any decision made by the moderation team, can
 be appealed to the Code of Conduct Team
 following the [appeal process][].
 
-## Reports regarding TSC and Moderation team members
+## Reports regarding maintainers team and Moderation team members
 
-Moderation disputes involving TSC or Moderation Team members,
-including questions of whether a TSC or Moderation Team member has
-failed the Code of Conduct, are to be handled by the other TSC members.
-This process will be mediated by a volunteer from the moderation team.
+Moderation disputes involving maintainers team or Moderation Team members,
+including questions of whether a maintainers team or Moderation Team member has
+failed the Code of Conduct, are to be handled by the other maintainers team
+members. This process will be mediated by a volunteer from the moderation team.
 
-TSC or Moderation Team members directly involved in a Moderation
+Maintainers team or Moderation Team members directly involved in a Moderation
 issue (as either the Requester or author of the Post in question) are
 required to recuse themselves from any decisions required to resolve the
 issue.
 
 ## Modifications to This Policy
 
-Modifications to this policy are subject to approval by the TSC.
+Modifications to this policy are subject to approval by the maintainers team.
 When modifications are proposed, if there are no objections after
-72 hours, the modifications are accepted. If there any objections to
-any proposed change, a TSC vote in favor of the change is required.
+72 hours, the modifications are accepted. If there are any objections to
+any proposed change, approval by the maintainers team (by consensus, with the
+admin breaking any tie) is required.
 
-[Code of Conduct]: https://github.com/nodejs/admin/blob/master/CODE_OF_CONDUCT.md
-[Technical Steering Committee]: https://github.com/WFP-VAM/survey-designer-documentation/blob/main/GOVERNANCE.md#technical-steering-committee
+[Code of Conduct]: CODE_OF_CONDUCT.md
+[SurveyDesigner maintainers team]: GOVERNANCE.md#the-surveydesigner-maintainers-team
 [GitHub's Repository roles documentation]: https://docs.github.com/en/organizations/managing-user-access-to-your-organizations-repositories/managing-repository-roles/repository-roles-for-an-organization#repository-roles-for-organizations
 [GitHub's Temporary Interaction Limits]: https://github.com/blog/2370-introducing-temporary-interaction-limits
 [Applicability]: #applicability
@@ -361,15 +363,15 @@ any proposed change, a TSC vote in favor of the change is required.
 [Non-Collaborator Posts]: #non-collaborator-posts
 [Temporary Interaction Limits]: #temporary-interaction-limits
 [Temporary and Indefinite Blocks]: #temporary-and-indefinite-blocks
-[Privacy of the `survey-designer-moderation` Repository]: #privacy-of-the-nodejsmoderation-repository
+[Privacy of the `survey-designer-moderation` Repository]: #privacy-of-the-survey-designer-moderation-repository
 [Moderation Team]: #moderation-team
 [Moderation Team members]: #current-members
 [Escalation of Issues]: #escalation-of-issues
 [Modifications to This Policy]: #modifications-to-this-policy
 [global.surveydesigner@wfp.org]: mailto:global.surveydesigner@wfp.org
 [block other individuals from their personal GitHub accounts]: https://help.github.com/en/articles/blocking-a-user-from-your-personal-account
-[GitHub Projects]: https://github.com/nodejs/admin/blob/master/GITHUB_ORG_MANAGEMENT_POLICY.md
+[GitHub Projects]: https://github.com/orgs/wfp/teams/surveydesigner
 [WFP Slack Community]: https://wfp.slack.com/
-[escalation process]: https://github.com/openjs-foundation/cross-project-council/blob/main/conduct/COC_POLICY.md#escalation
-[appeal process]: https://github.com/openjs-foundation/cross-project-council/blob/main/conduct/COC_POLICY.md#appeals
-[Member expectation]: https://github.com/nodejs/admin/blob/master/MemberExpectations.md
+[escalation process]: GOVERNANCE.md#decision-making
+[appeal process]: GOVERNANCE.md#decision-making
+[Member expectation]: CODE_OF_CONDUCT.md
