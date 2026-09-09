@@ -1,4 +1,5 @@
 from pyxform import xls2xform
+from pyxform.errors import PyXFormError
 
 
 class XMLConversion:
@@ -24,7 +25,7 @@ class XMLConversion:
             xml = converted.xform
             self.filter_warnings()
 
-        except Exception as e:
+        except PyXFormError as e:
             self.filter_warnings()
             self.errors.append(str(e))
             return
