@@ -121,6 +121,7 @@ class QuestionsExport:
         self.repeat_section_added = set()
         self.required_group_ids = set()
         self.choice_groups = []
+        self.row_source_map = {}
 
         self.languages_dict = dict(settings.LANGUAGES)
         self.language_values = set()
@@ -137,6 +138,17 @@ class QuestionsExport:
 
     def increment_row_index(self):
         self.current_row_index += 1
+
+    @staticmethod
+    def _source_for(instance):
+        return {
+            "model": instance.__class__.__name__,
+            "id": instance.id,
+            "name": instance.name,
+        }
+
+    def _record_row_source(self, sheet, row, instance):
+        self.row_source_map[(sheet.title, row)] = self._source_for(instance)
 
     @staticmethod
     def get_language_column(name, language):
@@ -254,6 +266,9 @@ class QuestionsExport:
             data["module_name"] = module_names[i]
             data["module_label"] = module_labels[i]
             self.increment_row_index()
+            self._record_row_source(
+                self.questions_sheet, self.current_row_index, repeat_section
+            )
             self._populate_rows(data)
 
         self.repeat_section_added.add(repeat_section)
@@ -312,6 +327,9 @@ class QuestionsExport:
             data["module_name"] = module_names[i]
             data["module_label"] = module_labels[i]
             self.increment_row_index()
+            self._record_row_source(
+                self.questions_sheet, self.current_row_index, question
+            )
             self._populate_rows(data)
 
         if repeat_sections:
@@ -348,6 +366,7 @@ class QuestionsExport:
         for choice_group in choices_queryset:
             for choice in choice_group.choices.all().order_by("order", "id"):
                 row += 1
+                self._record_row_source(self.choices_sheet, row, choice_group)
                 self.choices_sheet.cell(
                     row=row,
                     column=columns["choice_list"].value,
@@ -386,6 +405,7 @@ class QuestionsExport:
         self._fill_column_header(columns, self.suffixes_sheet)
         suffixes_queryset = self.get_suffixes(self.suffixes_ids)
         for i, suffix in enumerate(suffixes_queryset, 2):
+            self._record_row_source(self.suffixes_sheet, i, suffix)
             self.suffixes_sheet.cell(
                 row=i,
                 column=columns["name"].value,
@@ -421,6 +441,7 @@ class QuestionsExport:
         self._fill_column_header(columns, self.recall_period_sheet)
         recall_period_queryset = self.get_recall_periods(self.recall_period_ids)
         for i, recall_period in enumerate(recall_period_queryset, 2):
+            self._record_row_source(self.recall_period_sheet, i, recall_period)
             self.recall_period_sheet.cell(
                 row=i,
                 column=columns["name"].value,

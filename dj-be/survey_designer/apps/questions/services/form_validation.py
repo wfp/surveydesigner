@@ -946,6 +946,7 @@ def _validate_codebook_export_definitions(
     survey_headers: Mapping[str, int],
     survey_rows: Sequence[tuple[Any, ...]],
     emitted_lists: set[str],
+    row_source_map: Mapping[Any, Any] | None,
 ) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     suffixes: dict[str, dict[str, Any]] = {}
@@ -966,7 +967,12 @@ def _validate_codebook_export_definitions(
         if not any((name, suffix_type, choice_list, nested_suffixes)):
             continue
 
-        owner = {"model": "suffix", "name": name} if name else {"model": "suffix"}
+        owner = _row_owner(
+            row_source_map,
+            "suffixes",
+            row_number,
+            {"model": "suffix", "name": name} if name else {"model": "suffix"},
+        )
         if not name:
             issues.append(
                 _issue(
@@ -1000,11 +1006,7 @@ def _validate_codebook_export_definitions(
                         "CODEBOOK_SUFFIX_NAME_DUPLICATE",
                         "composition",
                         f"Suffix '{name}' is duplicated; it was first emitted at row {suffixes[name]['row']}.",
-                        owner={
-                            "model": "suffix",
-                            "name": name,
-                            "first_row": suffixes[name]["row"],
-                        },
+                        owner={**owner, "first_row": suffixes[name]["row"]},
                         field="name",
                         sheet="suffixes",
                         column="name",
@@ -1084,10 +1086,15 @@ def _validate_codebook_export_definitions(
         if not name and not description:
             continue
 
-        owner = (
-            {"model": "recall_period", "name": name}
-            if name
-            else {"model": "recall_period"}
+        owner = _row_owner(
+            row_source_map,
+            "recall_periods",
+            row_number,
+            (
+                {"model": "recall_period", "name": name}
+                if name
+                else {"model": "recall_period"}
+            ),
         )
         if not name:
             issues.append(
@@ -1122,11 +1129,7 @@ def _validate_codebook_export_definitions(
                     "CODEBOOK_RECALL_PERIOD_NAME_DUPLICATE",
                     "composition",
                     f"Recall period '{name}' is duplicated; it was first emitted at row {recall_periods[name]['row']}.",
-                    owner={
-                        "model": "recall_period",
-                        "name": name,
-                        "first_row": recall_periods[name]["row"],
-                    },
+                    owner={**owner, "first_row": recall_periods[name]["row"]},
                     field="name",
                     sheet="recall_periods",
                     column="name",
@@ -1144,7 +1147,12 @@ def _validate_codebook_export_definitions(
         if not any((suffix_1_name, suffix_2_name, recall_period_name)):
             continue
 
-        owner = {"model": "question", "name": question_name}
+        owner = _row_owner(
+            row_source_map,
+            "survey",
+            row_number,
+            {"model": "question", "name": question_name},
+        )
         suffix_1 = suffixes.get(suffix_1_name)
         suffix_2 = suffixes.get(suffix_2_name)
         if suffix_1_name and not suffix_1:
@@ -1252,14 +1260,38 @@ def _validate_codebook_export_definitions(
     return issues
 
 
-def _source_for_survey_row(
-    row_source_map: Mapping[Any, Any] | None, row_number: int
+def _source_for_row(
+    row_source_map: Mapping[Any, Any] | None,
+    sheet: str,
+    row_number: int,
 ) -> Mapping[str, Any] | None:
     if not row_source_map:
         return None
-    return row_source_map.get(("survey", row_number)) or row_source_map.get(
-        f"survey:{row_number}"
+    return row_source_map.get((sheet, row_number)) or row_source_map.get(
+        f"{sheet}:{row_number}"
     )
+
+
+def _source_for_survey_row(
+    row_source_map: Mapping[Any, Any] | None, row_number: int
+) -> Mapping[str, Any] | None:
+    return _source_for_row(row_source_map, "survey", row_number)
+
+
+def _row_owner(
+    row_source_map: Mapping[Any, Any] | None,
+    sheet: str,
+    row_number: int,
+    fallback: Mapping[str, Any],
+) -> dict[str, Any]:
+    source = _source_for_row(row_source_map, sheet, row_number)
+    if not source:
+        return dict(fallback)
+    return {
+        key: source[key]
+        for key in ("model", "id", "name")
+        if source.get(key) is not None
+    }
 
 
 def _validate_final_source_context(
@@ -1462,12 +1494,18 @@ def validate_codebook_integrity(
             if not any((list_name, choice_name, english_label)):
                 continue
             if not list_name:
+                owner = _row_owner(
+                    row_source_map,
+                    "choices",
+                    row_number,
+                    {"model": "choice", "name": choice_name},
+                )
                 issues.append(
                     _issue(
                         "CODEBOOK_CHOICE_LIST_NAME_MISSING",
                         "composition",
                         "An emitted choice row does not specify a choice list name.",
-                        owner={"model": "choice", "name": choice_name},
+                        owner=owner,
                         field=emitted_list_column,
                         sheet="choices",
                         column=emitted_list_column,
@@ -1489,7 +1527,12 @@ def validate_codebook_integrity(
                                 "CODEBOOK_CHOICE_LIST_NAME_INVALID",
                                 "composition",
                                 f"Choice list name '{list_name}' is invalid. Names must begin with a letter or underscore and contain only letters, digits, underscores, hyphens, or periods.",
-                                owner={"model": "choice_list", "name": list_name},
+                                owner=_row_owner(
+                                    row_source_map,
+                                    "choices",
+                                    row_number,
+                                    {"model": "choice_list", "name": list_name},
+                                ),
                                 field=emitted_list_column,
                                 sheet="choices",
                                 column=emitted_list_column,
@@ -1503,7 +1546,12 @@ def validate_codebook_integrity(
                         "CODEBOOK_CHOICE_VALUE_MISSING",
                         "composition",
                         f"Choice list '{list_name}' has an emitted choice with no value.",
-                        owner={"model": "choice_list", "name": list_name},
+                        owner=_row_owner(
+                            row_source_map,
+                            "choices",
+                            row_number,
+                            {"model": "choice_list", "name": list_name},
+                        ),
                         field="name",
                         sheet="choices",
                         column="name",
@@ -1521,11 +1569,16 @@ def validate_codebook_integrity(
                             "CODEBOOK_CHOICE_VALUE_DUPLICATE",
                             "composition",
                             f"Choice value '{choice_name}' is duplicated in choice list '{list_name}'; it was first emitted at row {first_row}.",
-                            owner={
-                                "model": "choice",
-                                "name": choice_name,
-                                "choice_list": list_name,
-                            },
+                            owner=_row_owner(
+                                row_source_map,
+                                "choices",
+                                row_number,
+                                {
+                                    "model": "choice",
+                                    "name": choice_name,
+                                    "choice_list": list_name,
+                                },
+                            ),
                             field="name",
                             sheet="choices",
                             column="name",
@@ -1540,11 +1593,16 @@ def validate_codebook_integrity(
                             "CODEBOOK_CHOICE_VALUE_INVALID",
                             "composition",
                             f"Choice value '{choice_name}' in choice list '{list_name}' contains whitespace, which is not supported by select_multiple questions.",
-                            owner={
-                                "model": "choice",
-                                "name": choice_name,
-                                "choice_list": list_name,
-                            },
+                            owner=_row_owner(
+                                row_source_map,
+                                "choices",
+                                row_number,
+                                {
+                                    "model": "choice",
+                                    "name": choice_name,
+                                    "choice_list": list_name,
+                                },
+                            ),
                             field="name",
                             sheet="choices",
                             column="name",
@@ -1557,11 +1615,16 @@ def validate_codebook_integrity(
                         "CODEBOOK_CHOICE_LABEL_MISSING",
                         "composition",
                         f"Choice '{choice_name}' in choice list '{list_name}' has no English label.",
-                        owner={
-                            "model": "choice",
-                            "name": choice_name,
-                            "choice_list": list_name,
-                        },
+                        owner=_row_owner(
+                            row_source_map,
+                            "choices",
+                            row_number,
+                            {
+                                "model": "choice",
+                                "name": choice_name,
+                                "choice_list": list_name,
+                            },
+                        ),
                         field="label",
                         sheet="choices",
                         column=english_label_column,
@@ -1572,7 +1635,11 @@ def validate_codebook_integrity(
         if is_codebook_export:
             issues.extend(
                 _validate_codebook_export_definitions(
-                    workbook, survey_headers, survey_rows, emitted_lists
+                    workbook,
+                    survey_headers,
+                    survey_rows,
+                    emitted_lists,
+                    row_source_map,
                 )
             )
         else:
@@ -1593,7 +1660,17 @@ def validate_codebook_integrity(
 
             question_type, list_name, list_column = declaration
             question_name = _row_value(row, survey_headers, "name")
-            owner = {"model": "question", "name": question_name}
+            fallback_owner = {"model": "question", "name": question_name}
+            owner = (
+                _row_owner(
+                    row_source_map,
+                    "survey",
+                    row_number,
+                    fallback_owner,
+                )
+                if is_codebook_export
+                else fallback_owner
+            )
 
             if not list_name:
                 issues.append(

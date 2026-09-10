@@ -813,6 +813,59 @@ def test_real_codebook_export_with_suffix_and_recall_period_passes(
     assert validate_codebook_integrity(xlsx) == []
 
 
+def test_questions_export_validation_reports_database_owners(
+    root_question_2,
+    sub_question_1,
+    sub_question_2,
+    choices_1,
+    suffix_1,
+    recall_period_1,
+):
+    type(root_question_2).objects.filter(id=root_question_2.id).update(choices=None)
+    first_choice = choices_1.choices.order_by("order", "id").first()
+    type(first_choice).objects.filter(id=first_choice.id).update(label="")
+    type(suffix_1).objects.filter(id=suffix_1.id).update(type="unsupported")
+    type(recall_period_1).objects.filter(id=recall_period_1.id).update(
+        name="invalid recall period"
+    )
+
+    base_question_model = type(root_question_2.base_question)
+    export = QuestionsExport(languages=[("en", "English")])
+    xlsx = export.generate_from_questions(
+        base_question_model.objects.filter(
+            id__in=[
+                root_question_2.base_question.id,
+                sub_question_1.base_question.id,
+                sub_question_2.base_question.id,
+            ]
+        )
+    )
+
+    issues = validate_codebook_integrity(xlsx, export.row_source_map)
+    owners_by_code = {issue.code: issue.owner for issue in issues}
+
+    assert owners_by_code["CODEBOOK_CHOICE_LIST_MISSING"] == {
+        "model": "RootQuestion",
+        "id": root_question_2.id,
+        "name": root_question_2.name,
+    }
+    assert owners_by_code["CODEBOOK_CHOICE_LABEL_MISSING"] == {
+        "model": "ChoiceGroup",
+        "id": choices_1.id,
+        "name": choices_1.name,
+    }
+    assert owners_by_code["CODEBOOK_SUFFIX_TYPE_UNSUPPORTED"] == {
+        "model": "Suffix",
+        "id": suffix_1.id,
+        "name": suffix_1.name,
+    }
+    assert owners_by_code["CODEBOOK_RECALL_PERIOD_NAME_INVALID"] == {
+        "model": "RecallPeriod",
+        "id": recall_period_1.id,
+        "name": "invalid recall period",
+    }
+
+
 @pytest.mark.parametrize(
     "survey_row, expected_code, expected_field",
     [
