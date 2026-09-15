@@ -379,6 +379,11 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "content-type",
     "survey-designer-organizations",
 ]
+CORS_EXPOSE_HEADERS = [
+    "X-Survey-Validation-Warnings",
+    "X-Validation-Warnings",
+    "X-Survey-Artifact-Hash",
+]
 
 # Sentry
 SEND_TO_SENTRY = environ.get("SEND_TO_SENTRY", "False").lower() == "true"

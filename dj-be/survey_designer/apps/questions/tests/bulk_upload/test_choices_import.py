@@ -7,9 +7,9 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from openpyxl import Workbook, load_workbook
-from openpyxl.writer.excel import save_virtual_workbook
 from questions.models import Choice, ChoiceGroup
 from questions.services.questions_import.choices import ChoicesImport
+from questions.services.workbook import save_virtual_workbook
 
 
 def build_choices_wb(choices_rows, languages=("en", "English"), with_other_sheets=True):

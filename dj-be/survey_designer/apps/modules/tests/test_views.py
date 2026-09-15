@@ -9,6 +9,7 @@ from accounts.models import UserAPIKey, UserAPISite
 from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.db import connection
+from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from django_rq import get_queue
 from documents.models import Document
@@ -20,6 +21,7 @@ from modules.models import (
     SubmoduleRequiredGroup,
 )
 from modules.views import generate_docx
+from pyxform.errors import PyXFormError
 from questions.const import QuestionType
 from questions.models import (
     RootQuestion,
@@ -60,6 +62,20 @@ def build_stub_xls_form(external_files):
             return b"fake-xlsx"
 
     return StubXLSForm(external_files)
+
+
+def mock_successful_xml_conversion(mocker, xml=None):
+    conversion = mocker.Mock()
+    conversion.run.return_value = xml or (
+        '<h:html xmlns:h="http://www.w3.org/1999/xhtml" '
+        'xmlns:xf="http://www.w3.org/2002/xforms">'
+        "<h:head><xf:model><xf:instance><data/></xf:instance>"
+        "</xf:model></h:head><h:body/></h:html>"
+    )
+    conversion.warnings = []
+    conversion.errors = []
+    mocker.patch("modules.views.XMLConversion", return_value=conversion)
+    return conversion
 
 
 @pytest.fixture(autouse=True)
@@ -578,6 +594,92 @@ def test_preview_xls_form(
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("conversion_error", "expected_status", "expected_code"),
+    [
+        (
+            PyXFormError("invalid XLSForm"),
+            status.HTTP_400_BAD_REQUEST,
+            "PYXFORM_CONVERSION_ERROR",
+        ),
+        (
+            RuntimeError("converter crashed"),
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "VALIDATOR_UNAVAILABLE",
+        ),
+        (
+            TimeoutError("converter timed out"),
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "VALIDATOR_UNAVAILABLE",
+        ),
+    ],
+)
+def test_converter_failures_keep_input_and_infrastructure_statuses(
+    mocker,
+    api_client_authenticated_admin,
+    submodule_1,
+    conversion_error,
+    expected_status,
+    expected_code,
+):
+    mocker.patch(
+        "questions.services.xml_conversion.xls2xform.convert",
+        side_effect=conversion_error,
+    )
+    payload = {
+        "name": "Converter failure survey",
+        "submodules": [submodule_1.id],
+        "submodules_order": [submodule_1.id],
+        "sub_questions": [],
+        "languages": ["en"],
+    }
+
+    response = api_client_authenticated_admin.post(
+        "/api/validate/", payload, format="json"
+    )
+
+    assert response.status_code == expected_status
+    assert response.json()["errors"][0]["code"] == expected_code
+
+
+@pytest.mark.django_db
+@override_settings(CORS_ALLOWED_ORIGINS=["http://localhost:3000"])
+def test_download_exposes_validation_warning_headers_to_frontend(
+    mocker, api_client_authenticated_admin, submodule_1
+):
+    conversion = mock_successful_xml_conversion(mocker)
+    conversion.warnings = ["non-blocking warning"]
+    payload = {
+        "name": "Warning survey",
+        "submodules": [submodule_1.id],
+        "submodules_order": [submodule_1.id],
+        "sub_questions": [],
+        "languages": ["en"],
+    }
+
+    response = api_client_authenticated_admin.post(
+        "/api/generate/",
+        payload,
+        format="json",
+        HTTP_ORIGIN="http://localhost:3000",
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    warnings = json.loads(response["X-Survey-Validation-Warnings"])
+    assert warnings[0]["code"] == "PYXFORM_WARNING"
+    assert response["Access-Control-Allow-Origin"] == "http://localhost:3000"
+    exposed_headers = {
+        header.strip().lower()
+        for header in response["Access-Control-Expose-Headers"].split(",")
+    }
+    assert {
+        "x-survey-validation-warnings",
+        "x-validation-warnings",
+        "x-survey-artifact-hash",
+    }.issubset(exposed_headers)
+
+
+@pytest.mark.django_db
 def test_preview_xls_form_with_external_media(
     mocker,
     logged_admin_client,
@@ -591,13 +693,9 @@ def test_preview_xls_form_with_external_media(
         "fruits.csv": ContentFile(csv_content, name="fruits.csv")
     }
 
-    mocker.patch("modules.views.get_xlsx_from_request", return_value=stub_form)
+    mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
 
-    xml_conversion = mocker.Mock()
-    xml_conversion.run.return_value = "<data/>"
-    xml_conversion.warnings = []
-    xml_conversion.errors = []
-    mocker.patch("modules.views.XMLConversion", return_value=xml_conversion)
+    mock_successful_xml_conversion(mocker)
 
     saved_paths = []
 
@@ -670,7 +768,7 @@ def test_preview_xls_form_rewrites_external_file_links(
         "logo.png": ContentFile(img_content, name="logo.png"),
     }
 
-    mocker.patch("modules.views.get_xlsx_from_request", return_value=stub_form)
+    mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
 
     xml_payload = (
         '<h:html xmlns:h="http://www.w3.org/1999/xhtml" '
@@ -679,11 +777,7 @@ def test_preview_xls_form_rewrites_external_file_links(
         '<h:body><h:img src="jr://images/logo.png"/></h:body>'
         "</h:html>"
     )
-    xml_conversion = mocker.Mock()
-    xml_conversion.run.return_value = xml_payload
-    xml_conversion.warnings = []
-    xml_conversion.errors = []
-    mocker.patch("modules.views.XMLConversion", return_value=xml_conversion)
+    mock_successful_xml_conversion(mocker, xml_payload)
 
     saved_contents = {}
 
@@ -896,6 +990,7 @@ def test_upload_xls_form_moda_uploads_metadata(
     fake_file = FakeFieldFile("fruits.csv", b"name,color\nbanana,yellow\n")
     stub_form = build_stub_xls_form({"fruits.csv": fake_file})
     mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
+    mock_successful_xml_conversion(mocker)
 
     upload_response = mocker.Mock()
     upload_response.ok = True
@@ -966,6 +1061,7 @@ def test_upload_xls_form_moda_without_attachments(
     site = moda_api_key.site
     stub_form = build_stub_xls_form({})
     mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
+    mock_successful_xml_conversion(mocker)
 
     upload_response = mocker.Mock()
     upload_response.ok = True
@@ -1009,6 +1105,7 @@ def test_upload_xls_form_moda_metadata_failure(
 ):
     stub_form = build_stub_xls_form({"fruits.csv": FakeFieldFile("fruits.csv")})
     mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
+    mock_successful_xml_conversion(mocker)
 
     upload_response = mocker.Mock()
     upload_response.ok = True

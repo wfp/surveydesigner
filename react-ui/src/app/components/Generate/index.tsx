@@ -14,7 +14,6 @@ import { useAppDispatch, useAppSelector } from "../../redux/store";
 import { useModules } from "../../contexts/ModulesContext";
 import { fetchProjects } from "../../redux/actions/projectsActions";
 import { API, capitalize } from "../../utils";
-import { renderApiErrorMessage } from "../../utils/apiError";
 import { clearJob } from "../../redux/actions/docFetcherActions";
 import { notificationsActions } from "../../redux/reducers/notificationReducer";
 import {
@@ -22,6 +21,12 @@ import {
   UploadResponse,
   UserAPIKey,
 } from "../../types/api";
+import {
+  formatValidationIssues,
+  getApiErrorTitle,
+  parseApiError,
+  renderApiErrorMessage,
+} from "../../utils/apiError";
 import { GenerateProps } from "./Generate.interface";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faFileAlt, faSearch } from "@fortawesome/free-solid-svg-icons";
@@ -70,6 +75,7 @@ function Generate({ next }: GenerateProps) {
 
   function uploadXLS() {
     setUploading(true);
+    setUploadResponse(null);
     const data = {
       site: selectedSite?.name,
       id: selectedSite?.id,
@@ -93,15 +99,19 @@ function Generate({ next }: GenerateProps) {
         setUploading(false);
         setUploadResponse(res.data);
       })
-      .catch((err) => {
+      .catch(async (err) => {
         setUploading(false);
+        const parsedError = await parseApiError(err);
         dispatch(
           notificationsActions.setErrorNotification({
             msg: renderApiErrorMessage(
-              err,
+              parsedError,
               "The survey could not be published.",
             ),
-            title: t("generate.notification.uploadError"),
+            title: getApiErrorTitle(
+              parsedError,
+              t("generate.notification.uploadError"),
+            ),
           }),
         );
       });
@@ -132,13 +142,26 @@ function Generate({ next }: GenerateProps) {
       );
     }
     if (uploadResponse) {
-      dispatch(
-        notificationsActions.setSuccessNotification({
-          msg: t("generate.notification.uploadConfirmation", {
-            name: selectedSite?.name,
-          }),
-        }),
+      const warningMessages = formatValidationIssues(
+        uploadResponse.warnings || [],
       );
+      const confirmation = t("generate.notification.uploadConfirmation", {
+        name: selectedSite?.name,
+      });
+      if (warningMessages.length) {
+        dispatch(
+          notificationsActions.setWarnNotification({
+            title: `${confirmation} (warnings)`,
+            msg: [confirmation, ...warningMessages].join("\n"),
+          }),
+        );
+      } else {
+        dispatch(
+          notificationsActions.setSuccessNotification({
+            msg: confirmation,
+          }),
+        );
+      }
     }
   }, [uploadResponse, uploading]);
 

@@ -6,7 +6,13 @@ import { downloadFile } from "./download";
 import { notificationsActions } from "../redux/reducers/notificationReducer";
 import { docFetcherActions } from "../redux/reducers/docFetcherReducer";
 import { AppDispatch } from "../redux/store";
-import { renderApiErrorMessage } from "./apiError";
+import {
+  formatValidationIssues,
+  getApiErrorTitle,
+  parseApiError,
+  parseValidationWarningsHeader,
+  renderApiErrorMessage,
+} from "./apiError";
 
 export function getOrderedSubmodules(
   surveyForm: any,
@@ -78,6 +84,24 @@ export function getDataForGeneration(
   };
 }
 
+type SurveyFormOrganizations = {
+  organizations?: Array<{ id: number | string }>;
+};
+
+const getOrganizationHeaders = (
+  surveyForm: SurveyFormOrganizations | null | undefined,
+): Record<string, string> => {
+  if (!surveyForm?.organizations?.length) {
+    return {};
+  }
+
+  return {
+    "Survey-Designer-Organizations": surveyForm.organizations
+      .map(({ id }) => id)
+      .join(","),
+  };
+};
+
 export const getXLS = (
   dispatch: AppDispatch,
   surveyForm: any,
@@ -92,6 +116,7 @@ export const getXLS = (
     responseType: "blob",
     headers: {
       "X-CSRFToken": csrfToken,
+      ...getOrganizationHeaders(surveyForm),
     },
   })
     .then((res) => {
@@ -106,12 +131,25 @@ export const getXLS = (
       }
 
       downloadFile(res, timestamp, mimeType, extension);
+      const warnings = parseValidationWarningsHeader(
+        res.headers["x-survey-validation-warnings"] ||
+          res.headers["x-validation-warnings"],
+      );
+      if (warnings.length) {
+        dispatch(
+          notificationsActions.setWarnNotification({
+            title: "Download completed with warnings",
+            msg: formatValidationIssues(warnings).join("\n"),
+          }),
+        );
+      }
     })
-    .catch((err) => {
+    .catch(async (err) => {
+      const parsedError = await parseApiError(err);
       dispatch(
         notificationsActions.setErrorNotification({
-          msg: renderApiErrorMessage(err, "Error getting XLS file."),
-          title: "Error getting XLS file.",
+          msg: renderApiErrorMessage(parsedError, "Error getting XLS file."),
+          title: getApiErrorTitle(parsedError, "Error getting XLS file."),
         }),
       );
     });
@@ -129,6 +167,7 @@ export const generateDoc = (
   API.post("/generate-doc/", data, {
     headers: {
       "X-CSRFToken": csrfToken,
+      ...getOrganizationHeaders(surveyForm),
     },
   })
     .then((res) => {
