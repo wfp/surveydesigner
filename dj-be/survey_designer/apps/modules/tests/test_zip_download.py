@@ -13,7 +13,7 @@ from modules.factories import ModuleFactory, SubmoduleFactory
 from organization.models import Organization
 from questions.const import QuestionType
 from questions.factories import RootQuestionFactory
-from questions.models import ChoiceGroup, ChoiceGroupFile
+from questions.models import Choice, ChoiceGroup, ChoiceGroupFile
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -59,17 +59,23 @@ class GenerateXLSZipTestCase(APITestCase):
             HTTP_SURVEY_DESIGNER_ORGANIZATIONS=str(self.organization.pk)
         )
 
-        self.module = ModuleFactory()
+        self.module = ModuleFactory(name="zip_module")
         self.module.organizations.add(self.organization)
-        self.submodule = SubmoduleFactory(module=self.module)
+        self.submodule = SubmoduleFactory(module=self.module, name="zip_submodule")
 
         # Create a standard select_one question (no file)
         self.choice_group = ChoiceGroupFactory()
+        Choice.objects.create(
+            choice_group=self.choice_group,
+            name="standard_choice",
+            label="Standard choice",
+        )
         self.q1 = RootQuestionFactory(
             submodules=[{"submodule_id": self.submodule.id}],
             type=QuestionType.SELECT_ONE,
             choices=self.choice_group,
             name="q1",
+            label="Standard question",
         )
 
         # Create a select_one_from_file question
@@ -84,20 +90,28 @@ class GenerateXLSZipTestCase(APITestCase):
             type=QuestionType.SELECT_ONE_FROM_FILE,
             choices_file=self.choice_file,
             name="q2",
+            label="External question",
         )
 
     def test_generate_standard_xls(self):
         """Test that a survey with NO external files returns an XLSX."""
         # Override setup for clean separation
         # Create clean module/submodule with only standard question
-        module_clean = ModuleFactory()
+        module_clean = ModuleFactory(name="clean_module")
         module_clean.organizations.add(self.organization)
-        submodule_clean = SubmoduleFactory(module=module_clean)
+        submodule_clean = SubmoduleFactory(module=module_clean, name="clean_submodule")
+        clean_choice_group = ChoiceGroupFactory()
+        Choice.objects.create(
+            choice_group=clean_choice_group,
+            name="clean_choice",
+            label="Clean choice",
+        )
         RootQuestionFactory(
             submodules=[{"submodule_id": submodule_clean.id}],
             type=QuestionType.SELECT_ONE,
-            choices=ChoiceGroupFactory(),
+            choices=clean_choice_group,
             name="q_clean",
+            label="Clean question",
         )
 
         payload_clean = {
