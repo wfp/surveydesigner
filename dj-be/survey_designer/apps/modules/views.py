@@ -51,7 +51,7 @@ from modules.serializers import (
     SubmoduleWithQuestionsSerializer,
     UploadXLSFormSerializer,
 )
-from modules.services import SubmodulesOrderValidator
+from modules.services import SubmoduleCompositionValidator
 from organization.models import Organization
 from questions.models import (
     BaseQuestion,
@@ -1155,7 +1155,7 @@ def parse_int_list_param(raw_value, param_name):
     parameters=[submodule_ids_param, indicator_ids_param, all_submodule_ids_param],
     responses={
         200: inline_serializer(
-            name="SubmodulesOrderValidationResponse",
+            name="SubmoduleCompositionValidationResponse",
             fields={
                 "valid": serializers.BooleanField(),
                 "artifact_hash": serializers.CharField(),
@@ -1167,7 +1167,7 @@ def parse_int_list_param(raw_value, param_name):
     },
     examples=examples,
 )
-class SubmodulesOrderValidationView(APIView):
+class SubmoduleCompositionValidationView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
@@ -1201,11 +1201,10 @@ class SubmodulesOrderValidationView(APIView):
         issues = []
 
         if submodule_ids:
-            validator = SubmodulesOrderValidator(
+            validator = SubmoduleCompositionValidator(
                 submodule_ids, indicator_ids, all_submodule_ids
             )
-            validator.process()
-            issues = validator.get_issues()
+            issues = validator.validate()
 
         return Response(
             ValidationResult(valid=not issues, errors=tuple(issues)).as_dict()

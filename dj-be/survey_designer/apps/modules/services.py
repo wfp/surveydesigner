@@ -9,7 +9,7 @@ from questions.services.form_validation import (
 )
 
 
-class SubmodulesOrderValidator:
+class SubmoduleCompositionValidator:
     def __init__(self, submodule_ids, indicator_ids, all_submodule_ids):
         self.submodule_ids = [int(id_) for id_ in submodule_ids]
         self.indicator_ids = [int(id_) for id_ in indicator_ids]
@@ -18,9 +18,9 @@ class SubmodulesOrderValidator:
         self.submodule_order = {
             submodule_id: index for index, submodule_id in enumerate(self.submodule_ids)
         }
-        self.dependent_submodules_result = {}
-        self.dependencies_result = {}
-        self.scope_issues = []
+        self.compatibility_results = {}
+        self.dependency_results = {}
+        self.dependency_issues = []
         self._submodules = None
         self._scope_submodules = None
         self._indicator_questions = None
@@ -80,7 +80,7 @@ class SubmodulesOrderValidator:
     def get_issues(self):
         issues = []
         for submodule, conflicting_submodules in sorted(
-            self.dependent_submodules_result.items(), key=lambda item: item[0].id
+            self.compatibility_results.items(), key=lambda item: item[0].id
         ):
             labels = ", ".join(
                 submodule.label
@@ -102,10 +102,11 @@ class SubmodulesOrderValidator:
                     field="submodules",
                 )
             )
-        issues.extend(self.scope_issues)
+        issues.extend(self.dependency_issues)
         return issues
 
-    def process_dependent_submodules(self):
+    def validate_compatibility(self):
+        self.compatibility_results = {}
         submodules_by_root_question = defaultdict(set)
         submodules_by_repeat_section = defaultdict(set)
 
@@ -126,11 +127,11 @@ class SubmodulesOrderValidator:
             next_submodules.discard(submodule)
             intersection = next_submodules.intersection(processed_submodules)
             if intersection:
-                self.dependent_submodules_result[submodule] = intersection
+                self.compatibility_results[submodule] = intersection
 
             processed_submodules.add(submodule)
 
-        return self.dependent_submodules_result
+        return self.compatibility_results
 
     @staticmethod
     def _expression_fields(owner):
@@ -240,7 +241,7 @@ class SubmodulesOrderValidator:
             )
             if not owns_expression:
                 continue
-            result = self.dependencies_result.setdefault(
+            result = self.dependency_results.setdefault(
                 submodule,
                 {"related_submodules": set(), "dependencies": []},
             )
@@ -248,7 +249,7 @@ class SubmodulesOrderValidator:
             if dependency not in result["dependencies"]:
                 result["dependencies"].append(dependency)
 
-    def process_relevant_dependencies(self):
+    def validate_dependencies(self):
         owners = self._scope_expression_owners()
         references = []
         for owner in owners:
@@ -279,8 +280,8 @@ class SubmodulesOrderValidator:
         }
         dependency_submodules = self._dependency_submodules(dependencies)
 
-        self.scope_issues = []
-        self.dependencies_result = {}
+        self.dependency_issues = []
+        self.dependency_results = {}
         for owner, field, referenced_name in references:
             matches = exact_dependencies.get(referenced_name, [])
             if any(
@@ -333,7 +334,7 @@ class SubmodulesOrderValidator:
                 )
                 code = "SELECTED_SCOPE_DEPENDENCY_UNRESOLVED"
 
-            self.scope_issues.append(
+            self.dependency_issues.append(
                 ValidationIssue(
                     code=code,
                     layer="composition",
@@ -344,8 +345,9 @@ class SubmodulesOrderValidator:
                 )
             )
 
-        return self.dependencies_result
+        return self.dependency_results
 
-    def process(self):
-        self.process_dependent_submodules()
-        self.process_relevant_dependencies()
+    def validate(self):
+        self.validate_compatibility()
+        self.validate_dependencies()
+        return self.get_issues()

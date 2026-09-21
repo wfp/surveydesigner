@@ -7,7 +7,7 @@ from .views import (
     IndicatorViewSet,
     ModuleViewSet,
     PreviewXLSForm,
-    SubmodulesOrderValidationView,
+    SubmoduleCompositionValidationView,
     SubmoduleViewSet,
     UploadXLSForm,
     ValidateXLSForm,
@@ -29,7 +29,7 @@ urlpatterns.extend(
         path("validate/", ValidateXLSForm.as_view(), name="validate_xls_form"),
         path(
             "order-validation/",
-            SubmodulesOrderValidationView.as_view(),
+            SubmoduleCompositionValidationView.as_view(),
             name="submodule_order_validation",
         ),
     ]
