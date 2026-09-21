@@ -1370,7 +1370,7 @@ def test_upload_xls_form_moda_metadata_failure(
 
 
 @pytest.mark.django_db
-class TestSubmodulesOrderValidationView:
+class TestSubmoduleCompositionValidationView:
     def test_submodules_order_validation_view_no_submodule_ids(
         self, logged_admin_client
     ):

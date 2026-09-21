@@ -729,9 +729,9 @@ export interface SubmoduleWithQuestions {
 /**
  *
  * @export
- * @interface SubmodulesOrderValidationResponse
+ * @interface SubmoduleCompositionValidationResponse
  */
-export type SubmodulesOrderValidationResponse = ValidationResult;
+export type SubmoduleCompositionValidationResponse = ValidationResult;
 /**
  *
  * @export
