@@ -1,20 +1,19 @@
 # Survey Designer
 
-[![Open Issues](https://img.shields.io/github/issues/wfp/surveydesigner)](https://github.com/wfp/surveydesigner/issues)
 [![License](https://img.shields.io/github/license/wfp/surveydesigner)](https://github.com/wfp/surveydesigner/blob/main/LICENSE)
-[![Last Commit](https://img.shields.io/github/last-commit/wfp/surveydesigner)](https://github.com/wfp/surveydesigner/commits/main)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/wfp/surveydesigner/ci.yml?branch=main)](https://github.com/wfp/surveydesigner/actions/workflows/ci.yml)
-
-![License](https://img.shields.io/github/license/wfp/surveydesigner)
-![Last Commit](https://img.shields.io/github/last-commit/wfp/surveydesigner)
-![Issues](https://img.shields.io/github/issues/wfp/surveydesigner)
-![Pull Requests](https://img.shields.io/github/issues-pr/wfp/surveydesigner)
-![Contributors](https://img.shields.io/github/contributors/wfp/surveydesigner)
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![PostgreSQL](https://img.shields.io/badge/postgresql-database-336791)
 ![Redis](https://img.shields.io/badge/redis-caching-DC382D)
 ![Docker](https://img.shields.io/badge/docker-ready-2496ED)
 ![Keycloak](https://img.shields.io/badge/auth-keycloak-4D4D4D)
+
+[![Build Status](https://img.shields.io/github/actions/workflow/status/wfp/surveydesigner/ci.yml?branch=main)](https://github.com/wfp/surveydesigner/actions/workflows/ci.yml)
+
+[![Open Issues](https://img.shields.io/github/issues/wfp/surveydesigner)](https://github.com/wfp/surveydesigner/issues)
+![Issues](https://img.shields.io/github/issues/wfp/surveydesigner)
+[![Last Commit](https://img.shields.io/github/last-commit/wfp/surveydesigner)](https://github.com/wfp/surveydesigner/commits/main)
+![Pull Requests](https://img.shields.io/github/issues-pr/wfp/surveydesigner)
+![Contributors](https://img.shields.io/github/contributors/wfp/surveydesigner)
 
 Survey Designer is an application that allows users in the field to build
 surveys in a fast and easy way while giving them the flexibility to make
