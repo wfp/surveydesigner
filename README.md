@@ -1,5 +1,10 @@
 # Survey Designer
 
+[![Open Issues](https://img.shields.io/github/issues/wfp/survey-designer)](https://github.com/wfp/survey-designer/issues)
+[![License](https://img.shields.io/github/license/wfp/survey-designer)](https://github.com/wfp/survey-designer/blob/main/LICENSE)
+[![Last Commit](https://img.shields.io/github/last-commit/wfp/survey-designer)](https://github.com/wfp/survey-designer/commits/main)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/wfp/survey-designer/ci.yml?branch=main)](https://github.com/wfp/survey-designer/actions/workflows/ci.yml)
+
 ![License](https://img.shields.io/github/license/wfp/surveydesigner)
 ![Last Commit](https://img.shields.io/github/last-commit/wfp/surveydesigner)
 ![Issues](https://img.shields.io/github/issues/wfp/surveydesigner)
