@@ -7,8 +7,6 @@
 ![Docker](https://img.shields.io/badge/docker-ready-2496ED)
 ![Keycloak](https://img.shields.io/badge/auth-keycloak-4D4D4D)
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/wfp/surveydesigner/ci.yml?branch=main)](https://github.com/wfp/surveydesigner/actions/workflows/ci.yml)
-
 [![Open Issues](https://img.shields.io/github/issues/wfp/surveydesigner)](https://github.com/wfp/surveydesigner/issues)
 ![Issues](https://img.shields.io/github/issues/wfp/surveydesigner)
 [![Last Commit](https://img.shields.io/github/last-commit/wfp/surveydesigner)](https://github.com/wfp/surveydesigner/commits/main)
