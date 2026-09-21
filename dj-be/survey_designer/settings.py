@@ -30,6 +30,19 @@ CORS_ALLOWED_ORIGINS = [
     origin for origin in environ.get("CORS_ALLOWED_ORIGINS", "").split(";") if origin
 ]
 
+EXTERNAL_CHOICE_FILE_MAX_BYTES = int(
+    environ.get("EXTERNAL_CHOICE_FILE_MAX_BYTES", 10 * 1024 * 1024)
+)
+EXTERNAL_CHOICE_FILE_READ_TIMEOUT_SECONDS = float(
+    environ.get("EXTERNAL_CHOICE_FILE_READ_TIMEOUT_SECONDS", 10)
+)
+EXTERNAL_CHOICE_FILE_MAX_ROWS = int(
+    environ.get("EXTERNAL_CHOICE_FILE_MAX_ROWS", 100000)
+)
+EXTERNAL_CHOICE_FILE_MAX_COLUMNS = int(
+    environ.get("EXTERNAL_CHOICE_FILE_MAX_COLUMNS", 256)
+)
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
 

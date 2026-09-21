@@ -31,6 +31,7 @@ from questions.models import (
 )
 from survey_designer import ___version___ as SURVEY_DESIGNER_VERSION
 
+from .form_validation import ExternalChoiceFileSource
 from .workbook import save_virtual_workbook
 
 
@@ -110,6 +111,7 @@ class XLSForm:
         self.bold_font = Font(bold=True)
         self.processed_questions = set()
         self.external_files = {}
+        self.external_file_sources = []
         self.row_source_map = {}
 
         self.wb = Workbook()
@@ -391,11 +393,19 @@ class XLSForm:
             if choices is not None and hasattr(choices, "csv_file"):
                 choices_file = choices
 
-        if not choices_file or not getattr(choices_file, "csv_file", None):
-            return
-
-        file_field = choices_file.csv_file
-        file_name = os.path.basename(file_field.name)
+        file_field = getattr(choices_file, "csv_file", None)
+        file_name = os.path.basename(str(getattr(file_field, "name", "") or ""))
+        self.external_file_sources.append(
+            ExternalChoiceFileSource(
+                filename=file_name,
+                file_obj=file_field,
+                owner=self._reference_source(question),
+                file_owner=self._reference_source(choices_file),
+                question_type=str(question.type),
+                parameters=str(getattr(question, "parameters", "") or ""),
+                choice_filter=str(getattr(question, "choice_filter", "") or ""),
+            )
+        )
         if file_name and file_name not in self.external_files:
             self.external_files[file_name] = file_field
 

@@ -8,6 +8,7 @@ from core.models import (
     TimestampMixin,
     UserTrackingMixin,
 )
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.functional import cached_property
@@ -430,10 +431,10 @@ class ChoiceGroupFile(BaseWFPModelMixin):
             filename = os.path.basename(self.csv_file.name)
 
             if hasattr(self.csv_file, "size"):
-                max_size = 10 * 1024 * 1024
+                max_size = settings.EXTERNAL_CHOICE_FILE_MAX_BYTES
                 if self.csv_file.size > max_size:
                     raise ValidationError(
-                        f"File size exceeds the maximum allowed size of 10MB. Current file size: {self.csv_file.size / (1024 * 1024):.2f}MB"
+                        f"File size exceeds the maximum allowed size of {max_size / (1024 * 1024):g}MB. Current file size: {self.csv_file.size / (1024 * 1024):.2f}MB"
                     )
 
             existing = ChoiceGroupFile.objects.exclude(pk=self.pk if self.pk else None)

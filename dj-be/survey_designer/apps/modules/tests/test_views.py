@@ -30,6 +30,7 @@ from questions.models import (
     SubQuestion,
     SubQuestionTranslation,
 )
+from questions.services import ExternalChoiceFileSource
 from rest_framework import status
 from rq.exceptions import NoSuchJobError
 from rq.job import Job
@@ -37,7 +38,7 @@ from surveys.models import Survey
 
 
 class FakeFieldFile:
-    def __init__(self, name, content=b"name\nvalue\n"):
+    def __init__(self, name, content=b"name,label\nvalue,Value\n"):
         self.name = f"question/{name}"
         self._content = content
         self.file = None
@@ -65,18 +66,28 @@ def build_minimal_xlsx():
     return output.getvalue()
 
 
-def build_stub_xls_form(external_files):
+def build_stub_xls_form(external_files, external_file_sources=()):
     class StubXLSForm:
         id_name = "test-form-id"
 
         def __init__(self, files):
             self.external_files = files
+            self.external_file_sources = list(external_file_sources)
             self.xlsx_bytes = build_minimal_xlsx()
 
         def generate(self):
             return self.xlsx_bytes
 
     return StubXLSForm(external_files)
+
+
+def build_external_choice_source(file_obj, filename="choices.csv"):
+    return ExternalChoiceFileSource(
+        filename=filename,
+        file_obj=file_obj,
+        owner={"model": "RootQuestion", "id": 17, "name": "external_question"},
+        file_owner={"model": "ChoiceGroupFile", "id": 23, "name": "external_choices"},
+    )
 
 
 def mock_successful_xml_conversion(mocker, xml=None):
@@ -125,6 +136,96 @@ def test_final_survey_actions_block_internal_select_without_emitted_choices(
     assert body["valid"] is False
     assert body["errors"][0]["code"] == "CODEBOOK_CHOICE_LIST_NOT_EMITTED", body
     assert body["errors"][0]["owner"]["name"] == root_question_2.name
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["/api/validate/", "/api/generate/", "/api/preview/", "/api/upload/"],
+)
+def test_final_survey_actions_block_invalid_external_choice_file_before_effects(
+    url,
+    mocker,
+    logged_admin_client,
+    moda_api_key,
+    submodule_1,
+):
+    invalid_file = FakeFieldFile("choices.csv", b"name\na\n")
+    source = build_external_choice_source(invalid_file)
+    stub_form = build_stub_xls_form(
+        {"choices.csv": invalid_file},
+        [source],
+    )
+    mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
+    conversion = mocker.patch("modules.views.XMLConversion")
+    external_request = mocker.patch("modules.views.requests.post")
+    preview_storage = mocker.patch("modules.views.Survey.objects.create")
+    payload = {
+        "name": "Invalid external choices",
+        "submodules": [submodule_1.id],
+        "submodules_order": [submodule_1.id],
+        "sub_questions": [],
+        "languages": [],
+        "id": moda_api_key.id,
+        "project_id": 99,
+    }
+
+    response = logged_admin_client.post(
+        url, json.dumps(payload), content_type="application/json"
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    issue = response.json()["errors"][0]
+    assert issue["code"] == "EXTERNAL_FILE_REQUIRED_COLUMN_MISSING"
+    assert issue["owner"] == {
+        "model": "RootQuestion",
+        "id": 17,
+        "name": "external_question",
+    }
+    assert issue["field"] == "choices_file"
+    assert issue["sheet"] == "choices.csv"
+    conversion.assert_not_called()
+    external_request.assert_not_called()
+    preview_storage.assert_not_called()
+
+
+def test_upload_classifies_external_storage_failure_without_external_requests(
+    mocker,
+    logged_admin_client,
+    moda_api_key,
+    submodule_1,
+):
+    unavailable_file = FakeFieldFile("choices.csv")
+    mocker.patch.object(
+        unavailable_file,
+        "open",
+        side_effect=PermissionError("storage credentials rejected"),
+    )
+    source = build_external_choice_source(unavailable_file)
+    stub_form = build_stub_xls_form(
+        {"choices.csv": unavailable_file},
+        [source],
+    )
+    mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
+    external_request = mocker.patch("modules.views.requests.post")
+    payload = {
+        "name": "Unavailable external choices",
+        "submodules": [submodule_1.id],
+        "submodules_order": [submodule_1.id],
+        "sub_questions": [],
+        "languages": [],
+        "id": moda_api_key.id,
+        "project_id": 99,
+    }
+
+    response = logged_admin_client.post(
+        "/api/upload/", json.dumps(payload), content_type="application/json"
+    )
+
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    issue = response.json()["errors"][0]
+    assert issue["code"] == "EXTERNAL_FILE_STORAGE_UNAVAILABLE"
+    assert issue["layer"] == "storage"
+    external_request.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -1106,8 +1207,10 @@ def test_upload_xls_form_moda_uploads_metadata(
     mocker, logged_admin_client, moda_api_key, submodule_1
 ):
     site = moda_api_key.site
-    fake_file = FakeFieldFile("fruits.csv", b"name,color\nbanana,yellow\n")
-    stub_form = build_stub_xls_form({"fruits.csv": fake_file})
+    csv_content = b"name,label,color\nbanana,Banana,yellow\n"
+    fake_file = FakeFieldFile("fruits.csv", csv_content)
+    source = build_external_choice_source(fake_file, "fruits.csv")
+    stub_form = build_stub_xls_form({"fruits.csv": fake_file}, [source])
     mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
     mock_successful_xml_conversion(mocker)
 
@@ -1170,7 +1273,7 @@ def test_upload_xls_form_moda_uploads_metadata(
     data_file = metadata_files["data_file"]
     assert data_file[0] == "fruits.csv"
     assert data_file[2] == "text/csv"
-    assert data_file[1].getvalue() == b"name,color\nbanana,yellow\n"
+    assert data_file[1].getvalue() == csv_content
 
 
 @pytest.mark.django_db

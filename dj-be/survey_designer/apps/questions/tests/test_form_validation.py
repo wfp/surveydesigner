@@ -2,16 +2,20 @@ import io
 
 import pytest
 from django.core.files.base import ContentFile
+from django.test import override_settings
 from openpyxl import Workbook
 from questions.models import ChoiceGroup
 from questions.services import QuestionsExport, XLSForm
 from questions.services.form_validation import (
+    ArtifactInfrastructureError,
     ArtifactInputError,
+    ExternalChoiceFileSource,
     GeneratedSurveyArtifact,
     ValidationIssue,
     build_generated_artifact,
     compute_artifact_hash,
     materialize_external_files,
+    resolve_external_choice_files,
     validate_codebook_integrity,
     validate_generated_artifact,
     validate_xml_compatibility,
@@ -132,6 +136,26 @@ def _configure_generated_choice_filter(
 class ConversionMustNotRun:
     def __init__(self, xlsx_file):
         raise AssertionError("pyxform must not run for an invalid codebook")
+
+
+def _external_choice_source(
+    content=b"name,label\na,Choice A\n",
+    *,
+    filename="choices.csv",
+    file_obj=None,
+    question_type="select_one_from_file",
+    parameters="",
+    choice_filter="",
+):
+    return ExternalChoiceFileSource(
+        filename=filename,
+        file_obj=file_obj or ContentFile(content, name=filename),
+        owner={"model": "RootQuestion", "id": 7, "name": "question_a"},
+        file_owner={"model": "ChoiceGroupFile", "id": 11, "name": "choices"},
+        question_type=question_type,
+        parameters=parameters,
+        choice_filter=choice_filter,
+    )
 
 
 def test_artifact_hash_is_order_independent_for_external_files():
@@ -1971,6 +1995,241 @@ def test_empty_external_file_is_a_structured_input_error():
 
     assert isinstance(raised.value.issue, ValidationIssue)
     assert raised.value.issue.code == "EXTERNAL_FILE_EMPTY"
+
+
+def test_external_choice_resolver_preserves_validated_filename_and_bytes():
+    content = b"name,label,region\na,Choice A,north\n"
+    source = _external_choice_source(
+        content,
+        choice_filter="region=${selected_region}",
+    )
+
+    assert resolve_external_choice_files([source]) == {"choices.csv": content}
+
+
+def test_external_choice_resolver_supports_custom_value_and_label_columns():
+    content = b"code,title\na,Choice A\n"
+    source = _external_choice_source(
+        content,
+        parameters="value=code label=title",
+    )
+
+    assert resolve_external_choice_files([source]) == {"choices.csv": content}
+
+
+@pytest.mark.parametrize(
+    ("content", "expected_code"),
+    [
+        (b"name\na\n", "EXTERNAL_FILE_REQUIRED_COLUMN_MISSING"),
+        (b"name,Label\na,Choice A\n", "EXTERNAL_FILE_COLUMN_CASE_MISMATCH"),
+        (b"name,label\na\n", "EXTERNAL_FILE_ROW_MALFORMED"),
+        (b"name,label\n,Choice A\n", "EXTERNAL_FILE_CHOICE_VALUE_MISSING"),
+        (
+            b"name,label\na,Choice A\na,Choice B\n",
+            "EXTERNAL_FILE_CHOICE_VALUE_DUPLICATE",
+        ),
+        (b"name,label\na,\n", "EXTERNAL_FILE_CHOICE_LABEL_MISSING"),
+        (b"name,label\n", "EXTERNAL_FILE_CHOICES_MISSING"),
+        (b"\xff\xfe", "EXTERNAL_FILE_ENCODING_INVALID"),
+    ],
+)
+def test_external_choice_resolver_reports_invalid_csv(content, expected_code):
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([_external_choice_source(content)])
+
+    issue = raised.value.issue
+    assert issue.code == expected_code
+    assert issue.owner == {
+        "model": "RootQuestion",
+        "id": 7,
+        "name": "question_a",
+    }
+    assert issue.field == "choices_file"
+    assert issue.sheet == "choices.csv"
+
+
+def test_external_choice_resolver_requires_choice_filter_columns():
+    source = _external_choice_source(
+        choice_filter="region=${selected_region}",
+    )
+
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_REQUIRED_COLUMN_MISSING"
+    assert raised.value.issue.column == "region"
+
+
+def test_external_choice_resolver_rejects_whitespace_for_multiple_choice_values():
+    source = _external_choice_source(
+        b"name,label\nwith space,Choice A\n",
+        question_type="select_multiple_from_file",
+    )
+
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_CHOICE_VALUE_INVALID"
+
+
+@pytest.mark.parametrize(
+    "filename", ["../choices.csv", "folder/choices.csv", "choices.txt"]
+)
+def test_external_choice_resolver_rejects_invalid_filename(filename):
+    file_obj = ContentFile(b"name,label\na,Choice A\n", name=filename)
+    source = _external_choice_source(filename=filename, file_obj=file_obj)
+
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_NAME_INVALID"
+
+
+def test_external_choice_resolver_reports_missing_linked_file():
+    source = ExternalChoiceFileSource(
+        filename="",
+        file_obj=None,
+        owner={"model": "RootQuestion", "id": 7, "name": "question_a"},
+        file_owner={"model": "ChoiceGroupFile", "id": 11, "name": "choices"},
+    )
+
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_MISSING"
+    assert "ChoiceGroupFile 'choices' (id 11)" in raised.value.issue.message
+
+
+def test_external_choice_resolver_rejects_case_colliding_filenames():
+    first = _external_choice_source(
+        filename="choices.csv",
+        file_obj=ContentFile(
+            b"name,label\na,Choice A\n",
+            name="choices.csv",
+        ),
+    )
+    second = _external_choice_source(
+        filename="Choices.csv",
+        file_obj=ContentFile(
+            b"name,label\nb,Choice B\n",
+            name="Choices.csv",
+        ),
+    )
+
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([first, second])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_NAME_DUPLICATE"
+
+
+def test_external_choice_resolver_reports_missing_storage_object():
+    class MissingFile:
+        name = "choices.csv"
+
+        @staticmethod
+        def open(mode):
+            raise FileNotFoundError("gone")
+
+    source = _external_choice_source(file_obj=MissingFile())
+
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_MISSING"
+    assert raised.value.issue.owner["name"] == "question_a"
+
+
+def test_external_choice_resolver_classifies_storage_failures_as_infrastructure():
+    class UnavailableFile:
+        name = "choices.csv"
+
+        @staticmethod
+        def open(mode):
+            raise PermissionError("credentials rejected")
+
+    source = _external_choice_source(file_obj=UnavailableFile())
+
+    with pytest.raises(ArtifactInfrastructureError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_STORAGE_UNAVAILABLE"
+    assert raised.value.issue.layer == "storage"
+    assert raised.value.issue.owner["id"] == 7
+
+
+@override_settings(EXTERNAL_CHOICE_FILE_MAX_BYTES=8)
+def test_external_choice_resolver_enforces_streamed_size_limit():
+    source = _external_choice_source(b"name,label\na,Choice A\n")
+
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_TOO_LARGE"
+
+
+@override_settings(EXTERNAL_CHOICE_FILE_MAX_ROWS=1)
+def test_external_choice_resolver_enforces_row_limit():
+    source = _external_choice_source(b"name,label\na,Choice A\nb,Choice B\n")
+
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_TOO_MANY_ROWS"
+
+
+@override_settings(EXTERNAL_CHOICE_FILE_READ_TIMEOUT_SECONDS=1)
+def test_external_choice_resolver_enforces_read_timeout(mocker):
+    source = _external_choice_source()
+    mocker.patch(
+        "questions.services.form_validation.time.monotonic",
+        side_effect=[0, 2],
+    )
+
+    with pytest.raises(ArtifactInfrastructureError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_READ_TIMEOUT"
+
+
+def test_generated_artifact_keeps_validated_external_bytes_after_source_changes():
+    class MutableFile:
+        name = "choices.csv"
+
+        def __init__(self):
+            self.content = b"name,label\na,Choice A\n"
+            self.position = 0
+
+        def open(self, mode):
+            self.position = 0
+            return self
+
+        def read(self, size=-1):
+            if self.position:
+                return b""
+            self.position = len(self.content)
+            return self.content
+
+        @staticmethod
+        def close():
+            return None
+
+    mutable_file = MutableFile()
+    source = _external_choice_source(file_obj=mutable_file)
+
+    class Form:
+        id_name = "generated-form"
+        row_source_map = {}
+        external_files = {"choices.csv": mutable_file}
+        external_file_sources = [source]
+
+        @staticmethod
+        def generate():
+            return b"xlsx-bytes"
+
+    artifact = build_generated_artifact(Form())
+    mutable_file.content = b"name,label\nb,Changed\n"
+
+    assert artifact.external_files == {"choices.csv": b"name,label\na,Choice A\n"}
 
 
 def test_xml_conversion_disables_java_validation(monkeypatch):

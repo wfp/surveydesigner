@@ -673,10 +673,10 @@ class ChoiceGroupFileAdminModelForm(ModelForm):
     def clean_csv_file(self):
         csv_file = self.cleaned_data.get("csv_file")
         if csv_file:
-            max_size = 10 * 1024 * 1024
+            max_size = settings.EXTERNAL_CHOICE_FILE_MAX_BYTES
             if csv_file.size > max_size:
                 raise forms.ValidationError(
-                    f"File size exceeds the maximum allowed size of 10MB. Current file size: {csv_file.size / (1024 * 1024):.2f}MB"
+                    f"File size exceeds the maximum allowed size of {max_size / (1024 * 1024):g}MB. Current file size: {csv_file.size / (1024 * 1024):.2f}MB"
                 )
         return csv_file
 

@@ -8,15 +8,20 @@ expanded without changing the public issue contract.
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import io
+import os
 import re
+import shlex
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 from xml.etree import ElementTree as ET
 
+from django.conf import settings
 from openpyxl import load_workbook
 from pyxform.parsing.expression import is_xml_tag, parse_expression
 
@@ -73,6 +78,10 @@ class ArtifactInputError(Exception):
 class ArtifactInfrastructureError(Exception):
     """The generator or artifact storage could not produce a stable artifact."""
 
+    def __init__(self, message: str, *, issue: "ValidationIssue | None" = None) -> None:
+        super().__init__(message)
+        self.issue = issue
+
 
 class ValidatorInfrastructureError(Exception):
     """The configured validator could not complete reliably."""
@@ -104,6 +113,20 @@ class ValidationIssue:
         return result
 
     to_dict = as_dict
+
+
+@dataclass(frozen=True)
+class ExternalChoiceFileSource:
+    """One selected question and its linked external choice file."""
+
+    filename: str
+    file_obj: Any
+    owner: Mapping[str, Any] | None = None
+    file_owner: Mapping[str, Any] | None = None
+    field: str = "choices_file"
+    question_type: str = ""
+    parameters: str = ""
+    choice_filter: str = ""
 
 
 def compute_artifact_hash(
@@ -316,16 +339,476 @@ def validate_xml_compatibility(
     return issues
 
 
+def _external_file_description(source: ExternalChoiceFileSource) -> str:
+    file_owner = source.file_owner or {}
+    owner_name = file_owner.get("name")
+    owner_id = file_owner.get("id")
+    if owner_name and owner_id is not None:
+        return f"ChoiceGroupFile '{owner_name}' (id {owner_id})"
+    if owner_name:
+        return f"ChoiceGroupFile '{owner_name}'"
+    return "external choice file"
+
+
+def _external_file_issue(
+    source: ExternalChoiceFileSource,
+    code: str,
+    message: str,
+    *,
+    layer: str = "composition",
+    field: str | None = None,
+    row: int | None = None,
+    column: str | None = None,
+) -> ValidationIssue:
+    return _issue(
+        code,
+        layer,
+        message,
+        owner=source.owner,
+        field=field or source.field,
+        sheet=source.filename or None,
+        row=row,
+        column=column,
+    )
+
+
+def _raise_external_infrastructure_error(
+    source: ExternalChoiceFileSource, code: str, message: str
+) -> None:
+    issue = _external_file_issue(
+        source,
+        code,
+        message,
+        layer="storage",
+    )
+    raise ArtifactInfrastructureError(issue.message, issue=issue)
+
+
+def _validate_external_filename(source: ExternalChoiceFileSource) -> str:
+    filename = str(source.filename or "").strip()
+    description = _external_file_description(source)
+    if not filename or source.file_obj is None:
+        raise ArtifactInputError(
+            _external_file_issue(
+                source,
+                "EXTERNAL_FILE_MISSING",
+                f"{description} is not linked to an available CSV file.",
+            )
+        )
+    if (
+        filename != os.path.basename(filename)
+        or "/" in filename
+        or "\\" in filename
+        or "\x00" in filename
+        or not filename.lower().endswith(".csv")
+    ):
+        raise ArtifactInputError(
+            _external_file_issue(
+                source,
+                "EXTERNAL_FILE_NAME_INVALID",
+                f"{description} has invalid filename '{filename}'; external choice files must use a plain .csv filename.",
+            )
+        )
+
+    stored_name = str(getattr(source.file_obj, "name", "") or "")
+    if stored_name and os.path.basename(stored_name) != filename:
+        raise ArtifactInputError(
+            _external_file_issue(
+                source,
+                "EXTERNAL_FILE_NAME_MISMATCH",
+                f"{description} is referenced as '{filename}', but storage resolves it as '{os.path.basename(stored_name)}'.",
+            )
+        )
+    return filename
+
+
+def _read_external_file(source: ExternalChoiceFileSource) -> bytes:
+    filename = _validate_external_filename(source)
+    max_bytes = int(
+        getattr(settings, "EXTERNAL_CHOICE_FILE_MAX_BYTES", 10 * 1024 * 1024)
+    )
+    timeout_seconds = float(
+        getattr(settings, "EXTERNAL_CHOICE_FILE_READ_TIMEOUT_SECONDS", 10)
+    )
+    chunk_size = 64 * 1024
+    started_at = time.monotonic()
+
+    try:
+        stream = source.file_obj.open("rb") or source.file_obj
+    except FileNotFoundError as exc:
+        raise ArtifactInputError(
+            _external_file_issue(
+                source,
+                "EXTERNAL_FILE_MISSING",
+                f"External choice file '{filename}' could not be found in storage.",
+            )
+        ) from exc
+    except Exception as exc:
+        _raise_external_infrastructure_error(
+            source,
+            "EXTERNAL_FILE_STORAGE_UNAVAILABLE",
+            f"External choice file '{filename}' could not be opened from storage: {exc}",
+        )
+
+    chunks: list[bytes] = []
+    total_bytes = 0
+    try:
+        while True:
+            try:
+                chunk = stream.read(chunk_size)
+            except TypeError:
+                chunk = stream.read()
+            if not chunk:
+                break
+            if not isinstance(chunk, bytes):
+                _raise_external_infrastructure_error(
+                    source,
+                    "EXTERNAL_FILE_READ_FAILED",
+                    f"External choice file '{filename}' did not return binary content.",
+                )
+            total_bytes += len(chunk)
+            if total_bytes > max_bytes:
+                raise ArtifactInputError(
+                    _external_file_issue(
+                        source,
+                        "EXTERNAL_FILE_TOO_LARGE",
+                        f"External choice file '{filename}' exceeds the configured {max_bytes}-byte limit.",
+                    )
+                )
+            chunks.append(chunk)
+            if time.monotonic() - started_at > timeout_seconds:
+                _raise_external_infrastructure_error(
+                    source,
+                    "EXTERNAL_FILE_READ_TIMEOUT",
+                    f"External choice file '{filename}' exceeded the configured {timeout_seconds:g}-second read limit.",
+                )
+    except (ArtifactInputError, ArtifactInfrastructureError):
+        raise
+    except FileNotFoundError as exc:
+        raise ArtifactInputError(
+            _external_file_issue(
+                source,
+                "EXTERNAL_FILE_MISSING",
+                f"External choice file '{filename}' disappeared while it was being read.",
+            )
+        ) from exc
+    except Exception as exc:
+        _raise_external_infrastructure_error(
+            source,
+            "EXTERNAL_FILE_READ_FAILED",
+            f"External choice file '{filename}' could not be read from storage: {exc}",
+        )
+    finally:
+        try:
+            stream.close()
+        except Exception:
+            pass
+
+    if time.monotonic() - started_at > timeout_seconds:
+        _raise_external_infrastructure_error(
+            source,
+            "EXTERNAL_FILE_READ_TIMEOUT",
+            f"External choice file '{filename}' exceeded the configured {timeout_seconds:g}-second read limit.",
+        )
+
+    content = b"".join(chunks)
+    if not content:
+        raise ArtifactInputError(
+            _external_file_issue(
+                source,
+                "EXTERNAL_FILE_EMPTY",
+                f"External choice file '{filename}' is empty.",
+            )
+        )
+    return content
+
+
+def _external_value_and_label_columns(
+    source: ExternalChoiceFileSource,
+) -> tuple[str, str]:
+    columns = {"value": "name", "label": "label"}
+    try:
+        tokens = shlex.split(str(source.parameters or ""))
+    except ValueError as exc:
+        raise ArtifactInputError(
+            _external_file_issue(
+                source,
+                "EXTERNAL_FILE_PARAMETERS_INVALID",
+                f"External choice parameters are invalid: {exc}",
+                field="parameters",
+            )
+        ) from exc
+
+    for token in tokens:
+        key, separator, value = token.partition("=")
+        normalized_key = key.strip().casefold()
+        if normalized_key not in columns:
+            continue
+        if not separator or not value.strip():
+            raise ArtifactInputError(
+                _external_file_issue(
+                    source,
+                    "EXTERNAL_FILE_PARAMETERS_INVALID",
+                    f"External choice parameter '{key}' must specify a CSV column.",
+                    field="parameters",
+                )
+            )
+        columns[normalized_key] = value.strip()
+    return columns["value"], columns["label"]
+
+
+def _required_external_columns(source: ExternalChoiceFileSource) -> tuple[str, ...]:
+    value_column, label_column = _external_value_and_label_columns(source)
+    filter_columns: set[str] = set()
+    if source.choice_filter:
+        try:
+            filter_columns, _, _ = _choice_filter_references(source.choice_filter)
+        except Exception:
+            filter_columns = set()
+    return tuple(dict.fromkeys((value_column, label_column, *sorted(filter_columns))))
+
+
+def _validate_external_csv(source: ExternalChoiceFileSource, content: bytes) -> None:
+    filename = source.filename
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ArtifactInputError(
+            _external_file_issue(
+                source,
+                "EXTERNAL_FILE_ENCODING_INVALID",
+                f"External choice file '{filename}' must be valid UTF-8 CSV data: {exc}",
+            )
+        ) from exc
+
+    max_rows = int(getattr(settings, "EXTERNAL_CHOICE_FILE_MAX_ROWS", 100000))
+    max_columns = int(getattr(settings, "EXTERNAL_CHOICE_FILE_MAX_COLUMNS", 256))
+    try:
+        reader = csv.reader(io.StringIO(text, newline=""), strict=True)
+        header_row = next(reader, None)
+        if header_row is None or not any(value.strip() for value in header_row):
+            raise ArtifactInputError(
+                _external_file_issue(
+                    source,
+                    "EXTERNAL_FILE_HEADER_MISSING",
+                    f"External choice file '{filename}' has no CSV header row.",
+                    row=1,
+                )
+            )
+
+        headers = [value.strip() for value in header_row]
+        if len(headers) > max_columns:
+            raise ArtifactInputError(
+                _external_file_issue(
+                    source,
+                    "EXTERNAL_FILE_TOO_MANY_COLUMNS",
+                    f"External choice file '{filename}' exceeds the configured {max_columns}-column limit.",
+                    row=1,
+                )
+            )
+        if any(not header for header in headers):
+            raise ArtifactInputError(
+                _external_file_issue(
+                    source,
+                    "EXTERNAL_FILE_HEADER_INVALID",
+                    f"External choice file '{filename}' contains an empty column name.",
+                    row=1,
+                )
+            )
+
+        headers_by_casefold: dict[str, list[str]] = defaultdict(list)
+        for header in headers:
+            headers_by_casefold[header.casefold()].append(header)
+        duplicate_headers = sorted(
+            values[0] for values in headers_by_casefold.values() if len(values) > 1
+        )
+        if duplicate_headers:
+            duplicate = duplicate_headers[0]
+            raise ArtifactInputError(
+                _external_file_issue(
+                    source,
+                    "EXTERNAL_FILE_COLUMN_DUPLICATE",
+                    f"External choice file '{filename}' contains duplicate column '{duplicate}'.",
+                    row=1,
+                    column=duplicate,
+                )
+            )
+
+        for required_column in _required_external_columns(source):
+            if required_column in headers:
+                continue
+            available = headers_by_casefold.get(required_column.casefold(), [])
+            if available:
+                code = "EXTERNAL_FILE_COLUMN_CASE_MISMATCH"
+                detail = f"; available exact column: '{available[0]}'"
+            else:
+                code = "EXTERNAL_FILE_REQUIRED_COLUMN_MISSING"
+                detail = ""
+            raise ArtifactInputError(
+                _external_file_issue(
+                    source,
+                    code,
+                    f"External choice file '{filename}' requires column '{required_column}'{detail}.",
+                    row=1,
+                    column=required_column,
+                )
+            )
+
+        value_column, label_column = _external_value_and_label_columns(source)
+        value_index = headers.index(value_column)
+        label_index = headers.index(label_column)
+        seen_values: set[str] = set()
+        choice_count = 0
+        for row in reader:
+            row_number = reader.line_num
+            if not row or not any(value.strip() for value in row):
+                continue
+            choice_count += 1
+            if choice_count > max_rows:
+                raise ArtifactInputError(
+                    _external_file_issue(
+                        source,
+                        "EXTERNAL_FILE_TOO_MANY_ROWS",
+                        f"External choice file '{filename}' exceeds the configured {max_rows}-row limit.",
+                        row=row_number,
+                    )
+                )
+            if len(row) != len(headers):
+                raise ArtifactInputError(
+                    _external_file_issue(
+                        source,
+                        "EXTERNAL_FILE_ROW_MALFORMED",
+                        f"External choice file '{filename}' row {row_number} has {len(row)} values but the header defines {len(headers)} columns.",
+                        row=row_number,
+                    )
+                )
+
+            choice_value = row[value_index].strip()
+            if not choice_value:
+                raise ArtifactInputError(
+                    _external_file_issue(
+                        source,
+                        "EXTERNAL_FILE_CHOICE_VALUE_MISSING",
+                        f"External choice file '{filename}' row {row_number} has no value in column '{value_column}'.",
+                        row=row_number,
+                        column=value_column,
+                    )
+                )
+            if choice_value in seen_values:
+                raise ArtifactInputError(
+                    _external_file_issue(
+                        source,
+                        "EXTERNAL_FILE_CHOICE_VALUE_DUPLICATE",
+                        f"External choice file '{filename}' repeats choice value '{choice_value}' at row {row_number}.",
+                        row=row_number,
+                        column=value_column,
+                    )
+                )
+            seen_values.add(choice_value)
+
+            if source.question_type == "select_multiple_from_file" and re.search(
+                r"\s", choice_value
+            ):
+                raise ArtifactInputError(
+                    _external_file_issue(
+                        source,
+                        "EXTERNAL_FILE_CHOICE_VALUE_INVALID",
+                        f"External choice file '{filename}' value '{choice_value}' at row {row_number} contains whitespace, which is not supported by select_multiple_from_file.",
+                        row=row_number,
+                        column=value_column,
+                    )
+                )
+
+            if not row[label_index].strip():
+                raise ArtifactInputError(
+                    _external_file_issue(
+                        source,
+                        "EXTERNAL_FILE_CHOICE_LABEL_MISSING",
+                        f"External choice file '{filename}' row {row_number} has no label in column '{label_column}'.",
+                        row=row_number,
+                        column=label_column,
+                    )
+                )
+
+        if not choice_count:
+            raise ArtifactInputError(
+                _external_file_issue(
+                    source,
+                    "EXTERNAL_FILE_CHOICES_MISSING",
+                    f"External choice file '{filename}' contains no usable choice rows.",
+                )
+            )
+    except ArtifactInputError:
+        raise
+    except csv.Error as exc:
+        raise ArtifactInputError(
+            _external_file_issue(
+                source,
+                "EXTERNAL_FILE_CSV_MALFORMED",
+                f"External choice file '{filename}' is malformed CSV: {exc}",
+                row=getattr(reader, "line_num", None),
+            )
+        ) from exc
+
+
+def resolve_external_choice_files(
+    sources: Sequence[ExternalChoiceFileSource] | None,
+) -> dict[str, bytes]:
+    """Resolve, validate, and freeze each selected external choice source."""
+
+    sources_by_filename: dict[str, list[ExternalChoiceFileSource]] = defaultdict(list)
+    filenames_by_casefold: dict[str, set[str]] = defaultdict(set)
+    for source in sources or ():
+        filename = _validate_external_filename(source)
+        sources_by_filename[filename].append(source)
+        filenames_by_casefold[filename.casefold()].add(filename)
+
+    for filenames in filenames_by_casefold.values():
+        if len(filenames) <= 1:
+            continue
+        filename = sorted(filenames)[0]
+        source = sources_by_filename[filename][0]
+        rendered = ", ".join(f"'{name}'" for name in sorted(filenames))
+        raise ArtifactInputError(
+            _external_file_issue(
+                source,
+                "EXTERNAL_FILE_NAME_DUPLICATE",
+                f"External choice filenames must be unique ignoring case; found {rendered}.",
+            )
+        )
+
+    materialized: dict[str, bytes] = {}
+    for filename, matching_sources in sources_by_filename.items():
+        stored_names = {
+            str(getattr(source.file_obj, "name", "") or "")
+            for source in matching_sources
+        }
+        if len(stored_names) > 1:
+            raise ArtifactInputError(
+                _external_file_issue(
+                    matching_sources[0],
+                    "EXTERNAL_FILE_NAME_DUPLICATE",
+                    f"External choice filename '{filename}' resolves to multiple linked files.",
+                )
+            )
+
+        content = _read_external_file(matching_sources[0])
+        for source in matching_sources:
+            _validate_external_csv(source, content)
+        materialized[filename] = content
+    return materialized
+
+
 def materialize_external_files(
     external_files: Mapping[str, Any] | None,
 ) -> dict[str, bytes]:
-    """Read every selected external file exactly once and retain its bytes."""
+    """Read non-choice artifact files once and retain their exact bytes."""
 
     materialized: dict[str, bytes] = {}
     for filename, file_obj in (external_files or {}).items():
         filename = str(filename)
         try:
-            stream = file_obj.open("rb")
+            stream = file_obj.open("rb") or file_obj
             try:
                 content = stream.read()
             finally:
@@ -1731,7 +2214,15 @@ def build_generated_artifact(xlsx_form: Any) -> GeneratedSurveyArtifact:
     except Exception as exc:
         raise ArtifactInfrastructureError(f"Unable to generate XLSX: {exc}") from exc
 
-    external_files = materialize_external_files(xlsx_form.external_files)
+    external_sources = tuple(getattr(xlsx_form, "external_file_sources", ()))
+    external_files = resolve_external_choice_files(external_sources)
+    source_filenames = {source.filename for source in external_sources}
+    other_files = {
+        filename: file_obj
+        for filename, file_obj in xlsx_form.external_files.items()
+        if filename not in source_filenames
+    }
+    external_files.update(materialize_external_files(other_files))
     return GeneratedSurveyArtifact(
         xlsx_bytes=xlsx_bytes,
         external_files=external_files,
@@ -1802,6 +2293,7 @@ __all__ = [
     "ArtifactInfrastructureError",
     "ArtifactInputError",
     "COMPATIBILITY_VERSION",
+    "ExternalChoiceFileSource",
     "GeneratedSurveyArtifact",
     "PYXFORM_VERSION",
     "ValidatorInfrastructureError",
@@ -1812,6 +2304,7 @@ __all__ = [
     "expression_question_references",
     "failed_validation_result",
     "materialize_external_files",
+    "resolve_external_choice_files",
     "validate_codebook_integrity",
     "validate_generated_artifact",
     "validate_xml_compatibility",

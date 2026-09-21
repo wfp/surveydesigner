@@ -150,7 +150,7 @@ def prepare_validated_artifact(get_serializer, request):
             status.HTTP_400_BAD_REQUEST,
         )
     except ArtifactInfrastructureError as exc:
-        issue = ValidationIssue(
+        issue = exc.issue or ValidationIssue(
             code="ARTIFACT_UNAVAILABLE",
             layer="composition",
             severity="error",
