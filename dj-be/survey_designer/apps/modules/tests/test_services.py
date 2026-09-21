@@ -2,6 +2,7 @@ import pytest
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from modules.services import SubmoduleCompositionValidator
+from questions.models import RepeatSection
 
 
 @pytest.mark.django_db
@@ -163,7 +164,150 @@ class TestSubmoduleCompositionValidator:
         assert [issue.code for issue in validator.get_issues()] == [
             "SELECTED_SCOPE_DEPENDENCY_UNRESOLVED"
         ]
-        assert "no exact question with that name exists" in validator.get_messages()[0]
+        assert "no question with that exact name exists" in validator.get_messages()[0]
+
+    def test_validate_reports_dependency_outside_available_scope(
+        self,
+        submodule_1,
+        root_question_1,
+        root_question_3,
+    ):
+        root_question_1.relevant = f"${{{root_question_3.name}}}"
+        root_question_1.save(update_fields=["relevant"])
+        validator = SubmoduleCompositionValidator(
+            [submodule_1.id], [], [submodule_1.id]
+        )
+
+        issues = validator.validate()
+
+        assert [issue.code for issue in issues] == [
+            "SELECTED_SCOPE_DEPENDENCY_UNAVAILABLE"
+        ]
+        assert "unavailable in the current survey scope" in issues[0].message
+
+    def test_validate_reports_dependency_case_mismatch(
+        self,
+        submodule_1,
+        submodule_2,
+        root_question_1,
+        root_question_3,
+    ):
+        root_question_1.relevant = f"${{{root_question_3.name.lower()}}}"
+        root_question_1.save(update_fields=["relevant"])
+        validator = SubmoduleCompositionValidator(
+            [submodule_1.id],
+            [],
+            [submodule_1.id, submodule_2.id],
+        )
+
+        issues = validator.validate()
+
+        assert [issue.code for issue in issues] == [
+            "SELECTED_SCOPE_DEPENDENCY_CASE_MISMATCH"
+        ]
+        assert f"available exact name: '{root_question_3.name}'" in issues[0].message
+
+    def test_validate_reports_ambiguous_dependency(
+        self,
+        submodule_1,
+        submodule_2,
+        root_question_1,
+        root_question_3,
+    ):
+        repeat = RepeatSection.objects.create(
+            name=root_question_3.name,
+            label="Ambiguous repeat",
+            repeat_count="1",
+        )
+        repeat.submodule.add(submodule_2)
+        root_question_1.relevant = f"${{{root_question_3.name}}}"
+        root_question_1.save(update_fields=["relevant"])
+        validator = SubmoduleCompositionValidator(
+            [submodule_1.id],
+            [],
+            [submodule_1.id, submodule_2.id],
+        )
+
+        issues = validator.validate()
+
+        assert [issue.code for issue in issues] == [
+            "SELECTED_SCOPE_DEPENDENCY_AMBIGUOUS"
+        ]
+        assert f"RootQuestion #{root_question_3.id}" in issues[0].message
+        assert f"RepeatSection #{repeat.id}" in issues[0].message
+
+    def test_validate_reports_inactive_dependency(
+        self,
+        submodule_1,
+        submodule_2,
+        root_question_1,
+        root_question_3,
+    ):
+        root_question_3.is_active = False
+        root_question_3.save(update_fields=["is_active"])
+        root_question_1.calculation = f"${{{root_question_3.name}}}"
+        root_question_1.save(update_fields=["calculation"])
+        validator = SubmoduleCompositionValidator(
+            [submodule_1.id, submodule_2.id],
+            [],
+            [submodule_1.id, submodule_2.id],
+        )
+
+        issues = validator.validate()
+
+        assert [issue.code for issue in issues] == ["SELECTED_SCOPE_DEPENDENCY_INVALID"]
+        assert issues[0].field == "calculation"
+        assert "is inactive" in issues[0].message
+
+    def test_validate_checks_selected_indicator_subquestion_expressions(
+        self,
+        submodule_1,
+        submodule_2,
+        root_question_3,
+        sub_question_1,
+        indicator_1,
+    ):
+        sub_question_1.constraint = f"${{{root_question_3.name}}} > 0"
+        sub_question_1.save(update_fields=["constraint"])
+        validator = SubmoduleCompositionValidator(
+            [submodule_1.id],
+            [indicator_1.id],
+            [submodule_1.id, submodule_2.id],
+        )
+
+        issues = validator.validate()
+
+        assert [issue.code for issue in issues] == [
+            "SELECTED_SCOPE_DEPENDENCY_NOT_EMITTED"
+        ]
+        assert issues[0].owner == {
+            "model": "SubQuestion",
+            "id": sub_question_1.id,
+            "name": sub_question_1.name,
+        }
+        assert issues[0].field == "constraint"
+
+    def test_validate_reports_incompatible_selected_submodules(
+        self,
+        submodule_2,
+        submodule_3,
+        root_question_3,
+    ):
+        validator = SubmoduleCompositionValidator(
+            [submodule_2.id, submodule_3.id],
+            [],
+            [submodule_2.id, submodule_3.id],
+        )
+
+        issues = validator.validate()
+
+        assert root_question_3.submodule.count() == 2
+        assert [issue.code for issue in issues] == ["SELECTED_SCOPE_SUBMODULE_CONFLICT"]
+        assert issues[0].owner == {
+            "model": "Submodule",
+            "id": submodule_3.id,
+            "name": submodule_3.name,
+        }
 
     def test_validate_uses_bounded_queries(
         self,
