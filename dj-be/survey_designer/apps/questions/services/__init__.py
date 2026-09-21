@@ -2,6 +2,7 @@ from .doc_conversion import DocConversion  # noqa
 from .form_validation import (  # noqa
     ArtifactInfrastructureError,
     ArtifactInputError,
+    ExternalChoiceFileSource,
     GeneratedSurveyArtifact,
     ValidationIssue,
     ValidationResult,
@@ -11,6 +12,7 @@ from .form_validation import (  # noqa
     expression_question_references,
     failed_validation_result,
     materialize_external_files,
+    resolve_external_choice_files,
     validate_generated_artifact,
     validate_xml_compatibility,
 )
