@@ -1193,6 +1193,8 @@ export interface ValidationIssue {
   severity: "error" | "warning" | string;
   message: string;
   owner?: Record<string, unknown>;
+  submodule?: Record<string, unknown>;
+  dependency?: Record<string, unknown>;
   field?: string;
   sheet?: string;
   column?: string;
