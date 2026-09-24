@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Draggable } from "react-beautiful-dnd";
 import { Controller } from "react-hook-form";
@@ -25,8 +25,19 @@ function SubmoduleListItem({
   isSelectedByIndicator,
   selectedIndicatorSubmoduleIdMap,
   selectedIndicatorMatchingSubmoduleIdMap,
+  isValidationTarget = false,
 }: SubmoduleListItemProps) {
   const { t } = useTranslation();
+  const validationTargetRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isValidationTarget || !validationTargetRef.current) return;
+    validationTargetRef.current.focus();
+    validationTargetRef.current.scrollIntoView?.({
+      behavior: "smooth",
+      block: "center",
+    });
+  }, [isValidationTarget]);
 
   function getSubmoduleLabel(submodule: Submodule) {
     let label = submodule.is_mandatory ? (
@@ -94,13 +105,17 @@ function SubmoduleListItem({
     >
       {(submoduleProvidedNext, submoduleSnapshot) => (
         <div
-          className={
+          className={`${
             submoduleSnapshot.isDragging ? "greyBackground" : "whiteBackground"
-          }
+          }${isValidationTarget ? " submodule-item--validation-error" : ""}`}
           data-testid={`submodule-draggable-${submodule.id}`}
+          tabIndex={isValidationTarget ? -1 : undefined}
           {...submoduleProvidedNext.draggableProps}
           {...submoduleProvidedNext.dragHandleProps}
-          ref={submoduleProvidedNext.innerRef}
+          ref={(element) => {
+            validationTargetRef.current = element;
+            submoduleProvidedNext.innerRef(element);
+          }}
         >
           <ListItem key={submodule.id} className="submodule-item">
             <Controller
