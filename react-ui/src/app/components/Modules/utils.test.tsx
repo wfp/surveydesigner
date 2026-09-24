@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { API } from "../../utils";
-import { apiValidation } from "./utils";
+import { apiValidation, getValidationSubmoduleId } from "./utils";
 
 vi.mock("../../utils", async () => {
   const actual = await vi.importActual("../../utils");
@@ -19,25 +19,28 @@ const requestArguments: [
   Record<number, number[]>,
 ] = [[11], [], [1], { 1: [11, 12] }];
 
+const structuredIssue = {
+  code: "SELECTED_SCOPE_DEPENDENCY_NOT_EMITTED",
+  layer: "composition",
+  severity: "error",
+  message: "Question B requires Question A.",
+  owner: { model: "RootQuestion", id: 21, name: "question_b" },
+  submodule: { model: "Submodule", id: 11, name: "nutrition" },
+  dependency: { name: "question_a", status: "not_emitted" },
+  field: "relevant",
+};
+
 describe("Step 2 API validation", () => {
   beforeEach(() => {
     vi.mocked(API.get).mockReset();
   });
 
-  it("formats structured selected-scope errors", async () => {
+  it("preserves structured selected-scope errors", async () => {
     vi.mocked(API.get).mockResolvedValue({
       data: {
         valid: false,
         artifact_hash: "sha256:test",
-        errors: [
-          {
-            code: "SELECTED_SCOPE_DEPENDENCY_NOT_EMITTED",
-            layer: "composition",
-            severity: "error",
-            message: "Question B requires Question A.",
-            field: "relevant",
-          },
-        ],
+        errors: [structuredIssue],
         warnings: [],
         validator: { pyxform: "4.5.0", compatibility: "1.0" },
       },
@@ -47,8 +50,9 @@ describe("Step 2 API validation", () => {
 
     expect(result).toEqual({
       ok: false,
-      data: ["Question B requires Question A. (field relevant)"],
+      data: [structuredIssue],
     });
+    expect(getValidationSubmoduleId(result.data)).toBe(11);
   });
 
   it("allows a valid selected scope", async () => {
@@ -75,5 +79,17 @@ describe("Step 2 API validation", () => {
       ok: false,
       data: ["Legacy validation error"],
     });
+  });
+
+  it("uses a submodule owner when older diagnostics have no scope field", () => {
+    expect(
+      getValidationSubmoduleId([
+        {
+          ...structuredIssue,
+          submodule: undefined,
+          owner: { model: "Submodule", id: 12, name: "food_security" },
+        },
+      ]),
+    ).toBe(12);
   });
 });
