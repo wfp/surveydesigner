@@ -55,12 +55,42 @@ class TestSubmoduleCompositionValidator:
         assert [issue.code for issue in validator.get_issues()] == [
             "SELECTED_SCOPE_DEPENDENCY_NOT_EMITTED"
         ]
-        assert validator.get_issues()[0].owner == {
+        issue = validator.get_issues()[0]
+        assert issue.owner == {
             "model": "RootQuestion",
             "id": root_question_1.id,
             "name": root_question_1.name,
         }
-        assert validator.get_issues()[0].field == field
+        assert issue.submodule == {
+            "model": "Submodule",
+            "id": submodule_1.id,
+            "name": submodule_1.name,
+            "label": submodule_1.label,
+        }
+        assert issue.dependency == {
+            "name": root_question_3.name,
+            "status": "not_emitted",
+            "target": {
+                "model": "RootQuestion",
+                "id": root_question_3.id,
+                "name": root_question_3.name,
+            },
+            "available_submodules": [
+                {
+                    "model": "Submodule",
+                    "id": submodule_2.id,
+                    "name": submodule_2.name,
+                    "label": submodule_2.label,
+                },
+                {
+                    "model": "Submodule",
+                    "id": submodule_3.id,
+                    "name": submodule_3.name,
+                    "label": submodule_3.label,
+                },
+            ],
+        }
+        assert issue.field == field
         assert submodule_1 in validator.dependency_results
         assert (
             submodule_2
@@ -164,7 +194,12 @@ class TestSubmoduleCompositionValidator:
         assert [issue.code for issue in validator.get_issues()] == [
             "SELECTED_SCOPE_DEPENDENCY_UNRESOLVED"
         ]
-        assert "no question with that exact name exists" in validator.get_messages()[0]
+        issue = validator.get_issues()[0]
+        assert "no question with that exact name exists" in issue.message
+        assert issue.dependency == {
+            "name": "QuestionThatDoesNotExist",
+            "status": "unresolved",
+        }
 
     def test_validate_reports_dependency_outside_available_scope(
         self,
@@ -184,6 +219,10 @@ class TestSubmoduleCompositionValidator:
             "SELECTED_SCOPE_DEPENDENCY_UNAVAILABLE"
         ]
         assert "unavailable in the current survey scope" in issues[0].message
+        assert issues[0].dependency == {
+            "name": root_question_3.name,
+            "status": "unavailable",
+        }
 
     def test_validate_reports_dependency_case_mismatch(
         self,
@@ -206,6 +245,11 @@ class TestSubmoduleCompositionValidator:
             "SELECTED_SCOPE_DEPENDENCY_CASE_MISMATCH"
         ]
         assert f"available exact name: '{root_question_3.name}'" in issues[0].message
+        assert issues[0].dependency == {
+            "name": root_question_3.name.lower(),
+            "status": "case_mismatch",
+            "available_names": [root_question_3.name],
+        }
 
     def test_validate_reports_ambiguous_dependency(
         self,
@@ -235,6 +279,22 @@ class TestSubmoduleCompositionValidator:
         ]
         assert f"RootQuestion #{root_question_3.id}" in issues[0].message
         assert f"RepeatSection #{repeat.id}" in issues[0].message
+        assert issues[0].dependency == {
+            "name": root_question_3.name,
+            "status": "ambiguous",
+            "candidates": [
+                {
+                    "model": "RepeatSection",
+                    "id": repeat.id,
+                    "name": repeat.name,
+                },
+                {
+                    "model": "RootQuestion",
+                    "id": root_question_3.id,
+                    "name": root_question_3.name,
+                },
+            ],
+        }
 
     def test_validate_reports_inactive_dependency(
         self,
@@ -258,6 +318,16 @@ class TestSubmoduleCompositionValidator:
         assert [issue.code for issue in issues] == ["SELECTED_SCOPE_DEPENDENCY_INVALID"]
         assert issues[0].field == "calculation"
         assert "is inactive" in issues[0].message
+        assert issues[0].dependency == {
+            "name": root_question_3.name,
+            "status": "invalid",
+            "reason": "inactive",
+            "target": {
+                "model": "RootQuestion",
+                "id": root_question_3.id,
+                "name": root_question_3.name,
+            },
+        }
 
     def test_validate_checks_selected_indicator_subquestion_expressions(
         self,
@@ -285,6 +355,12 @@ class TestSubmoduleCompositionValidator:
             "id": sub_question_1.id,
             "name": sub_question_1.name,
         }
+        assert issues[0].submodule == {
+            "model": "Submodule",
+            "id": submodule_1.id,
+            "name": submodule_1.name,
+            "label": submodule_1.label,
+        }
         assert issues[0].field == "constraint"
 
     def test_validate_reports_incompatible_selected_submodules(
@@ -307,6 +383,23 @@ class TestSubmoduleCompositionValidator:
             "model": "Submodule",
             "id": submodule_3.id,
             "name": submodule_3.name,
+        }
+        assert issues[0].submodule == {
+            "model": "Submodule",
+            "id": submodule_3.id,
+            "name": submodule_3.name,
+            "label": submodule_3.label,
+        }
+        assert issues[0].dependency == {
+            "status": "conflict",
+            "submodules": [
+                {
+                    "model": "Submodule",
+                    "id": submodule_2.id,
+                    "name": submodule_2.name,
+                    "label": submodule_2.label,
+                }
+            ],
         }
 
     def test_validate_uses_bounded_queries(

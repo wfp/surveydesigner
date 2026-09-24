@@ -24,6 +24,7 @@ class SubmoduleCompositionValidator:
         self._submodules = None
         self._scope_submodules = None
         self._indicator_questions = None
+        self._owner_submodules = {}
 
     def get_root_question_queryset(self):
         return RootQuestion.objects.select_related("base_question")
@@ -94,10 +95,17 @@ class SubmoduleCompositionValidator:
                     layer="composition",
                     severity="error",
                     message=f"{submodule.label} contains questions from: {labels}. Select only one of these submodules.",
-                    owner={
-                        "model": "Submodule",
-                        "id": submodule.id,
-                        "name": submodule.name,
+                    owner=self._owner(submodule),
+                    submodule=self._submodule(submodule),
+                    dependency={
+                        "status": "conflict",
+                        "submodules": [
+                            self._submodule(conflicting_submodule)
+                            for conflicting_submodule in sorted(
+                                conflicting_submodules,
+                                key=lambda item: item.id,
+                            )
+                        ],
                     },
                     field="submodules",
                 )
@@ -151,20 +159,49 @@ class SubmoduleCompositionValidator:
             "name": owner.name,
         }
 
+    @staticmethod
+    def _submodule(submodule):
+        return {
+            "model": "Submodule",
+            "id": submodule.id,
+            "name": submodule.name,
+            "label": submodule.label,
+        }
+
+    def _add_owner_submodule(self, owner, submodule):
+        key = (owner.__class__, owner.id)
+        self._owner_submodules.setdefault(key, {})[submodule.id] = submodule
+
+    def _affected_submodule(self, owner):
+        submodules = self._owner_submodules.get((owner.__class__, owner.id), {})
+        if not submodules:
+            return None
+        submodule = min(
+            submodules.values(),
+            key=lambda item: (
+                self.submodule_order.get(item.id, len(self.submodule_order)),
+                item.id,
+            ),
+        )
+        return self._submodule(submodule)
+
     def _scope_expression_owners(self):
         owners = {}
+        self._owner_submodules = {}
 
-        def add(owner):
+        def add(owner, submodule=None):
             owners[(owner.__class__, owner.id)] = owner
+            if submodule is not None:
+                self._add_owner_submodule(owner, submodule)
 
         for submodule in self.get_scope_submodules():
-            add(submodule.module)
-            add(submodule)
+            add(submodule.module, submodule)
+            add(submodule, submodule)
         for submodule in self.get_submodules():
             for question in submodule.prefetched_root_questions:
-                add(question)
+                add(question, submodule)
             for repeat_section in submodule.prefetched_repeat_sections:
-                add(repeat_section)
+                add(repeat_section, submodule)
         for base_question in self.get_indicator_questions():
             owner = base_question.instance
             if isinstance(owner, (RootQuestion, SubQuestion, RepeatSection)):
@@ -258,7 +295,9 @@ class SubmoduleCompositionValidator:
         instance = dependency.instance
         return f"{instance.__class__.__name__} #{instance.id}"
 
-    def _dependency_issue(self, owner, field, referenced_name, code, detail):
+    def _dependency_issue(
+        self, owner, field, referenced_name, code, detail, dependency
+    ):
         owner_data = self._owner(owner)
         return ValidationIssue(
             code=code,
@@ -269,6 +308,8 @@ class SubmoduleCompositionValidator:
                 f"question '{referenced_name}', {detail}"
             ),
             owner=owner_data,
+            submodule=self._affected_submodule(owner),
+            dependency=dependency,
             field=field,
         )
 
@@ -305,7 +346,15 @@ class SubmoduleCompositionValidator:
             question.id for question in self.get_indicator_questions()
         }
         emitted_base_question_ids.update(indicator_base_question_ids)
-        dependency_submodules = self._dependency_submodules(dependencies)
+        dependency_sources = {
+            question.id: question
+            for question in (*dependencies, *self.get_indicator_questions())
+        }
+        dependency_submodules = self._dependency_submodules(dependency_sources.values())
+        for base_question in self.get_indicator_questions():
+            owner = base_question.instance
+            for submodule in dependency_submodules.get(base_question.id, []):
+                self._add_owner_submodule(owner, submodule)
         available_dependency_ids = (
             set(dependency_submodules) | indicator_base_question_ids
         )
@@ -340,6 +389,11 @@ class SubmoduleCompositionValidator:
                         "SELECTED_SCOPE_DEPENDENCY_CASE_MISMATCH",
                         "but references are case-sensitive; available exact name: "
                         f"{rendered_names}.",
+                        {
+                            "name": referenced_name,
+                            "status": "case_mismatch",
+                            "available_names": available_names,
+                        },
                     )
                 elif casefold_matches:
                     issue = self._dependency_issue(
@@ -348,6 +402,10 @@ class SubmoduleCompositionValidator:
                         referenced_name,
                         "SELECTED_SCOPE_DEPENDENCY_UNAVAILABLE",
                         "but that question is unavailable in the current survey scope.",
+                        {
+                            "name": referenced_name,
+                            "status": "unavailable",
+                        },
                     )
                 else:
                     issue = self._dependency_issue(
@@ -356,6 +414,10 @@ class SubmoduleCompositionValidator:
                         referenced_name,
                         "SELECTED_SCOPE_DEPENDENCY_UNRESOLVED",
                         "but no question with that exact name exists.",
+                        {
+                            "name": referenced_name,
+                            "status": "unresolved",
+                        },
                     )
                 self.dependency_issues.append(issue)
                 continue
@@ -378,6 +440,20 @@ class SubmoduleCompositionValidator:
                         referenced_name,
                         "SELECTED_SCOPE_DEPENDENCY_AMBIGUOUS",
                         f"but that name matches multiple questions: {descriptions}.",
+                        {
+                            "name": referenced_name,
+                            "status": "ambiguous",
+                            "candidates": [
+                                self._owner(dependency.instance)
+                                for dependency in sorted(
+                                    matches,
+                                    key=lambda dependency: (
+                                        dependency.instance.__class__.__name__,
+                                        dependency.instance.id,
+                                    ),
+                                )
+                            ],
+                        },
                     )
                 )
                 continue
@@ -391,6 +467,12 @@ class SubmoduleCompositionValidator:
                         referenced_name,
                         "SELECTED_SCOPE_DEPENDENCY_INVALID",
                         f"but the referenced {self._dependency_description(dependency)} is inactive.",
+                        {
+                            "name": referenced_name,
+                            "status": "invalid",
+                            "reason": "inactive",
+                            "target": self._owner(dependency.instance),
+                        },
                     )
                 )
                 continue
@@ -432,6 +514,16 @@ class SubmoduleCompositionValidator:
                     severity="error",
                     message=message,
                     owner=owner_data,
+                    submodule=self._affected_submodule(owner),
+                    dependency={
+                        "name": referenced_name,
+                        "status": "not_emitted",
+                        "target": self._owner(dependency.instance),
+                        "available_submodules": [
+                            self._submodule(submodule)
+                            for submodule in related_submodules
+                        ],
+                    },
                     field=field,
                 )
             )

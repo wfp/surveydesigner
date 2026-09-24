@@ -1409,6 +1409,29 @@ class TestSubmoduleCompositionValidationView:
             "id": root_question_1.id,
             "name": root_question_1.name,
         }
+        assert body["errors"][0]["submodule"] == {
+            "model": "Submodule",
+            "id": submodule_1.id,
+            "name": submodule_1.name,
+            "label": submodule_1.label,
+        }
+        assert body["errors"][0]["dependency"] == {
+            "name": root_question_3.name,
+            "status": "not_emitted",
+            "target": {
+                "model": "RootQuestion",
+                "id": root_question_3.id,
+                "name": root_question_3.name,
+            },
+            "available_submodules": [
+                {
+                    "model": "Submodule",
+                    "id": submodule_2.id,
+                    "name": submodule_2.name,
+                    "label": submodule_2.label,
+                }
+            ],
+        }
         assert body["errors"][0]["field"] == "relevant"
 
     def test_submodules_order_validation_view_with_submodule_ids(

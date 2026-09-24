@@ -138,6 +138,38 @@ class ConversionMustNotRun:
         raise AssertionError("pyxform must not run for an invalid codebook")
 
 
+def test_validation_issue_serializes_structured_composition_diagnostics():
+    issue = ValidationIssue(
+        code="SELECTED_SCOPE_DEPENDENCY_NOT_EMITTED",
+        layer="composition",
+        severity="error",
+        message="A selected question has an unselected dependency.",
+        owner={"model": "RootQuestion", "id": 7, "name": "question_a"},
+        submodule={"model": "Submodule", "id": 3, "name": "food"},
+        dependency={
+            "name": "question_b",
+            "status": "not_emitted",
+            "target": {"model": "RootQuestion", "id": 8},
+        },
+        field="relevant",
+    )
+
+    assert issue.as_dict() == {
+        "code": "SELECTED_SCOPE_DEPENDENCY_NOT_EMITTED",
+        "layer": "composition",
+        "severity": "error",
+        "message": "A selected question has an unselected dependency.",
+        "owner": {"model": "RootQuestion", "id": 7, "name": "question_a"},
+        "submodule": {"model": "Submodule", "id": 3, "name": "food"},
+        "dependency": {
+            "name": "question_b",
+            "status": "not_emitted",
+            "target": {"model": "RootQuestion", "id": 8},
+        },
+        "field": "relevant",
+    }
+
+
 def _external_choice_source(
     content=b"name,label\na,Choice A\n",
     *,
