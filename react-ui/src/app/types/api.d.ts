@@ -729,9 +729,9 @@ export interface SubmoduleWithQuestions {
 /**
  *
  * @export
- * @interface SubmodulesOrderValidationResponse
+ * @interface SubmoduleCompositionValidationResponse
  */
-export type SubmodulesOrderValidationResponse = ValidationResult;
+export type SubmoduleCompositionValidationResponse = ValidationResult;
 /**
  *
  * @export
@@ -1193,6 +1193,8 @@ export interface ValidationIssue {
   severity: "error" | "warning" | string;
   message: string;
   owner?: Record<string, unknown>;
+  submodule?: Record<string, unknown>;
+  dependency?: Record<string, unknown>;
   field?: string;
   sheet?: string;
   column?: string;

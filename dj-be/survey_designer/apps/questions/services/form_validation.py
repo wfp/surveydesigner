@@ -94,6 +94,8 @@ class ValidationIssue:
     severity: str
     message: str
     owner: Mapping[str, Any] | None = None
+    submodule: Mapping[str, Any] | None = None
+    dependency: Mapping[str, Any] | None = None
     field: str | None = None
     sheet: str | None = None
     column: str | None = None
@@ -106,10 +108,19 @@ class ValidationIssue:
             "severity": self.severity,
             "message": self.message,
         }
-        for key in ("owner", "field", "sheet", "column", "row"):
+        mapping_fields = {"owner", "submodule", "dependency"}
+        for key in (
+            "owner",
+            "submodule",
+            "dependency",
+            "field",
+            "sheet",
+            "column",
+            "row",
+        ):
             value = getattr(self, key)
             if value is not None:
-                result[key] = dict(value) if key == "owner" else value
+                result[key] = dict(value) if key in mapping_fields else value
         return result
 
     to_dict = as_dict

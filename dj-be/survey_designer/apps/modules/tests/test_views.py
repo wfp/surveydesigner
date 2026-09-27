@@ -268,6 +268,100 @@ def test_final_survey_actions_block_reference_to_unselected_question(
     assert root_question_3.name in body["errors"][0]["message"]
 
 
+def test_step_2_and_final_artifact_gates_reject_unselected_dependency(
+    logged_admin_client,
+    moda_api_key,
+    submodule_1,
+    submodule_2,
+    root_question_1,
+    root_question_3,
+):
+    root_question_1.relevant = f"${{{root_question_3.name}}} > 0"
+    root_question_1.save(update_fields=["relevant"])
+
+    step_2_response = logged_admin_client.get(
+        "/api/order-validation/",
+        {
+            "submodule_ids": str(submodule_1.id),
+            "all_submodule_ids": f"{submodule_1.id} {submodule_2.id}",
+        },
+    )
+
+    assert step_2_response.status_code == status.HTTP_200_OK
+    step_2_body = step_2_response.json()
+    assert step_2_body["valid"] is False
+    assert step_2_body["errors"][0]["code"] == ("SELECTED_SCOPE_DEPENDENCY_NOT_EMITTED")
+    assert step_2_body["errors"][0]["submodule"]["id"] == submodule_1.id
+    assert step_2_body["errors"][0]["dependency"]["target"]["id"] == (
+        root_question_3.id
+    )
+
+    final_response = logged_admin_client.post(
+        "/api/validate/",
+        json.dumps(
+            {
+                "name": "Unselected dependency backstop",
+                "submodules": [submodule_1.id],
+                "submodules_order": [submodule_1.id],
+                "sub_questions": [],
+                "languages": [],
+                "id": moda_api_key.id,
+                "project_id": 99,
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert final_response.status_code == status.HTTP_400_BAD_REQUEST
+    final_body = final_response.json()
+    assert final_body["valid"] is False
+    assert final_body["errors"][0]["code"] == "CODEBOOK_REFERENCE_NOT_EMITTED"
+    assert final_body["errors"][0]["owner"]["id"] == root_question_1.id
+
+
+def test_step_2_success_does_not_bypass_final_artifact_validation(
+    logged_admin_client,
+    moda_api_key,
+    submodule_1,
+    root_question_2,
+    choices_1,
+):
+    choices_1.choices.update(is_active=False)
+
+    step_2_response = logged_admin_client.get(
+        "/api/order-validation/",
+        {
+            "submodule_ids": str(submodule_1.id),
+            "all_submodule_ids": str(submodule_1.id),
+        },
+    )
+
+    assert step_2_response.status_code == status.HTTP_200_OK
+    assert step_2_response.json()["valid"] is True
+
+    final_response = logged_admin_client.post(
+        "/api/validate/",
+        json.dumps(
+            {
+                "name": "Final artifact backstop",
+                "submodules": [submodule_1.id],
+                "submodules_order": [submodule_1.id],
+                "sub_questions": [],
+                "languages": [],
+                "id": moda_api_key.id,
+                "project_id": 99,
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert final_response.status_code == status.HTTP_400_BAD_REQUEST
+    final_body = final_response.json()
+    assert final_body["valid"] is False
+    assert final_body["errors"][0]["code"] == "CODEBOOK_CHOICE_LIST_NOT_EMITTED"
+    assert final_body["errors"][0]["owner"]["name"] == root_question_2.name
+
+
 def test_validate_action_blocks_choice_without_english_label(
     logged_admin_client,
     submodule_1,
@@ -1370,7 +1464,7 @@ def test_upload_xls_form_moda_metadata_failure(
 
 
 @pytest.mark.django_db
-class TestSubmodulesOrderValidationView:
+class TestSubmoduleCompositionValidationView:
     def test_submodules_order_validation_view_no_submodule_ids(
         self, logged_admin_client
     ):
@@ -1408,6 +1502,29 @@ class TestSubmodulesOrderValidationView:
             "model": "RootQuestion",
             "id": root_question_1.id,
             "name": root_question_1.name,
+        }
+        assert body["errors"][0]["submodule"] == {
+            "model": "Submodule",
+            "id": submodule_1.id,
+            "name": submodule_1.name,
+            "label": submodule_1.label,
+        }
+        assert body["errors"][0]["dependency"] == {
+            "name": root_question_3.name,
+            "status": "not_emitted",
+            "target": {
+                "model": "RootQuestion",
+                "id": root_question_3.id,
+                "name": root_question_3.name,
+            },
+            "available_submodules": [
+                {
+                    "model": "Submodule",
+                    "id": submodule_2.id,
+                    "name": submodule_2.name,
+                    "label": submodule_2.label,
+                }
+            ],
         }
         assert body["errors"][0]["field"] == "relevant"
 

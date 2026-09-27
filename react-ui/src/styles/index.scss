@@ -190,6 +190,17 @@
   margin-left: 1rem;
 }
 
+.submodule-item--validation-error {
+  border-left: 3px solid #c5192d;
+  background: #fff1f3;
+  outline: 2px solid transparent;
+}
+
+.submodule-item--validation-error:focus {
+  outline-color: #c5192d;
+  outline-offset: 2px;
+}
+
 .d-flex {
   display: flex;
 }

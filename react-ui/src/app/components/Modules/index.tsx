@@ -26,7 +26,11 @@ import ModuleListItem from "../ModuleListItem";
 import IndicatorAreaListItem from "../IndicatorAreaListItem";
 import { useModules } from "../../contexts/ModulesContext";
 import { getCompareFunction } from "../../utils";
-import { apiValidation, getErrorDisplay } from "./utils";
+import {
+  apiValidation,
+  getErrorDisplay,
+  getValidationSubmoduleId,
+} from "./utils";
 import {
   deriveModuleOrderFromSubmodulesOrder,
   getFirstDefinedOrder,
@@ -35,7 +39,7 @@ import {
   mergeOrderedIds,
 } from "./ordering";
 import { fetchIndicatorAreas } from "../../redux/actions/indicatorAreasActions";
-import { Indicator, Module, Submodule } from "../../types/api";
+import { Indicator, Module, Submodule, ValidationIssue } from "../../types/api";
 import { ModulesProps } from "./Modules.interface";
 import { IndicatorAreaWithIndicators } from "../../types";
 
@@ -67,9 +71,12 @@ function Modules({
     clickedIndicator: Indicator;
     event?: ChangeEvent<HTMLInputElement>;
   } | null>(null);
-  const [submitError, setSubmitError] = useState<string | string[] | null>(
-    null,
-  );
+  const [submitError, setSubmitError] = useState<
+    string | Array<string | ValidationIssue> | null
+  >(null);
+  const [validationSubmoduleId, setValidationSubmoduleId] = useState<
+    number | null
+  >(null);
   const { control, handleSubmit, setValue, getValues, watch, register } =
     useForm<SurveyFormState>({
       defaultValues: {
@@ -114,6 +121,8 @@ function Modules({
     clickedIndicator: Indicator,
     event?: ChangeEvent<HTMLInputElement>,
   ) {
+    setSubmitError(null);
+    setValidationSubmoduleId(null);
     const inds = getValues("indicators") || [];
     const { id } = clickedIndicator;
     const isMandatory = clickedIndicator.is_mandatory;
@@ -165,6 +174,8 @@ function Modules({
           submodules_order,
         ).then((result) => {
           if (result.ok) {
+            setSubmitError(null);
+            setValidationSubmoduleId(null);
             const orderedSubmodules = modules_order
               .flatMap((modId) => submodules_order[modId])
               .filter((subId) => data.submodules.includes(subId));
@@ -187,6 +198,7 @@ function Modules({
             proceed?.();
           } else {
             setSubmitError(result.data);
+            setValidationSubmoduleId(getValidationSubmoduleId(result.data));
             setGoToStep?.(step ?? 0);
           }
           setIsValidating(false);
@@ -201,6 +213,8 @@ function Modules({
     clickedSubmodule: Submodule,
     event?: ChangeEvent<HTMLInputElement>,
   ) {
+    setSubmitError(null);
+    setValidationSubmoduleId(null);
     const submodules = getValues("submodules");
     const { id } = clickedSubmodule;
     const isMandatory = clickedSubmodule.is_mandatory;
@@ -624,7 +638,10 @@ function Modules({
             statusIconDescription=""
             subtitle={getErrorDisplay(submitError)}
             title="Error"
-            onClick={() => setSubmitError(null)}
+            onClick={() => {
+              setSubmitError(null);
+              setValidationSubmoduleId(null);
+            }}
             // eslint-disable-next-line jsx-a11y/aria-role
             role="error_notification"
             isDismissible={true}
@@ -657,6 +674,7 @@ function Modules({
                             collapseAll={collapseAllModules}
                             setCollapseAll={setCollapseAllModules}
                             watchAllFields={watchAllFields}
+                            validationSubmoduleId={validationSubmoduleId}
                           />
                         );
                       })}
