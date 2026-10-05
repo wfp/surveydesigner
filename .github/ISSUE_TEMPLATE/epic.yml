@@ -1,7 +1,9 @@
 name: 🏆 Epic
 description: A large scope of work containing multiple features
-title: "epic: <title>"
+title: "🏆 <EPIC>"
 labels: ["epic"]
+type: "Epic"
+projects: ["wfp/11"]
 body:
   - type: markdown
     attributes:
@@ -47,6 +49,8 @@ body:
     attributes:
       label: ✅ Success Criteria
       description: How will we know when this Epic is complete?
+    validations:
+      required: true
 
   - type: textarea
     id: additional-context

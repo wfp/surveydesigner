@@ -1,17 +1,10 @@
 name: 🛠️ Task / Chore
 description: General improvements, maintenance, or internal tasks
-title: "task: <title>"
+title: "🛠️ <TASK>"
 labels: ["internal"]
+type: "Task"
+projects: ["wfp/11"]
 body:
-  - type: input
-    id: parent-issue
-    attributes:
-      label: 📖 Parent User Story
-      description: Enter the link or issue number of the Parent User Story (#123).
-      placeholder: "#123"
-    validations:
-      required: true
-
   - type: markdown
     attributes:
       value: |
@@ -21,6 +14,15 @@ body:
         > **Hierarchy Rules:**
         > - **Tasks** MUST have a **Parent User Story**.
         > - **Tasks** **cannot** have children and cannot have another Task or Feature as parent.
+
+  - type: input
+    id: parent-issue
+    attributes:
+      label: 📖 Parent User Story
+      description: Enter the link or issue number of the Parent User Story (#123).
+      placeholder: "#123"
+    validations:
+      required: true
 
   - type: textarea
     id: description
@@ -48,6 +50,8 @@ body:
         - [ ] Step 1
         - [ ] Step 2
         - [ ] Step 3
+    validations:
+      required: true
 
   - type: textarea
     id: additional-context

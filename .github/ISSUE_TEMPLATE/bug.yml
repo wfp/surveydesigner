@@ -1,12 +1,21 @@
 name: 🐛 Bug Report
 description: Report errors or unexpected behavior
-title: "bug: <title>"
+title: "🐛 <BUG>"
 labels: ["bug"]
+type: "Bug"
+projects: ["wfp/11"]
 body:
   - type: markdown
     attributes:
       value: |
         Thanks for taking the time to report a bug! Please fill out the details below so we can fix it as soon as possible.
+
+  - type: input
+    id: related-issues
+    attributes:
+      label: 🔗 Related Epics, Features, or User Stories
+      description: Link any Epics, Features, or User Stories this bug relates to (optional).
+      placeholder: "#101, #102"
 
   - type: textarea
     id: description

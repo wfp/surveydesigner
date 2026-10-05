@@ -1,17 +1,10 @@
 name: 📖 User Story
 description: Define a specific technical or user-facing requirement
-title: "user-story: <title>"
+title: "📖 <USER STORY>"
 labels: ["user-story"]
+type: "User Story"
+projects: ["wfp/11"]
 body:
-  - type: input
-    id: parent-issue
-    attributes:
-      label: 🚀 Parent Feature
-      description: Enter the link or issue number of the Parent Feature (#123).
-      placeholder: "#123"
-    validations:
-      required: true
-
   - type: markdown
     attributes:
       value: |
@@ -23,11 +16,21 @@ body:
         > - **User Stories** contain **ONLY Tasks** as children.
         > - **User Stories** **cannot** have another User Story or Epic as parent/child.
 
+  - type: input
+    id: parent-issue
+    attributes:
+      label: 🚀 Parent Feature
+      description: Enter the link or issue number of the Parent Feature (#123).
+      placeholder: "#123"
+    validations:
+      required: true
+
   - type: textarea
     id: user-story
     attributes:
       label: 📖 User Story
-      description: |
+      description: What is the goal of this user story?
+      placeholder: |
         As a [user/admin/developer]
         I need to [perform this action]
         So that [I receive this value/benefit]
@@ -47,11 +50,13 @@ body:
     id: acceptance-criteria
     attributes:
       label: 📋 Acceptance Criteria (Testability)
-      description: List the conditions that must be met for this feature to be considered complete.
+      description: List the conditions that must be met for this user story to be considered complete.
       placeholder: |
         - [ ] Condition 1
         - [ ] Condition 2
         - [ ] Condition 3
+    validations:
+      required: true
 
   - type: textarea
     id: included-tasks

@@ -1,17 +1,10 @@
 name: 🚀 Feature Request
 description: Suggest a new feature or improvement
-title: "feat: <title>"
+title: "🚀 <FEATURE>"
 labels: ["enhancement"]
+type: "Feature"
+projects: ["wfp/11"]
 body:
-  - type: input
-    id: parent-epic
-    attributes:
-      label: 🏆 Parent Epic
-      description: Enter the link or issue number of the Parent Epic (#123).
-      placeholder: "#123"
-    validations:
-      required: true
-
   - type: markdown
     attributes:
       value: |
@@ -23,10 +16,19 @@ body:
         > - **Features** contain **ONLY User Stories** as children.
         > - **Features** **cannot** have another Feature as parent/child, and cannot contain Tasks directly.
 
-  - type: textarea
-    id: user-story
+  - type: input
+    id: parent-epic
     attributes:
-      label: 📖 User Story
+      label: 🏆 Parent Epic
+      description: Enter the link or issue number of the Parent Epic (#123).
+      placeholder: "#123"
+    validations:
+      required: true
+
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: 🚀 Feature Description
       description: What is the goal of this feature?
       placeholder: |
         As a [user/admin/developer]
@@ -53,6 +55,8 @@ body:
         - [ ] Condition 1
         - [ ] Condition 2
         - [ ] Condition 3
+    validations:
+      required: true
 
   - type: textarea
     id: included-user-stories
