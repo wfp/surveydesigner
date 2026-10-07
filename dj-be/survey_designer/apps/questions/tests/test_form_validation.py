@@ -3,7 +3,7 @@ import io
 import pytest
 from django.core.files.base import ContentFile
 from django.test import override_settings
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from questions.models import ChoiceGroup
 from questions.services import QuestionsExport, XLSForm
 from questions.services.form_validation import (
@@ -256,6 +256,54 @@ def test_compatibility_requires_referenced_csv_in_exact_artifact():
     assert validate_xml_compatibility(xml, {"choices.csv": b"data"}) == []
 
 
+def _xform(model="", body=""):
+    return (
+        '<h:html xmlns="http://www.w3.org/2002/xforms" '
+        'xmlns:h="http://www.w3.org/1999/xhtml" '
+        'xmlns:jr="http://openrosa.org/javarosa">'
+        "<h:head><model><instance><data><q/><r/></data></instance>"
+        f"{model}</model></h:head><h:body>{body}</h:body></h:html>"
+    )
+
+
+_XPATH_LOCATIONS = (
+    ("relevant", lambda value: _xform(f'<bind nodeset="/data/q" relevant="{value}"/>')),
+    (
+        "read_only",
+        lambda value: _xform(f'<bind nodeset="/data/q" readonly="{value}"/>'),
+    ),
+    (
+        "default",
+        lambda value: _xform(
+            f'<setvalue event="odk-instance-first-load" ref="/data/q" value="{value}"/>'
+        ),
+    ),
+    (
+        "choice_filter",
+        lambda value: _xform(
+            body=f'<select1 ref="/data/q"><itemset nodeset="{value}"/></select1>'
+        ),
+    ),
+    (
+        "repeat_count",
+        lambda value: _xform(body=f'<repeat nodeset="/data/q" jr:count="{value}"/>'),
+    ),
+)
+
+
+@pytest.mark.parametrize("column, build", _XPATH_LOCATIONS)
+def test_compatibility_compiles_every_emitted_xpath(column, build):
+    issues = validate_xml_compatibility(build(" /data/r  ="))
+
+    assert [issue.code for issue in issues] == ["XPATH_SYNTAX_INVALID"]
+    assert (issues[0].column, issues[0].field, issues[0].layer) == (
+        column,
+        "/data/q",
+        "compatibility",
+    )
+    assert validate_xml_compatibility(build("jr:choice-name( /data/r , 'x')")) == []
+
+
 def test_validation_result_normalizes_compatibility_issues():
     class Conversion:
         def __init__(self, xlsx_file):
@@ -284,7 +332,7 @@ def test_validation_result_normalizes_compatibility_issues():
     }
     assert result.as_dict()["validator"] == {
         "pyxform": "4.5.0",
-        "compatibility": "1.0",
+        "compatibility": "1.1",
     }
 
 
@@ -2281,3 +2329,319 @@ def test_xml_conversion_disables_java_validation(monkeypatch):
     assert calls["validate"] is False
     assert calls["pretty_print"] is True
     assert calls["enketo"] is False
+
+
+def _expression_survey(rows, columns=("relevant", "calculation", "repeat_count")):
+    survey_columns = ["type", "name", *columns]
+    width = len(survey_columns)
+    return _codebook_workbook(
+        [tuple(row) + (None,) * (width - len(row)) for row in rows],
+        survey_columns=survey_columns,
+    )
+
+
+def test_final_artifact_rejects_malformed_expression_before_conversion():
+    artifact = GeneratedSurveyArtifact(
+        _expression_survey(
+            [
+                ("integer", "size"),
+                ("integer", "age", "${size} ="),
+            ]
+        )
+    )
+
+    result = validate_generated_artifact(artifact, converter_cls=ConversionMustNotRun)
+
+    assert [issue.code for issue in result.errors] == ["EXPRESSION_INCOMPLETE"]
+    issue = result.errors[0]
+    assert issue.layer == "composition"
+    assert issue.owner == {"model": "question", "name": "age", "type": "integer"}
+    assert (issue.field, issue.sheet, issue.column, issue.row) == (
+        "relevant",
+        "survey",
+        "relevant",
+        3,
+    )
+
+
+def test_final_artifact_rejects_repeat_member_referenced_outside_the_repeat():
+    xlsx = _expression_survey(
+        [
+            ("integer", "size"),
+            ("begin_repeat", "household", None, None, "${size}"),
+            ("integer", "age"),
+            ("end_repeat",),
+            ("calculate", "oldest", None, "max(${age})"),
+            ("integer", "first_age", "${age} > 18"),
+        ]
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["EXPRESSION_REPEAT_CONTEXT_INVALID"]
+    assert issues[0].owner["name"] == "first_age"
+    assert issues[0].row == 7
+    assert "inside repeat 'household'" in issues[0].message
+
+
+def test_final_artifact_accepts_references_within_the_same_repeat():
+    xlsx = _expression_survey(
+        [
+            ("integer", "size"),
+            ("begin_repeat", "household", None, None, "${size}"),
+            ("integer", "age"),
+            ("integer", "years_left", "${age} < 65", "65 - ${age}"),
+            ("end_repeat",),
+        ]
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_final_artifact_rejects_repeat_count_from_its_own_member():
+    xlsx = _expression_survey(
+        [
+            ("begin_repeat", "household", None, None, "${age}"),
+            ("integer", "age"),
+            ("end_repeat",),
+        ]
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["EXPRESSION_REPEAT_CONTEXT_INVALID"]
+    assert issues[0].owner == {
+        "model": "repeat",
+        "name": "household",
+        "type": "begin_repeat",
+    }
+    assert issues[0].field == "repeat_count"
+
+
+def test_final_artifact_accepts_quoted_reference_to_own_repeat_member():
+    xlsx = _expression_survey(
+        [
+            ("begin_repeat", "r", "'${child}' != ''", None, "2"),
+            ("integer", "child"),
+            ("end_repeat",),
+        ]
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_final_artifact_rejects_non_numeric_repeat_count():
+    xlsx = _expression_survey(
+        [
+            ("date", "size"),
+            ("begin_repeat", "household", None, None, "${size}"),
+            ("integer", "age"),
+            ("end_repeat",),
+        ]
+    )
+
+    issues = [
+        issue
+        for issue in validate_codebook_integrity(xlsx)
+        if issue.code.startswith("EXPRESSION_")
+    ]
+
+    assert [issue.code for issue in issues] == ["EXPRESSION_RESULT_TYPE_INVALID"]
+    assert "of type 'date'" in issues[0].message
+
+
+def test_final_artifact_accepts_numeric_select_as_repeat_count():
+    xlsx = _codebook_workbook(
+        [
+            ("select_one sizes", "size", None),
+            ("begin_repeat", "household", "${size}"),
+            ("integer", "age", None),
+            ("end_repeat", None, None),
+        ],
+        [("sizes", "1", "One"), ("sizes", "2", "Two")],
+        survey_columns=["type", "name", "repeat_count"],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_final_artifact_rejects_reference_across_a_nested_repeat():
+    xlsx = _expression_survey(
+        [
+            ("begin_repeat", "outer", None, None, "2"),
+            ("begin_repeat", "inner", None, None, "2"),
+            ("integer", "inner_value"),
+            ("end_repeat",),
+            ("calculate", "outside_inner", None, "${inner_value}"),
+            ("end_repeat",),
+        ]
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["EXPRESSION_REPEAT_CONTEXT_INVALID"]
+    assert issues[0].owner["name"] == "outside_inner"
+
+
+def test_final_artifact_rejects_generated_repeat_count_name_collision():
+    xlsx = _expression_survey(
+        [
+            ("integer", "household_count"),
+            ("begin_repeat", "household", None, None, "5"),
+            ("integer", "age"),
+            ("end_repeat",),
+        ]
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_GENERATED_NAME_DUPLICATE"]
+    assert issues[0].field == "repeat_count"
+    assert "generated node 'household_count'" in issues[0].message
+
+
+def test_plain_reference_repeat_count_does_not_generate_a_count_node():
+    xlsx = _expression_survey(
+        [
+            ("integer", "household_count"),
+            ("begin_repeat", "household", None, None, "${household_count}"),
+            ("integer", "age"),
+            ("end_repeat",),
+        ]
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_final_artifact_rejects_calculation_cycle():
+    xlsx = _expression_survey(
+        [
+            ("calculate", "a", None, "${b} + 1"),
+            ("calculate", "b", None, "${a} + 1"),
+        ]
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["EXPRESSION_DEPENDENCY_CYCLE"]
+    assert issues[0].row == 2
+    assert "a -> b -> a" in issues[0].message
+
+
+def test_final_artifact_rejects_self_referencing_relevant():
+    xlsx = _expression_survey([("integer", "a", "${a} > 1")])
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["EXPRESSION_DEPENDENCY_CYCLE"]
+    assert "a -> a" in issues[0].message
+
+
+def test_final_artifact_rejects_group_relevant_that_depends_on_its_own_member():
+    xlsx = _expression_survey(
+        [
+            ("begin_group", "section", "${inside} = 1"),
+            ("integer", "inside"),
+            ("end_group",),
+        ]
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["EXPRESSION_DEPENDENCY_CYCLE"]
+    assert issues[0].owner["name"] == "section"
+    assert "section -> inside -> section" in issues[0].message
+
+
+def test_final_artifact_rejects_calculation_that_reads_itself():
+    xlsx = _expression_survey([("integer", "q", None, ". + 1")])
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["EXPRESSION_DEPENDENCY_CYCLE"]
+    assert "q -> q" in issues[0].message
+
+
+def test_reference_inside_text_is_not_a_dependency_cycle():
+    xlsx = _expression_survey([("calculate", "q", None, "string-length('${q}')")])
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_deeply_nested_expression_does_not_break_the_gate():
+    xlsx = _expression_survey(
+        [("calculate", "q", None, "(" * 300 + "1 + 1" + ")" * 300)]
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_constraint_self_reference_is_not_a_dependency_cycle():
+    xlsx = _expression_survey(
+        [("integer", "a", "${a} > 0")],
+        columns=("constraint",),
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_generated_survey_reports_malformed_subquestion_expression_owner(
+    submodule_1,
+    root_question_1,
+    sub_question_1,
+):
+    sub_question_1.relevant = f"${{{root_question_1.name}}} >"
+    sub_question_1.save(update_fields=["relevant"])
+    form = XLSForm(
+        name="Malformed subquestion expression",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[sub_question_1.id],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == ["EXPRESSION_INCOMPLETE"]
+    assert result.errors[0].owner == {
+        "model": "SubQuestion",
+        "id": sub_question_1.id,
+        "name": sub_question_1.name,
+    }
+    assert result.errors[0].field == "relevant"
+
+
+def test_generated_survey_emits_valid_expressions_unchanged_and_passes(
+    submodule_1,
+    root_question_1,
+    root_question_2,
+):
+    expressions = {
+        "relevant": f"count-selected(${{{root_question_2.name}}}) > 0",
+        "constraint": ". >= 0 and . <= 7",
+        "required": "yes",
+    }
+    for field_name, expression in expressions.items():
+        setattr(root_question_1, field_name, expression)
+    root_question_1.save(update_fields=list(expressions))
+    form = XLSForm(
+        name="Valid expressions",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+    artifact = build_generated_artifact(form)
+
+    result = validate_generated_artifact(artifact)
+
+    assert result.valid is True
+    survey = load_workbook(io.BytesIO(artifact.xlsx_bytes))["survey"]
+    headers = [cell.value for cell in survey[1]]
+    (row,) = [
+        row
+        for row in survey.iter_rows(min_row=2, values_only=True)
+        if row[headers.index("name")] == root_question_1.name
+    ]
+    for field_name, expression in expressions.items():
+        assert row[headers.index(field_name)] == expression

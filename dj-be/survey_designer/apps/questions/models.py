@@ -120,16 +120,6 @@ class BaseQuestion(models.Model):
     def get_base_questions(cls, names: list):
         return cls.objects.filter_by_names(names)
 
-    def set_instance_constraint_dependencies(self, base_questions):
-        self.instance.constraint_dependencies.set(
-            question.id for question in base_questions
-        )
-
-    def set_instance_relevant_dependencies(self, base_questions):
-        self.instance.relevant_dependencies.set(
-            question.id for question in base_questions
-        )
-
 
 class RootQuestion(BaseWFPModelMixin, QuestionFieldsMixin):
     submodule = models.ManyToManyField(
@@ -164,6 +154,15 @@ class RootQuestion(BaseWFPModelMixin, QuestionFieldsMixin):
     )
     calculation_dependencies = models.ManyToManyField(
         BaseQuestion, related_name="root_question_calculation_dependencies", blank=True
+    )
+    required_dependencies = models.ManyToManyField(
+        BaseQuestion, related_name="root_question_required_dependencies", blank=True
+    )
+    read_only_dependencies = models.ManyToManyField(
+        BaseQuestion, related_name="root_question_read_only_dependencies", blank=True
+    )
+    default_dependencies = models.ManyToManyField(
+        BaseQuestion, related_name="root_question_default_dependencies", blank=True
     )
 
     class Meta:
@@ -282,6 +281,15 @@ class SubQuestion(BaseWFPModelMixin, QuestionFieldsMixin):
     )
     calculation_dependencies = models.ManyToManyField(
         BaseQuestion, related_name="sub_question_calculation_dependencies", blank=True
+    )
+    required_dependencies = models.ManyToManyField(
+        BaseQuestion, related_name="sub_question_required_dependencies", blank=True
+    )
+    read_only_dependencies = models.ManyToManyField(
+        BaseQuestion, related_name="sub_question_read_only_dependencies", blank=True
+    )
+    default_dependencies = models.ManyToManyField(
+        BaseQuestion, related_name="sub_question_default_dependencies", blank=True
     )
 
     class Meta:
@@ -492,19 +500,6 @@ class Calculation(BaseWFPModelMixin):
         BaseQuestion, related_name="calculations", blank=True
     )
 
-    @staticmethod
-    def get_question_names(calculation: str):
-        return re.findall(r"\$\{(.+?)\}", calculation)
-
-    @staticmethod
-    def get_base_questions(names: list):
-        return BaseQuestion.objects.filter_by_names(names)
-
-    def set_related_questions(self):
-        names = self.get_question_names(self.calculation)
-        questions = self.get_base_questions(names)
-        self.related_questions.set(question.id for question in questions)
-
 
 class RepeatSection(BaseWFPModelMixin):
     submodule = models.ManyToManyField(
@@ -523,19 +518,6 @@ class RepeatSection(BaseWFPModelMixin):
     relevant_dependencies = models.ManyToManyField(
         BaseQuestion, related_name="repeat_section_relevant_dependencies", blank=True
     )
-
-    @staticmethod
-    def get_question_names(calculation: str):
-        return re.findall(r"\$\{(.+?)\}", calculation)
-
-    @staticmethod
-    def get_base_questions(names: list):
-        return BaseQuestion.objects.filter_by_names(names)
-
-    def set_repeat_count_dependencies(self):
-        names = self.get_question_names(self.repeat_count)
-        questions = self.get_base_questions(names)
-        self.repeat_count_dependencies.set(question.id for question in questions)
 
 
 # Translations:
