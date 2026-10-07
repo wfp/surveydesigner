@@ -125,7 +125,7 @@ class TestConstraintCreateView:
         form_data = {
             "base_questions": [root_question_1.base_question.id],
             "mode": "text",
-            "constraint": "random constraint",
+            "constraint": ". > 0",
             "constraint_message": "random constraint message",
         }
         response = logged_admin_client.post(

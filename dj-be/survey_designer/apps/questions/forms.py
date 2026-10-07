@@ -19,7 +19,6 @@ from questions.const import (
 )
 from questions.models import (
     BaseQuestion,
-    Calculation,
     ChoiceGroupFile,
     RepeatSection,
     RootQuestion,
@@ -35,7 +34,47 @@ def _user_has_change_permission(user, obj):
     return user.has_perm(f"{opts.app_label}.{codename}", obj)
 
 
-class SubQuestionAdminModelForm(ModelForm):
+class ExpressionValidationFormMixin:
+    """Validate expression fields with the shared expression service.
+
+    Every expression field is checked on every save, so an existing invalid
+    record cannot be saved unchanged.
+    """
+
+    expression_model = None
+
+    def get_expression_name(self):
+        return self.cleaned_data.get("name") or self.instance.name
+
+    def validate_expressions(self, fields, **kwargs):
+        # questions.services imports the bulk importer, which imports this module.
+        from questions.services.expression_scope import validate_expression_fields
+
+        previous_name = self.instance.name if self.instance.pk else None
+        issues = validate_expression_fields(
+            {
+                "model": self.expression_model,
+                "id": self.instance.pk,
+                "name": self.get_expression_name(),
+            },
+            {
+                field_name: self.cleaned_data.get(field_name, "")
+                for field_name in fields
+                if field_name in self.cleaned_data
+            },
+            previous_name=previous_name,
+            **kwargs,
+        )
+        for issue in issues:
+            self.add_error(
+                issue.field if issue.field in self.fields else None, issue.message
+            )
+        return issues
+
+
+class SubQuestionAdminModelForm(ExpressionValidationFormMixin, ModelForm):
+    expression_model = "SubQuestion"
+
     repeat_sections = forms.ModelMultipleChoiceField(
         queryset=RepeatSection.objects.all(),
         required=False,
@@ -94,27 +133,45 @@ class SubQuestionAdminModelForm(ModelForm):
             self.fields["repeat_sections"].queryset = RepeatSection.objects.all()
             self.fields["indicators"].queryset = Indicator.objects.all()
 
-    def check_question_names(self, field_name, field_value, error_message):
-        names = BaseQuestion.get_question_names(field_value)
-        # If there are no ${...} in the string, we consider it valid and return early
-        if not names:
-            return
-        base_questions = BaseQuestion.get_base_questions(names)
-        if not base_questions.exists():
-            self.add_error(
-                field_name,
-                f"Invalid {error_message} - Questions not found: {', '.join(names)}",
-            )
+    def get_root_question(self):
+        root_question = self.cleaned_data.get("root_question")
+        if root_question is None and self.instance.root_question_id:
+            root_question = self.instance.root_question
+        return root_question
+
+    def get_expression_name(self):
+        root_question = self.get_root_question()
+        if root_question is None:
+            return self.instance.name
+        return "".join(
+            [
+                root_question.name,
+                *(
+                    reference.name
+                    for reference in (
+                        self.cleaned_data.get("suffix"),
+                        self.cleaned_data.get("suffix_2"),
+                        self.cleaned_data.get("recall_period"),
+                    )
+                    if reference
+                ),
+            ]
+        )
+
+    def get_expression_type(self):
+        suffix = self.cleaned_data.get("suffix_2") or self.cleaned_data.get("suffix")
+        if suffix:
+            return suffix.type
+        root_question = self.get_root_question()
+        return root_question.type if root_question else ""
 
     def clean(self):
+        from questions.services.expression_validation import QUESTION_EXPRESSION_FIELDS
+
         super().clean()
         suffix = self.cleaned_data.get("suffix")
         suffix_2 = self.cleaned_data.get("suffix_2")
         recall_period = self.cleaned_data.get("recall_period")
-        constraint = self.cleaned_data.get("constraint")
-        relevant = self.cleaned_data.get("relevant")
-        choice_filter = self.cleaned_data.get("choice_filter")
-        calculation = self.cleaned_data.get("calculation")
 
         if not (suffix or recall_period):
             self.add_error("", "Suffix or Recall Period have to be selected.")
@@ -125,17 +182,14 @@ class SubQuestionAdminModelForm(ModelForm):
         if suffix and suffix_2 and suffix == suffix_2:
             self.add_error("", "Suffix cannot be the same as Suffix 2.")
 
-        if constraint:
-            self.check_question_names("constraint", constraint, "constraint")
-
-        if relevant:
-            self.check_question_names("relevant", relevant, "relevant")
-
-        if choice_filter:
-            self.check_question_names("choice_filter", choice_filter, "choice filter")
-
-        if calculation:
-            self.check_question_names("calculation", calculation, "calculation")
+        self.validate_expressions(
+            QUESTION_EXPRESSION_FIELDS,
+            question_type=self.get_expression_type(),
+            repeats=[
+                repeat_section.name
+                for repeat_section in self.cleaned_data.get("repeat_sections") or ()
+            ],
+        )
         return self.cleaned_data
 
 
@@ -153,29 +207,46 @@ class SuffixAdminForm(ModelForm):
         return data
 
 
-class CalculationAdminModelForm(ModelForm):
-    def clean_calculation(self):
+class CalculationAdminModelForm(ExpressionValidationFormMixin, ModelForm):
+    expression_model = "Calculation"
+
+    def clean(self):
+        from questions.services.expression_validation import analyse_expression
+
+        super().clean()
+        if "calculation" not in self.cleaned_data:
+            return self.cleaned_data
+
         calculation = self.cleaned_data["calculation"]
-
-        question_names = Calculation.get_question_names(calculation)
-        base_questions = Calculation.get_base_questions(question_names)
-
-        if not question_names:
+        # Calculations are not survey nodes, so they cannot be part of a cycle.
+        issues = self.validate_expressions(("calculation",), check_cycles=False)
+        if not issues and not analyse_expression(calculation.strip()).references:
             message = f"No questions found in calculation: {calculation}"
             self.add_error("calculation", message)
-
-        missing_questions = [
-            question_name
-            for question_name in question_names
-            if question_name not in {question.name for question in base_questions}
-        ]
-        if missing_questions:
-            message = f"Questions not found: {', '.join(missing_questions)}"
-            self.add_error("calculation", message)
-        return calculation
+        return self.cleaned_data
 
 
-class RootQuestionAdminModelForm(ModelForm):
+class RepeatSectionAdminModelForm(ExpressionValidationFormMixin, ModelForm):
+    expression_model = "RepeatSection"
+
+    def clean(self):
+        from questions.services.expression_validation import REPEAT_EXPRESSION_FIELDS
+
+        super().clean()
+        # A repeat's count and relevance are evaluated outside the repeat.
+        self.validate_expressions(
+            REPEAT_EXPRESSION_FIELDS,
+            members=[
+                base_question.name
+                for base_question in self.cleaned_data.get("questions") or ()
+            ],
+        )
+        return self.cleaned_data
+
+
+class RootQuestionAdminModelForm(ExpressionValidationFormMixin, ModelForm):
+    expression_model = "RootQuestion"
+
     repeat_sections = forms.ModelMultipleChoiceField(
         queryset=RepeatSection.objects.all(),
         required=False,
@@ -242,27 +313,13 @@ class RootQuestionAdminModelForm(ModelForm):
             self.fields["repeat_sections"].queryset = RepeatSection.objects.all()
             self.fields["indicators"].queryset = Indicator.objects.all()
 
-    def check_question_names(self, field_name, field_value, error_message):
-        names = BaseQuestion.get_question_names(field_value)
-        # If there are no ${...} in the string, we consider it valid and return early
-        if not names:
-            return
-        base_questions = BaseQuestion.get_base_questions(names)
-        if not base_questions.exists():
-            self.add_error(
-                field_name,
-                f"Invalid {error_message} - Questions not found: {', '.join(names)}",
-            )
-
     def clean(self):
+        from questions.services.expression_validation import QUESTION_EXPRESSION_FIELDS
+
         super().clean()
         type_ = self.cleaned_data.get("type")
         choices = self.cleaned_data.get("choices")
         choices_file = self.cleaned_data.get("choices_file")
-        constraint = self.cleaned_data.get("constraint")
-        relevant = self.cleaned_data.get("relevant")
-        choice_filter = self.cleaned_data.get("choice_filter")
-        calculation = self.cleaned_data.get("calculation")
 
         if type_:
             if type_ in (QuestionType.SELECT_ONE, QuestionType.SELECT_MULTIPLE):
@@ -285,17 +342,14 @@ class RootQuestionAdminModelForm(ModelForm):
                         "Cannot set both 'choices' and 'choices_file'. Use 'choices_file' for file-based question types.",
                     )
 
-        if constraint:
-            self.check_question_names("constraint", constraint, "constraint")
-
-        if relevant:
-            self.check_question_names("relevant", relevant, "relevant")
-
-        if choice_filter:
-            self.check_question_names("choice_filter", choice_filter, "choice filter")
-
-        if calculation:
-            self.check_question_names("calculation", calculation, "calculation")
+        self.validate_expressions(
+            QUESTION_EXPRESSION_FIELDS,
+            question_type=type_ or self.instance.type,
+            repeats=[
+                repeat_section.name
+                for repeat_section in self.cleaned_data.get("repeat_sections") or ()
+            ],
+        )
         return self.cleaned_data
 
 
@@ -834,8 +888,6 @@ class ImportRowForm(Form):
         name = cd.get("name")
         type_ = cd.get("type")
         choice_list = cd.get("choice_list")
-        relevant = cd.get("relevant")
-        constraint = cd.get("constraint")
         submodule_name = cd.get("submodule_name")
         module_name = cd.get("module_name")
         calculation = cd.get("calculation")
@@ -854,26 +906,6 @@ class ImportRowForm(Form):
 
         if type_ == "repeat" and not repeat_count:
             self.add_error("repeat_count", "This field is required.")
-
-        if calculation:
-            self.cleaned_data["calculation_dependencies"] = (
-                BaseQuestion.get_question_names(calculation)
-            )
-
-        if relevant:
-            self.cleaned_data["relevant_dependencies"] = (
-                BaseQuestion.get_question_names(relevant)
-            )
-
-        if constraint:
-            self.cleaned_data["constraint_dependencies"] = (
-                BaseQuestion.get_question_names(constraint)
-            )
-
-        if repeat_count:
-            self.cleaned_data["repeat_count_dependencies"] = (
-                BaseQuestion.get_question_names(repeat_count)
-            )
 
         if submodule_name:
             submodule = Submodule.objects.filter(name__iexact=submodule_name).first()
