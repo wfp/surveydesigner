@@ -1133,7 +1133,7 @@ examples = [
                 }
             ],
             "warnings": [],
-            "validator": {"pyxform": "4.5.0", "compatibility": "1.0"},
+            "validator": {"pyxform": "4.5.0", "compatibility": "1.1"},
         },
         response_only=True,
         description="A normalized Step 2 selected-scope validation response.",

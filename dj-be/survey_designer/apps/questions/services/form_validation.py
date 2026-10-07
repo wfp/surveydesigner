@@ -22,14 +22,34 @@ from typing import Any, Mapping, Sequence
 from xml.etree import ElementTree as ET
 
 from django.conf import settings
+from lxml import etree
 from openpyxl import load_workbook
+from pyxform.constants import NSMAP
 from pyxform.parsing.expression import is_xml_tag, parse_expression
 
 PYXFORM_VERSION = "4.5.0"
-COMPATIBILITY_VERSION = "1.0"
+COMPATIBILITY_VERSION = "1.1"
 _EMPTY_ARTIFACT_HASH = "sha256:" + hashlib.sha256(b"").hexdigest()
 _XFORMS_NS = "http://www.w3.org/2002/xforms"
 _XHTML_NS = "http://www.w3.org/1999/xhtml"
+_JAVAROSA_NS = "http://openrosa.org/javarosa"
+# Namespace prefixes pyxform declares on every generated XForm.
+_XFORM_PREFIXES = {
+    key.partition(":")[2]: uri for key, uri in NSMAP.items() if ":" in key
+}
+# Where pyxform emits each XLSForm expression column in the XForm.
+_XFORM_EXPRESSIONS = {
+    f"{{{_XFORMS_NS}}}bind": (
+        ("relevant", "relevant"),
+        ("constraint", "constraint"),
+        ("required", "required"),
+        ("readonly", "read_only"),
+        ("calculate", "calculation"),
+    ),
+    f"{{{_XFORMS_NS}}}setvalue": (("value", "default"),),
+    f"{{{_XFORMS_NS}}}itemset": (("nodeset", "choice_filter"),),
+    f"{{{_XFORMS_NS}}}repeat": ((f"{{{_JAVAROSA_NS}}}count", "repeat_count"),),
+}
 _EXTERNAL_REFERENCE = re.compile(r"jr://file-csv/([^/]+)$")
 _ENGLISH_LABEL_COLUMN = re.compile(r"^label::.*\(\s*en\s*\)$", re.IGNORECASE)
 _INTERNAL_SELECT_TYPES = ("select_one", "select_multiple")
@@ -266,14 +286,51 @@ def _normalise_messages(
     ]
 
 
+def _validate_xpath_syntax(root: ET.Element) -> list[ValidationIssue]:
+    """Compile every emitted expression with libxml2's XPath parser.
+
+    pyxform's ``validate=False`` conversion does not check XPath syntax. This
+    independent parser backs up the composition expression checks.
+    """
+
+    issues: list[ValidationIssue] = []
+    for parent in root.iter():
+        for element in parent:
+            for attribute, column in _XFORM_EXPRESSIONS.get(element.tag, ()):
+                expression = element.get(attribute)
+                if not expression or not expression.strip():
+                    continue
+                try:
+                    etree.XPath(expression, namespaces=_XFORM_PREFIXES)
+                except etree.XPathError as exc:
+                    # An itemset's nodeset is the expression; its select owns it.
+                    node = (
+                        parent.get("ref")
+                        if column == "choice_filter"
+                        else element.get("nodeset") or element.get("ref")
+                    )
+                    issues.append(
+                        _issue(
+                            "XPATH_SYNTAX_INVALID",
+                            "compatibility",
+                            f"Generated XForm has invalid XPath in {column} for '{node}': {exc}",
+                            field=node,
+                            sheet="survey",
+                            column=column,
+                        )
+                    )
+    return issues
+
+
 def validate_xml_compatibility(
     xml: str | bytes | None, external_files: Mapping[str, bytes] | None = None
 ) -> list[ValidationIssue]:
     """Check minimal pyxform output and exact-artifact file references.
 
     This is not a JavaRosa or ODK Validate replacement. Pyxform performs the
-    XLSForm checks; this seam only confirms the generated XForm shell and that
-    referenced CSV files are present in the materialized artifact.
+    XLSForm checks; this seam confirms the generated XForm shell, compiles each
+    emitted XPath expression, and checks that referenced CSV files are present
+    in the materialized artifact.
     """
 
     try:
@@ -347,6 +404,7 @@ def validate_xml_compatibility(
                         field=match.group(1),
                     )
                 )
+    issues.extend(_validate_xpath_syntax(root))
     return issues
 
 
@@ -1056,6 +1114,149 @@ def _validate_survey_references(
                     )
                 )
 
+    return issues
+
+
+def _validate_survey_expressions(
+    survey_headers: Mapping[str, int],
+    survey_rows: Sequence[tuple[Any, ...]],
+    row_source_map: Mapping[Any, Any] | None,
+) -> list[ValidationIssue]:
+    """Lint emitted expressions in the context of the composed survey.
+
+    The generated workbook is the authority for node names and nesting, so
+    repeat context and dependency cycles are decided here. Reference scope is
+    reported by ``_validate_survey_references``.
+    """
+
+    from pyxform.validators.pyxform.pyxform_reference import is_pyxform_reference
+
+    from .expression_validation import (
+        DEPENDENCY_CYCLE_FIELDS,
+        SURVEY_EXPRESSION_COLUMNS,
+        DependencyEdge,
+        ExpressionContext,
+        cycle_dependency_names,
+        dependency_cycle_issue,
+        find_dependency_cycles,
+        lint_expression,
+    )
+
+    structure = []
+    open_sections: list[tuple[str, str]] = []
+    name_repeats: dict[str, frozenset[str]] = {}
+    name_types: dict[str, str] = {}
+    first_rows: dict[str, tuple[int, str]] = {}
+    descendants: dict[str, list[str]] = defaultdict(list)
+    for row_number, row in enumerate(survey_rows, start=2):
+        declaration = _row_value(row, survey_headers, "type")
+        name = _row_value(row, survey_headers, "name")
+        row_type = _normalized_survey_row_type(declaration)
+        if row_type in _END_SURVEY_ROW_TYPES:
+            if open_sections:
+                open_sections.pop()
+            continue
+
+        repeat_chain = [
+            section_name
+            for section_kind, section_name in open_sections
+            if section_kind == "repeat"
+        ]
+        repeats = frozenset(repeat_chain)
+        structure.append((row_number, row, declaration, name, row_type, repeats))
+        if name:
+            first_rows.setdefault(name, (row_number, declaration))
+            for _, section_name in open_sections:
+                descendants[section_name].append(name)
+            # Only the innermost repeat matters: an owner outside it reads
+            # several values even when both share an outer repeat.
+            if row_type == "begin_repeat":
+                name_repeats.setdefault(name, frozenset((name,)))
+                name_types.setdefault(name, "repeat")
+            else:
+                name_repeats.setdefault(name, frozenset(repeat_chain[-1:]))
+                name_types.setdefault(
+                    name,
+                    (
+                        "group"
+                        if row_type == "begin_group"
+                        else _base_question_type(declaration)
+                    ),
+                )
+        if row_type in ("begin_group", "begin_repeat"):
+            section_kind = "repeat" if row_type == "begin_repeat" else "group"
+            open_sections.append((section_kind, name))
+
+    columns = [
+        column for column in SURVEY_EXPRESSION_COLUMNS if column in survey_headers
+    ]
+    issues: list[ValidationIssue] = []
+    edges: list[DependencyEdge] = []
+    for row_number, row, declaration, name, row_type, repeats in structure:
+        owner = _survey_row_owner(declaration, name, row_number, row_source_map)
+        is_section = row_type in ("begin_group", "begin_repeat")
+        question_type = "" if is_section else _base_question_type(declaration)
+        for column in columns:
+            value = _row_value(row, survey_headers, column)
+            if not value:
+                continue
+            # A repeat's own fields are evaluated in its parent's context.
+            context = ExpressionContext(
+                owner=owner,
+                field=column,
+                question_type=question_type,
+                layer="composition",
+                repeats=repeats,
+                own_members=(
+                    frozenset(descendants[name])
+                    if row_type == "begin_repeat"
+                    else frozenset()
+                ),
+                name_repeats=name_repeats,
+                name_types=name_types,
+                sheet="survey",
+                row=row_number,
+                column=column,
+            )
+            field_issues = lint_expression(value, context)
+            issues.extend(field_issues)
+
+            if column == "repeat_count" and not is_pyxform_reference(value):
+                generated_name = f"{name}_count"
+                if generated_name in first_rows:
+                    first_row, first_declaration = first_rows[generated_name]
+                    first_model = _generated_survey_owner(first_declaration)["model"]
+                    issues.append(
+                        _issue(
+                            "CODEBOOK_GENERATED_NAME_DUPLICATE",
+                            "composition",
+                            f"Repeat '{name}' count is emitted as generated node '{generated_name}', which duplicates a {first_model} first emitted at survey row {first_row}.",
+                            owner=owner,
+                            field=column,
+                            sheet="survey",
+                            column=column,
+                            row=row_number,
+                        )
+                    )
+
+            if field_issues or not name or column not in DEPENDENCY_CYCLE_FIELDS:
+                continue
+            dependencies = cycle_dependency_names(value, column, name, question_type)
+            for dependency in sorted(dependencies):
+                edges.append(
+                    DependencyEdge(name, dependency, owner, column, row_number)
+                )
+            if dependencies and column == "relevant" and is_section:
+                # Relevance cascades, so everything inside depends on it.
+                for descendant in descendants[name]:
+                    edges.append(
+                        DependencyEdge(descendant, name, owner, column, row_number)
+                    )
+
+    issues.extend(
+        dependency_cycle_issue(cycle, layer="composition", sheet="survey")
+        for cycle in find_dependency_cycles(edges)
+    )
     return issues
 
 
@@ -1957,6 +2158,11 @@ def validate_codebook_integrity(
             )
             issues.extend(
                 _validate_survey_references(survey_headers, survey_rows, row_source_map)
+            )
+            issues.extend(
+                _validate_survey_expressions(
+                    survey_headers, survey_rows, row_source_map
+                )
             )
         emitted_list_column = (
             "list_name" if "list_name" in choices_headers else "choice_list"

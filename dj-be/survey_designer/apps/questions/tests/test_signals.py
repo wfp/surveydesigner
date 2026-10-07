@@ -114,7 +114,7 @@ def test_admin_rename_propagates_to_equations_and_translations(
     override_q2 = {
         "constraint": f"${{{old}}} = 5",
         "relevant": f"${{{old}}} > 10",
-        "choice_filter": f"${{{old}}} in some_filter",
+        "choice_filter": f"some_filter = ${{{old}}}",
         "calculation": f"${{{old}}} + 1",
     }
     type_override = None
@@ -133,7 +133,7 @@ def test_admin_rename_propagates_to_equations_and_translations(
     root_question_2.refresh_from_db()
     assert root_question_2.relevant == f"${{{old}}} > 10"
     assert root_question_2.constraint == f"${{{old}}} = 5"
-    assert root_question_2.choice_filter == f"${{{old}}} in some_filter"
+    assert root_question_2.choice_filter == f"some_filter = ${{{old}}}"
     assert root_question_2.calculation == f"${{{old}}} + 1"
 
     # Admin save_model sets dependency M2Ms from equation parsing
@@ -183,7 +183,7 @@ def test_admin_rename_propagates_to_equations_and_translations(
 
     assert root_question_2.relevant == f"${{{new}}} > 10"
     assert root_question_2.constraint == f"${{{new}}} = 5"
-    assert root_question_2.choice_filter == f"${{{new}}} in some_filter"
+    assert root_question_2.choice_filter == f"some_filter = ${{{new}}}"
     assert root_question_2.calculation == f"${{{new}}} + 1"
 
     assert t_en.label == f"EN label uses ${{{new}}}"

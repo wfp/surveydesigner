@@ -30,7 +30,15 @@ class TestSubmoduleCompositionValidator:
 
     @pytest.mark.parametrize(
         "field",
-        ("relevant", "constraint", "calculation", "choice_filter"),
+        (
+            "relevant",
+            "constraint",
+            "calculation",
+            "choice_filter",
+            "required",
+            "read_only",
+            "default",
+        ),
     )
     def test_validate_dependencies_uses_non_selected_submodules(
         self,
