@@ -1,13 +1,12 @@
 # Survey Designer
 
-Survey Designer is an application that allows users in the field to build
-surveys in a fast and easy way while giving them the flexibility to make
-necessary adjustments while also maintaining WFP standard labeling & naming
-conventions.
-This is to improve the overall data quality when it comes to survey design,
-data collection & analysis (saving time and resources) as well as allowing for
-reproducibility and sharing resources between users. This tool is targeted for
-users that are using XLSForm or ODK-based tools (such as: MoDa or Kobo).
+[Survey Designer](https://www.surveydesigner.vam.wfp.org) is an application that allows users in different sectors to build
+surveys in a fast and easy way, while giving them the flexibility to make necessary adjustments and while maintaining standard labeling & naming
+conventions - following a standard "Codebook".
+
+This is to improve the overall data quality when it comes to survey design, data collection & analysis (saving time and resources) as well as allowing for reproducibility and sharing resources between users. 
+
+This tool is targeted for users that are using XLSForm or ODK-based tools (such as: MoDa, Kobo, ODK, ONA, Survey123 ... etc.).
 
 ## Frontend Architecture
 
