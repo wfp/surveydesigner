@@ -26,6 +26,7 @@ api_urlpatterns = [
     path("", include("surveys.urls")),
     path("", include("organization.urls")),
     path("", include("frontend_content.urls")),
+    path("release-notifications/", include("release_notifications.urls")),
     path(
         "repeat-section-autocomplete/",
         views.RepeatSectionAutocomplete.as_view(),
