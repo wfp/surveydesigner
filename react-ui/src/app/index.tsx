@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import React, { ReactNode, useEffect } from "react";
+import React, { ReactNode, useEffect, useState } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -26,12 +26,13 @@ import {
 } from "react-router-dom";
 import * as Sentry from "@sentry/react";
 import { BrowserTracing } from "@sentry/tracing";
+import { Loading } from "@wfp/react";
+import { useTranslation } from "react-i18next";
 import CookieConsent from "./components/CookieConsent";
 
 import store, { useAppSelector, useAppDispatch } from "./redux/store";
 import ScrollToTop from "./utils/scrollToTop";
 import { API, VERSION } from "./utils";
-import { useTranslation } from "react-i18next";
 import { loadUserData } from "./redux/actions/authActions";
 
 if (import.meta.env.PROD) {
@@ -64,11 +65,13 @@ const { lazy } = React;
 const Home = lazy(() => import("./views/Home"));
 const SurveyWizard = lazy(() => import("./components/SurveyWizard"));
 const ApiKeys = lazy(() => import("./views/APIKeys"));
+const Notifications = lazy(() => import("./views/Notifications"));
 const Faq = lazy(() => import("./views/Faq"));
 const NotFound = lazy(() => import("./views/Error/NotFound"));
 const SharedLinkLandingPage = lazy(() => import("./views/SharedLink"));
 
 function App() {
+  const [authReady, setAuthReady] = useState(false);
   const { i18n } = useTranslation();
   window.global = window;
   const dispatch = useAppDispatch();
@@ -90,8 +93,16 @@ function App() {
   }, []);
 
   useEffect(() => {
-    dispatch(loadUserData());
+    let active = true;
+    dispatch(loadUserData()).finally(() => {
+      if (active) setAuthReady(true);
+    });
+    return () => {
+      active = false;
+    };
   }, [dispatch]);
+
+  if (!authReady) return <Loading withOverlay small={false} />;
 
   return (
     <Router>
@@ -99,6 +110,14 @@ function App() {
       <CookieConsent />
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route
+          path="/notifications"
+          element={
+            <PrivateRoute>
+              <Notifications />
+            </PrivateRoute>
+          }
+        />
         <Route
           path="/design/:step"
           element={
