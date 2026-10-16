@@ -2384,7 +2384,7 @@ def test_final_artifact_rejects_repeat_member_referenced_outside_the_repeat():
     assert "inside repeat 'household'" in issues[0].message
 
 
-def test_final_artifact_accepts_references_within_the_same_repeat():
+def test_final_artifact_accepts_valid_repeat_references():
     xlsx = _expression_survey(
         [
             ("integer", "size"),
@@ -2392,6 +2392,7 @@ def test_final_artifact_accepts_references_within_the_same_repeat():
             ("integer", "age"),
             ("integer", "years_left", "${age} < 65", "65 - ${age}"),
             ("end_repeat",),
+            ("calculate", "first_age", None, "${household}[1]/age"),
         ]
     )
 
@@ -2553,8 +2554,9 @@ def test_final_artifact_rejects_group_relevant_that_depends_on_its_own_member():
     assert "section -> inside -> section" in issues[0].message
 
 
-def test_final_artifact_rejects_calculation_that_reads_itself():
-    xlsx = _expression_survey([("integer", "q", None, ". + 1")])
+@pytest.mark.parametrize("expression", (". + 1", "/data/q + 1", "../q + 1"))
+def test_final_artifact_rejects_calculation_that_reads_itself(expression):
+    xlsx = _expression_survey([("integer", "q", None, expression)])
 
     issues = validate_codebook_integrity(xlsx)
 

@@ -207,11 +207,30 @@ class ExpressionReference:
     aggregated: bool = False
     # Inside a text value: pyxform substitutes a constant path, nothing is read.
     in_text: bool = False
+    # A numeric positional predicate narrows this reference's final path step.
+    positional: bool = False
+
+
+@dataclass(frozen=True)
+class ExpressionPath:
+    """A simple raw XPath path whose target can be resolved from form structure."""
+
+    steps: tuple[str, ...]
+    absolute: bool = False
+
+
+@dataclass(frozen=True)
+class ExpressionPathContext:
+    """Generated survey paths available to a raw XPath expression."""
+
+    owner_path: tuple[str, ...]
+    names_by_path: Mapping[tuple[str, ...], str]
 
 
 @dataclass(frozen=True)
 class ExpressionAnalysis:
     references: tuple[ExpressionReference, ...] = ()
+    raw_paths: tuple[ExpressionPath, ...] = ()
     result_type: str = "any"
     error_code: str | None = None
     error_message: str | None = None
@@ -244,6 +263,10 @@ class ExpressionContext:
     # For a repeat's own fields: the names emitted inside that repeat.
     own_members: frozenset[str] = frozenset()
     name_repeats: Mapping[str, frozenset[str]] = dataclasses.field(default_factory=dict)
+    # Full repeat ancestry, used when a positional predicate selects a repeat.
+    name_repeat_chains: Mapping[str, tuple[str, ...]] = dataclasses.field(
+        default_factory=dict
+    )
     name_types: Mapping[str, str] = dataclasses.field(default_factory=dict)
     sheet: str | None = None
     row: int | None = None
@@ -422,6 +445,7 @@ class _Parser:
         self.index = 0
         self.functions: list[str] = []
         self.references: list[ExpressionReference] = []
+        self.raw_paths: list[ExpressionPath] = []
         self.predicate_depth = 0
         self.reads_context = False
 
@@ -503,14 +527,20 @@ class _Parser:
 
     def path_expr(self) -> str:
         if self.token.kind == "path":
+            start = self.index
             separator = self.advance()
             if separator.value == "//" or self.starts_step():
                 self.relative_location_path()
+                self._record_raw_path(self.tokens[start : self.index])
             return "node"
         if self.starts_step():
-            if self.token.kind == "." and not self.predicate_depth:
-                self.reads_context = True
+            start = self.index
             self.relative_location_path()
+            path = self._raw_path(self.tokens[start : self.index])
+            if path is not None:
+                self.raw_paths.append(path)
+                if path.steps == (".",) and not self.predicate_depth:
+                    self.reads_context = True
             return "node"
         result = self.filter_expr()
         if self.token.kind == "path":
@@ -518,6 +548,30 @@ class _Parser:
             self.relative_location_path()
             return "node"
         return result
+
+    def _raw_path(self, tokens: Sequence[_Token]) -> ExpressionPath | None:
+        """Parse only plain child/parent paths, leaving XPath semantics to ODK."""
+
+        if self.predicate_depth or not tokens:
+            return None
+        if any(token.kind in ("[", "]", "axis", "@", "node_type") for token in tokens):
+            return None
+        if any(token.kind not in ("name", ".", "..", "path") for token in tokens):
+            return None
+        absolute = tokens[0].kind == "path" and tokens[0].value == "/"
+        if tokens[0].kind == "path" and tokens[0].value != "/":
+            return None
+        steps = tuple(token.value for token in tokens if token.kind != "path")
+        if not steps or any(
+            token.kind == "path" and token.value != "/" for token in tokens
+        ):
+            return None
+        return ExpressionPath(steps, absolute=absolute)
+
+    def _record_raw_path(self, tokens: Sequence[_Token]) -> None:
+        path = self._raw_path(tokens)
+        if path is not None:
+            self.raw_paths.append(path)
 
     def relative_location_path(self) -> None:
         self.step()
@@ -549,20 +603,34 @@ class _Parser:
         while self.token.kind == "[":
             self.predicate()
 
-    def predicate(self) -> None:
+    def predicate(self) -> bool:
         self.expect("[")
+        start = self.index
         self.predicate_depth += 1
         self.expr()
         self.predicate_depth -= 1
         self.expect("]")
+        predicate_tokens = self.tokens[start : self.index - 1]
+        if len(predicate_tokens) != 1 or predicate_tokens[0].kind != "number":
+            return False
+        number = float(predicate_tokens[0].value)
+        return number >= 0 and number.is_integer()
 
     def filter_expr(self) -> str:
+        reference_primary = self.token.kind == "reference"
         result = self.primary_expr()
-        # A predicate on ${name} applies to each repeated node, so it does not
-        # narrow repeated values the way an aggregate does.
+        reference_index = len(self.references) - 1
+        positional = False
+        has_predicate = False
         while self.token.kind == "[":
-            self.predicate()
+            has_predicate = True
+            positional = self.predicate() or positional
             result = "node"
+        if has_predicate and reference_primary and reference_index >= 0:
+            reference = self.references[reference_index]
+            self.references[reference_index] = dataclasses.replace(
+                reference, positional=positional
+            )
         return result
 
     def primary_expr(self) -> str:
@@ -655,6 +723,7 @@ def analyse_expression(expression: str) -> ExpressionAnalysis:
         return ExpressionAnalysis(references=_token_references(tokens))
     return ExpressionAnalysis(
         references=tuple(parser.references),
+        raw_paths=tuple(parser.raw_paths),
         result_type=result_type,
         constant=_constant(tokens),
         reads_context=parser.reads_context,
@@ -703,12 +772,17 @@ def expression_dependency_names(
 
 
 def cycle_dependency_names(
-    expression: Any, field_name: str, owner_name: str, question_type: str = ""
+    expression: Any,
+    field_name: str,
+    owner_name: str,
+    question_type: str = "",
+    path_context: ExpressionPathContext | None = None,
 ) -> frozenset[str]:
     """Names whose values an expression reads when it is evaluated.
 
     References inside text values become constant paths and are not read,
-    while "." reads the owner itself.
+    while "." reads the owner itself. Plain raw paths are resolved when the
+    caller supplies the generated survey paths in ``path_context``.
     """
 
     analysis = _valid_analysis(expression, field_name, question_type)
@@ -719,9 +793,36 @@ def cycle_dependency_names(
         for reference in analysis.references
         if not reference.last_saved and not reference.in_text
     }
+    if path_context is not None:
+        for path in analysis.raw_paths:
+            target_path = _resolve_expression_path(path, path_context)
+            if target_path is None:
+                continue
+            target_name = path_context.names_by_path.get(target_path)
+            if target_name:
+                names.add(target_name)
     if analysis.reads_context:
         names.add(owner_name)
     return frozenset(names)
+
+
+def _resolve_expression_path(
+    path: ExpressionPath, context: ExpressionPathContext
+) -> tuple[str, ...] | None:
+    if path.absolute:
+        current = []
+    else:
+        current = list(context.owner_path)
+    for step in path.steps:
+        if step == ".":
+            continue
+        if step == "..":
+            if not current:
+                return None
+            current.pop()
+            continue
+        current.append(step)
+    return tuple(current)
 
 
 def _reference_issues(
@@ -782,6 +883,15 @@ def _repeat_context_issues(
             not target_repeats
             or reference.aggregated
             or target_repeats & context.repeats
+            or (
+                reference.positional
+                and target_repeats == frozenset((reference.name,))
+                and set(
+                    context.name_repeat_chains.get(reference.name, (reference.name,))[
+                        :-1
+                    ]
+                ).issubset(context.repeats)
+            )
         ):
             continue
         seen.add(reference.name)
@@ -1009,6 +1119,7 @@ __all__ = [
     "DependencyEdge",
     "ExpressionAnalysis",
     "ExpressionContext",
+    "ExpressionPathContext",
     "ExpressionReference",
     "NON_NUMERIC_QUESTION_TYPES",
     "QUESTION_EXPRESSION_FIELDS",

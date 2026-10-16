@@ -2,6 +2,7 @@ import pytest
 from questions.services.expression_validation import (
     DependencyEdge,
     ExpressionContext,
+    ExpressionPathContext,
     cycle_dependency_names,
     dependency_cycle_issue,
     expression_dependency_names,
@@ -164,6 +165,7 @@ def test_reference_into_repeat_from_outside_requires_an_aggregate():
         "sum(${member}) > 1",
         "indexed-repeat(${member}, ${household}, 1) > 1",
         "count(${household}) > 0",
+        "${household}[1]/age > 1",
     ),
 )
 def test_aggregated_repeat_reference_is_accepted(expression):
@@ -326,6 +328,22 @@ def test_cycle_dependencies_only_include_values_that_are_read():
         )
         == frozenset()
     )
+    path_context = ExpressionPathContext(
+        owner_path=("data", "quest"),
+        names_by_path={
+            ("data", "quest"): "quest",
+            ("data", "other"): "other",
+        },
+    )
+    assert cycle_dependency_names(
+        "/data/quest + 1", "calculation", "quest", path_context=path_context
+    ) == {"quest"}
+    assert cycle_dependency_names(
+        "../quest + 1", "calculation", "quest", path_context=path_context
+    ) == {"quest"}
+    assert cycle_dependency_names(
+        "../other + 1", "calculation", "quest", path_context=path_context
+    ) == {"other"}
 
 
 def test_deeply_nested_expression_keeps_its_references():

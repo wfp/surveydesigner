@@ -51,6 +51,8 @@ _XFORM_EXPRESSIONS = {
     f"{{{_XFORMS_NS}}}repeat": ((f"{{{_JAVAROSA_NS}}}count", "repeat_count"),),
 }
 _EXTERNAL_REFERENCE = re.compile(r"jr://file-csv/([^/]+)$")
+# XMLConversion leaves pyxform's default main-instance root in place.
+_XFORM_ROOT_NODE_NAME = "data"
 _ENGLISH_LABEL_COLUMN = re.compile(r"^label::.*\(\s*en\s*\)$", re.IGNORECASE)
 _INTERNAL_SELECT_TYPES = ("select_one", "select_multiple")
 _EXTERNAL_SELECT_TYPES = ("select_one_from_file", "select_multiple_from_file")
@@ -1136,6 +1138,7 @@ def _validate_survey_expressions(
         SURVEY_EXPRESSION_COLUMNS,
         DependencyEdge,
         ExpressionContext,
+        ExpressionPathContext,
         cycle_dependency_names,
         dependency_cycle_issue,
         find_dependency_cycles,
@@ -1145,9 +1148,11 @@ def _validate_survey_expressions(
     structure = []
     open_sections: list[tuple[str, str]] = []
     name_repeats: dict[str, frozenset[str]] = {}
+    name_repeat_chains: dict[str, tuple[str, ...]] = {}
     name_types: dict[str, str] = {}
     first_rows: dict[str, tuple[int, str]] = {}
     descendants: dict[str, list[str]] = defaultdict(list)
+    names_by_path: dict[tuple[str, ...], str] = {}
     for row_number, row in enumerate(survey_rows, start=2):
         declaration = _row_value(row, survey_headers, "type")
         name = _row_value(row, survey_headers, "name")
@@ -1163,7 +1168,14 @@ def _validate_survey_expressions(
             if section_kind == "repeat"
         ]
         repeats = frozenset(repeat_chain)
-        structure.append((row_number, row, declaration, name, row_type, repeats))
+        path = (
+            _XFORM_ROOT_NODE_NAME,
+            *[section_name for _, section_name in open_sections],
+            name,
+        )
+        structure.append((row_number, row, declaration, name, row_type, repeats, path))
+        if name:
+            names_by_path[path] = name
         if name:
             first_rows.setdefault(name, (row_number, declaration))
             for _, section_name in open_sections:
@@ -1172,9 +1184,11 @@ def _validate_survey_expressions(
             # several values even when both share an outer repeat.
             if row_type == "begin_repeat":
                 name_repeats.setdefault(name, frozenset((name,)))
+                name_repeat_chains.setdefault(name, (*repeat_chain, name))
                 name_types.setdefault(name, "repeat")
             else:
                 name_repeats.setdefault(name, frozenset(repeat_chain[-1:]))
+                name_repeat_chains.setdefault(name, tuple(repeat_chain))
                 name_types.setdefault(
                     name,
                     (
@@ -1192,7 +1206,7 @@ def _validate_survey_expressions(
     ]
     issues: list[ValidationIssue] = []
     edges: list[DependencyEdge] = []
-    for row_number, row, declaration, name, row_type, repeats in structure:
+    for row_number, row, declaration, name, row_type, repeats, path in structure:
         owner = _survey_row_owner(declaration, name, row_number, row_source_map)
         is_section = row_type in ("begin_group", "begin_repeat")
         question_type = "" if is_section else _base_question_type(declaration)
@@ -1213,6 +1227,7 @@ def _validate_survey_expressions(
                     else frozenset()
                 ),
                 name_repeats=name_repeats,
+                name_repeat_chains=name_repeat_chains,
                 name_types=name_types,
                 sheet="survey",
                 row=row_number,
@@ -1241,7 +1256,16 @@ def _validate_survey_expressions(
 
             if field_issues or not name or column not in DEPENDENCY_CYCLE_FIELDS:
                 continue
-            dependencies = cycle_dependency_names(value, column, name, question_type)
+            dependencies = cycle_dependency_names(
+                value,
+                column,
+                name,
+                question_type,
+                path_context=ExpressionPathContext(
+                    owner_path=path,
+                    names_by_path=names_by_path,
+                ),
+            )
             for dependency in sorted(dependencies):
                 edges.append(
                     DependencyEdge(name, dependency, owner, column, row_number)
