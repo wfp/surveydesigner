@@ -1,4 +1,25 @@
 {
+    "releaseNotifications": {
+        "viewAll": "View all notifications",
+        "historyTitle": "Release notifications",
+        "new": "New",
+        "read": "Read",
+        "range": "{{min}}–{{max}} of {{total}} releases",
+        "page": "Page {{page}}",
+        "pages": "{{page}} of {{total}} pages",
+        "pageNumber": "Page number",
+        "title": "Latest changes",
+        "unread": "Latest changes, unread release",
+        "update": "Release update",
+        "version": "Version {{version}}",
+        "loading": "Loading notifications…",
+        "empty": "No new release notifications.",
+        "clear": "Clear notifications",
+        "retry": "Retry",
+        "fetchError": "Could not load release notifications. Please retry.",
+        "readError": "Could not mark this release as read. Please retry.",
+        "clearError": "Could not clear this notification. Please retry."
+    },
     "deleteSavedSurveyModal": {
         "delete": "Are you sure you want to delete the survey.",
         "actionCannotBeUndone": "This action cannot be undone.",

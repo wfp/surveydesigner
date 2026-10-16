@@ -95,6 +95,7 @@ LOCAL_APPS = [
     "survey_designer.apps.surveys",
     "survey_designer.apps.organization",
     "survey_designer.apps.frontend_content",
+    "survey_designer.apps.release_notifications",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -378,6 +379,8 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-csrftoken",
     "content-type",
     "survey-designer-organizations",
+    "baggage",
+    "sentry-trace",
 ]
 
 # Sentry

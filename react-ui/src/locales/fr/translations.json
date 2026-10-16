@@ -1,4 +1,25 @@
 {
+    "releaseNotifications": {
+        "viewAll": "Voir toutes les notifications",
+        "historyTitle": "Notifications de version",
+        "new": "Nouveau",
+        "read": "Lu",
+        "range": "{{min}}–{{max}} sur {{total}} versions",
+        "page": "Page {{page}}",
+        "pages": "{{page}} sur {{total}} pages",
+        "pageNumber": "Numéro de page",
+        "title": "Dernières modifications",
+        "unread": "Dernières modifications, version non lue",
+        "update": "Mise à jour",
+        "version": "Version {{version}}",
+        "loading": "Chargement des notifications…",
+        "empty": "Aucune nouvelle notification de version.",
+        "clear": "Effacer les notifications",
+        "retry": "Réessayer",
+        "fetchError": "Impossible de charger les notifications. Veuillez réessayer.",
+        "readError": "Impossible de marquer cette version comme lue. Veuillez réessayer.",
+        "clearError": "Impossible d’effacer cette notification. Veuillez réessayer."
+    },
     "deleteSavedSurveyModal": {
         "delete": "Êtes-vous sûr de vouloir supprimer l'enquête.",
         "actionCannotBeUndone": "Cette action ne peut pas être annulée.",
