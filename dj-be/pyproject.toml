@@ -52,6 +52,7 @@ zipp = "3.19.1"
 rq = "1.16.2"
 openpyxl = "3.1.5"
 numpy = "1.25.2"
+lxml = "5.4.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "24.10.0"
