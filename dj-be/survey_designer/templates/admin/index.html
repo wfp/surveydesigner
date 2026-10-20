@@ -23,6 +23,17 @@
           Bulk Upload/Edits
         </a>
       {% endif %}
+      {% if user.is_superuser or user.is_global_admins_member %}
+        {% if perms.questions.view_rootquestion and perms.questions.view_subquestion and perms.questions.view_repeatsection and perms.questions.view_calculation %}
+        <a
+          href="{% url 'survey-health' %}"
+          class="button upload-button"
+          style="padding: 7px 15px;"
+        >
+          Survey health
+        </a>
+        {% endif %}
+      {% endif %}
     </div>
   </div>
 {% endblock %}
