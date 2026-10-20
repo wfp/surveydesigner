@@ -1,0 +1,288 @@
+#survey-health {
+  max-width: 1180px;
+}
+
+#survey-health [hidden] {
+  display: none !important;
+}
+
+.survey-health-heading,
+.survey-health-results-heading,
+.survey-health-finding-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.survey-health-heading {
+  margin-bottom: 1.25rem;
+}
+
+.survey-health-heading h1,
+.survey-health-results-heading h2,
+.survey-health-scan-errors h2 {
+  margin: 0;
+}
+
+.survey-health-scope {
+  color: var(--body-quiet-color, #666);
+  line-height: 1.5;
+  margin: .4rem 0 0;
+  max-width: 850px;
+}
+
+.survey-health-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: .5rem;
+}
+
+.survey-health-status {
+  background: var(--darkened-bg, #f8f8f8);
+  border-left: 4px solid var(--link-fg, #447e9b);
+  margin: 1rem 0;
+  padding: .75rem 1rem;
+}
+
+.survey-health-progress {
+  align-items: center;
+  display: flex;
+  gap: .75rem;
+  margin: .75rem 0 1.25rem;
+}
+
+.survey-health-progress-track {
+  background: var(--border-color, #ddd);
+  border-radius: 999px;
+  height: .55rem;
+  min-width: 150px;
+  overflow: hidden;
+  width: min(500px, 60%);
+}
+
+.survey-health-progress-track span {
+  background: var(--link-fg, #447e9b);
+  display: block;
+  height: 100%;
+  transition: width .2s ease;
+  width: 0;
+}
+
+.survey-health-progress-track.is-indeterminate span {
+  transform: translateX(-130%);
+  width: 35%;
+  animation: survey-health-progress-indeterminate 1.4s ease-in-out infinite;
+}
+
+@keyframes survey-health-progress-indeterminate {
+  0% { transform: translateX(-130%); }
+  100% { transform: translateX(360%); }
+}
+
+.survey-health-summary {
+  display: grid;
+  gap: .75rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 1.25rem 0 2rem;
+}
+
+.survey-health-card {
+  background: var(--darkened-bg, #f8f8f8);
+  border: 1px solid var(--hairline-color, #ddd);
+  border-radius: 4px;
+  padding: 1rem;
+}
+
+.survey-health-card-warning {
+  border-color: #e0a52b;
+}
+
+.survey-health-card-label {
+  color: var(--body-quiet-color, #666);
+  display: block;
+  font-size: .8rem;
+  text-transform: uppercase;
+}
+
+.survey-health-card strong {
+  display: block;
+  font-size: 1.75rem;
+  margin-top: .25rem;
+}
+
+.survey-health-filters {
+  align-items: end;
+  background: var(--darkened-bg, #f8f8f8);
+  border: 1px solid var(--hairline-color, #ddd);
+  display: grid;
+  gap: .75rem;
+  grid-template-columns: 1fr 1fr 1.2fr 2fr;
+  margin: 1rem 0;
+  padding: .9rem;
+}
+
+.survey-health-filters label {
+  display: block;
+  font-size: .8rem;
+  font-weight: 600;
+  margin-bottom: .25rem;
+}
+
+.survey-health-filters input,
+.survey-health-filters select {
+  box-sizing: border-box;
+  min-height: 2.25rem;
+  width: 100%;
+}
+
+.survey-health-results-count {
+  color: var(--body-quiet-color, #666);
+  font-size: .9rem;
+}
+
+.survey-health-empty {
+  background: var(--darkened-bg, #f8f8f8);
+  color: var(--body-quiet-color, #666);
+  padding: 1.25rem;
+  text-align: center;
+}
+
+.survey-health-list {
+  display: grid;
+  gap: .75rem;
+}
+
+.survey-health-finding,
+.survey-health-scan-error {
+  border: 1px solid var(--hairline-color, #ddd);
+  border-radius: 4px;
+  padding: 1rem;
+}
+
+.survey-health-finding-heading h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.survey-health-object-meta {
+  color: var(--body-quiet-color, #666);
+  font-size: .85rem;
+  margin: .2rem 0 0;
+}
+
+.survey-health-code {
+  background: var(--darkened-bg, #f8f8f8);
+  border-radius: 3px;
+  font-family: monospace;
+  font-size: .8rem;
+  padding: .3rem .45rem;
+  word-break: break-word;
+}
+
+.survey-health-finding-details {
+  display: grid;
+  gap: .35rem 1rem;
+  grid-template-columns: 9rem 1fr;
+  margin: .9rem 0 0;
+}
+
+.survey-health-finding-details dt {
+  color: var(--body-quiet-color, #666);
+  font-weight: 600;
+}
+
+.survey-health-finding-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.survey-health-expression {
+  background: var(--darkened-bg, #f8f8f8);
+  font-family: monospace;
+  max-height: 8rem;
+  overflow: auto;
+  padding: .35rem;
+  white-space: pre-wrap;
+}
+
+.survey-health-finding-actions {
+  margin-top: .9rem;
+}
+
+.survey-health-pagination {
+  align-items: center;
+  display: flex;
+  gap: .75rem;
+  justify-content: center;
+  margin: 1.25rem 0;
+}
+
+.survey-health-scan-errors {
+  margin-top: 2rem;
+}
+
+.survey-health-scan-errors > p,
+.survey-health-scan-error p {
+  color: var(--body-quiet-color, #666);
+}
+
+.survey-health-scan-error + .survey-health-scan-error {
+  margin-top: .5rem;
+}
+
+.survey-health-limitations {
+  color: var(--body-quiet-color, #666);
+  font-size: .85rem;
+  margin-top: 2rem;
+}
+
+@media (max-width: 800px) {
+  .survey-health-heading {
+    display: block;
+  }
+
+  .survey-health-actions {
+    margin-top: 1rem;
+  }
+
+  .survey-health-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .survey-health-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .survey-health-summary,
+  .survey-health-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .survey-health-finding-heading {
+    display: block;
+  }
+
+  .survey-health-code {
+    display: inline-block;
+    margin-top: .5rem;
+  }
+
+  .survey-health-finding-details {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .survey-health-progress-track span {
+    transition: none;
+  }
+
+  .survey-health-progress-track.is-indeterminate span {
+    animation: none;
+    transform: none;
+    width: 50%;
+  }
+}

@@ -1,15 +1,19 @@
+import json
 from collections import defaultdict
 
 from dal import autocomplete
 from django.conf import settings
-from django.contrib import messages
+from django.contrib import admin, messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Q
 from django.db.models.functions import Collate
 from django.forms import formset_factory
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, reverse
+from django.urls import NoReverseMatch
+from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import FormView
 from modules.models import Indicator
 from questions.models import (
@@ -35,6 +39,171 @@ from .services.expression_scope import (
     sync_expression_dependencies,
     validate_expression_fields,
 )
+from .services.health import (
+    MODEL_ORDER,
+    MODEL_SPECS,
+    HealthScanInfrastructureError,
+    count_totals,
+    scan_batch,
+)
+
+
+def _health_user_can_access(user):
+    """Require global admin authority and view permission for every scan model."""
+
+    if not user or not user.is_authenticated:
+        return False
+    if not (user.is_superuser or user.is_global_admins_member):
+        return False
+    return all(
+        user.has_perm(
+            f"{spec.model._meta.app_label}.view_{spec.model._meta.model_name}"
+        )
+        for spec in MODEL_SPECS.values()
+    )
+
+
+def _health_headers(response):
+    response["Cache-Control"] = "no-store, private"
+    response["Pragma"] = "no-cache"
+    return response
+
+
+def _health_error(message, status, **extra):
+    body = {"status": "error", "message": message, **extra}
+    return _health_headers(JsonResponse(body, status=status))
+
+
+def _health_edit_url(request, model, obj, field=""):
+    """Build a link only when the registered admin allows this object to change."""
+
+    if obj is None:
+        return None
+    model_admin = admin.site._registry.get(model)
+    if model_admin is None:
+        return None
+    try:
+        if not model_admin.has_change_permission(request, obj):
+            return None
+        url = reverse(
+            f"admin:{model._meta.app_label}_{model._meta.model_name}_change",
+            args=[obj.pk],
+        )
+    except (LookupError, NoReverseMatch, PermissionDenied):
+        return None
+    if field:
+        url = f"{url}#id_{field}"
+    return url
+
+
+def _health_add_edit_links(request, payload, objects):
+    """Decorate findings from the page's already-loaded objects.
+
+    This callback runs inside the scanner's read-only transaction, so link
+    permission checks share the same timeout and transaction guard as the
+    validation queries.
+    """
+
+    permissions = {}
+    resolved = {}
+
+    def resolve_object(finding):
+        key = (finding.get("model"), finding.get("id"))
+        if key in objects:
+            return objects[key]
+        if key in resolved:
+            return resolved[key]
+        spec = MODEL_SPECS.get(finding.get("model"))
+        object_id = finding.get("id")
+        if (
+            spec is None
+            or not isinstance(object_id, int)
+            or isinstance(object_id, bool)
+            or object_id <= 0
+        ):
+            resolved[key] = None
+            return None
+        # Dependency graph errors may refer to an object outside this page.
+        # Load only the identity fields needed by the registered admin's
+        # permission check; this callback remains inside the scan guard.
+        resolved[key] = (
+            spec.model.objects.only("id", "name").filter(pk=object_id).first()
+        )
+        return resolved[key]
+
+    for findings, field_anchor in (
+        (payload.get("issues", []), True),
+        (payload.get("scan_errors", []), False),
+    ):
+        for finding in findings:
+            obj = resolve_object(finding)
+            if obj is None:
+                continue
+            key = (finding.get("model"), obj.pk)
+            if key not in permissions:
+                permissions[key] = _health_edit_url(request, type(obj), obj)
+            if permissions[key]:
+                finding["edit_url"] = (
+                    f"{permissions[key]}#id_{finding.get('field')}"
+                    if field_anchor
+                    else permissions[key]
+                )
+    return payload
+
+
+@require_GET
+def survey_health(request):
+    """Render the idle health page; scans only happen through the POST endpoint."""
+
+    if not _health_user_can_access(request.user):
+        raise PermissionDenied
+    context = admin.site.each_context(request)
+    context.update(
+        {
+            "title": "Survey health",
+            "health_models": [
+                {"key": key, "label": MODEL_SPECS[key].label} for key in MODEL_ORDER
+            ],
+            "health_scan_url": reverse("survey-health-scan"),
+        }
+    )
+    return _health_headers(render(request, "admin/survey_health.html", context))
+
+
+@require_POST
+def survey_health_scan(request):
+    """Scan one bounded page for the authorized admin browser session."""
+
+    if not _health_user_can_access(request.user):
+        raise PermissionDenied
+    try:
+        data = json.loads(request.body.decode("utf-8") or "{}")
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return _health_error("Invalid health scan request.", 400)
+    if not isinstance(data, dict):
+        return _health_error("Invalid health scan request.", 400)
+    if data.get("action") == "totals":
+        try:
+            totals = count_totals()
+        except HealthScanInfrastructureError as error:
+            return _health_error(str(error), 503, complete=False)
+        return _health_headers(JsonResponse({"status": "ok", "totals": totals}))
+    model_key = data.get("model")
+    if not isinstance(model_key, str) or model_key not in MODEL_SPECS:
+        return _health_error("Unknown health scan model.", 400)
+    try:
+        payload = scan_batch(
+            model_key,
+            after_pk=data.get("after_pk", 0),
+            requested_limit=data.get("limit", 25),
+            decorate=lambda result, objects: _health_add_edit_links(
+                request, result, objects
+            ),
+        )
+    except HealthScanInfrastructureError as error:
+        return _health_error(str(error), 503, complete=False)
+    payload["status"] = "ok"
+    return _health_headers(JsonResponse(payload))
 
 
 def _collation_safe_icontains(queryset, search_term, field_names):
