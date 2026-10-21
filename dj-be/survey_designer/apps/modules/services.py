@@ -3,6 +3,7 @@ from collections import defaultdict
 from django.db.models import Prefetch, Q
 from modules.models import Indicator, Module, Submodule
 from questions.models import BaseQuestion, RepeatSection, RootQuestion, SubQuestion
+from questions.services.expression_validation import QUESTION_EXPRESSION_FIELDS
 from questions.services.form_validation import (
     ValidationIssue,
     expression_question_references,
@@ -146,7 +147,7 @@ class SubmoduleCompositionValidator:
         if isinstance(owner, (Module, Submodule)):
             return ("relevant",)
         if isinstance(owner, (RootQuestion, SubQuestion)):
-            return ("relevant", "constraint", "calculation", "choice_filter")
+            return QUESTION_EXPRESSION_FIELDS
         if isinstance(owner, RepeatSection):
             return ("relevant", "repeat_count")
         return ()

@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from dal import autocomplete
 from django.conf import settings
 from django.contrib import messages
@@ -27,6 +29,12 @@ from .forms import (
     UploadQuestionsForm,
 )
 from .services import DataImport, QuestionsExport
+from .services.expression_scope import (
+    expression_references,
+    load_reference_scope,
+    sync_expression_dependencies,
+    validate_expression_fields,
+)
 
 
 def _collation_safe_icontains(queryset, search_term, field_names):
@@ -63,6 +71,48 @@ class AdminQuestionBulkEditMixin(LoginRequiredMixin, UserPassesTestMixin):
             + ", ".join(unauthorized_questions),
         )
         return True
+
+    def add_expression_errors(self, form, field_name, formula, base_questions):
+        """Validate the formula for every selected question before saving it."""
+        error_field = field_name if field_name in form.fields else None
+        has_error = False
+        scope = load_reference_scope(expression_references({field_name: formula}))
+        repeats_by_question = defaultdict(list)
+        for (
+            base_question_id,
+            repeat_name,
+        ) in RepeatSection.questions.through.objects.filter(
+            basequestion__in=base_questions
+        ).values_list(
+            "basequestion_id", "repeatsection__name"
+        ):
+            repeats_by_question[base_question_id].append(repeat_name)
+        for base_question in base_questions:
+            instance = base_question.instance
+            if isinstance(instance, RepeatSection):
+                # A repeat's relevance is evaluated outside the repeat.
+                question_kwargs = {
+                    "members": [member.name for member in instance.questions.all()]
+                }
+            else:
+                question_kwargs = {
+                    "question_type": instance.type or "",
+                    "repeats": repeats_by_question[base_question.id],
+                }
+            issues = validate_expression_fields(
+                {
+                    "model": instance.__class__.__name__,
+                    "id": instance.id,
+                    "name": instance.name,
+                },
+                {field_name: formula},
+                scope=scope,
+                **question_kwargs,
+            )
+            for issue in issues:
+                form.add_error(error_field, issue.message)
+                has_error = True
+        return has_error
 
 
 class ConstraintCreateView(AdminQuestionBulkEditMixin, FormView):
@@ -101,11 +151,10 @@ class ConstraintCreateView(AdminQuestionBulkEditMixin, FormView):
         return context
 
     def get_formula(self, form, formset):
-        dependencies = []
         formulas = []
         for count, formset_form in enumerate(formset.forms):
             logical_operator = (
-                f"{formset_form.cleaned_data['logical_operator']}" if count > 0 else ""
+                f"{formset_form.cleaned_data['logical_operator']} " if count > 0 else ""
             )
 
             operator = formset_form.cleaned_data["operator"]
@@ -114,7 +163,6 @@ class ConstraintCreateView(AdminQuestionBulkEditMixin, FormView):
             right_side_value = ""
             if reference_question == ReferenceQuestionType.OTHER:
                 question = formset_form.cleaned_data["question"]
-                dependencies.append(question)
                 question_name = question.instance.name
                 right_side_value = f"${{{question_name}}}"
             elif reference_question == ReferenceQuestionType.SELF:
@@ -122,24 +170,7 @@ class ConstraintCreateView(AdminQuestionBulkEditMixin, FormView):
 
             formulas.append(f"{logical_operator}. {operator} {right_side_value}")
 
-        return " ".join(formulas), dependencies
-
-    def break_down_text_formula(self, form, formula):
-        question_names = BaseQuestion.get_question_names(formula)
-        base_questions = BaseQuestion.get_base_questions(question_names)
-        has_error = False
-
-        for question in base_questions:
-            question_names.remove(question.name)
-
-        if question_names:
-            message = f"Questions not found: {', '.join(question_names)}"
-            form.add_error("constraint", message)
-            has_error = True
-
-        if has_error:
-            return None, None
-        return formula, base_questions
+        return " ".join(formulas)
 
     def create_translations(self, base_question, formset):
         for form in formset.forms:
@@ -170,7 +201,6 @@ class ConstraintCreateView(AdminQuestionBulkEditMixin, FormView):
 
         if form.is_valid() and translation_formset.is_valid():
             formula = None
-            dependencies = None
             base_questions = form.cleaned_data["base_questions"]
             if self.add_object_permission_errors(form, base_questions):
                 return self.render_to_response(
@@ -183,12 +213,12 @@ class ConstraintCreateView(AdminQuestionBulkEditMixin, FormView):
 
             if form.cleaned_data["mode"] == "text":
                 formula = form.cleaned_data["constraint"]
-                formula, dependencies = self.break_down_text_formula(form, formula)
-            else:
-                if formset.is_valid():
-                    formula, dependencies = self.get_formula(form, formset)
+            elif formset.is_valid():
+                formula = self.get_formula(form, formset)
 
-            if formula:
+            if formula and not self.add_expression_errors(
+                form, "constraint", formula, base_questions
+            ):
                 for question in base_questions:
                     question.instance.constraint = formula
                     question.instance.constraint_message = form.cleaned_data[
@@ -197,9 +227,7 @@ class ConstraintCreateView(AdminQuestionBulkEditMixin, FormView):
                     question.instance.updated_by = request.user
                     question.instance.save()
                     self.create_translations(question, translation_formset)
-
-                    if dependencies:
-                        question.set_instance_constraint_dependencies(dependencies)
+                    sync_expression_dependencies(question.instance)
                 messages.success(request, "Constraint successfully added.")
                 return self.form_valid(form)
 
@@ -226,23 +254,6 @@ class RelevantCreateView(AdminQuestionBulkEditMixin, FormView):
             initial["base_questions"] = BaseQuestion.objects.filter(id__in=ids)
         return initial
 
-    def break_down_text_formula(self, form, formula):
-        question_names = BaseQuestion.get_question_names(formula)
-        base_questions = BaseQuestion.get_base_questions(question_names)
-        has_error = False
-
-        for question in base_questions:
-            question_names.remove(question.name)
-
-        if question_names:
-            message = f"Questions not found: {', '.join(question_names)}"
-            form.add_error("relevant", message)
-            has_error = True
-
-        if has_error:
-            return None, None
-        return formula, base_questions
-
     def post(self, request, *args, **kwargs):
         form = self.get_form()
 
@@ -256,16 +267,14 @@ class RelevantCreateView(AdminQuestionBulkEditMixin, FormView):
                 )
 
             formula = form.cleaned_data["relevant"]
-            formula, dependencies = self.break_down_text_formula(form, formula)
-
-            if formula:
+            if not self.add_expression_errors(
+                form, "relevant", formula, base_questions
+            ):
                 for question in base_questions:
                     question.instance.relevant = formula
                     question.instance.updated_by = request.user
                     question.instance.save()
-
-                    if dependencies:
-                        question.set_instance_relevant_dependencies(dependencies)
+                    sync_expression_dependencies(question.instance)
                 messages.success(request, "Relevant formula successfully added.")
                 return self.form_valid(form)
 
