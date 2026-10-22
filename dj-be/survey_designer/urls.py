@@ -45,6 +45,16 @@ api_urlpatterns = [
 
 admin_urlpatterns = [
     path(
+        "survey-health/",
+        admin.site.admin_view(views.survey_health),
+        name="survey-health",
+    ),
+    path(
+        "survey-health/scan/",
+        admin.site.admin_view(views.survey_health_scan),
+        name="survey-health-scan",
+    ),
+    path(
         "questions/constraint/",
         views.ConstraintCreateView.as_view(),
         name="constraint",

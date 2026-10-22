@@ -40,6 +40,12 @@ GENERATED_METADATA_NAMES = frozenset(
 # Bound the dependency walk; cycles longer than this are left to the
 # final-artifact gate, which sees the whole composed survey.
 _MAX_CYCLE_SEARCH_NODES = 500
+
+
+class CycleTraversalLimitExceeded(RuntimeError):
+    """A caller with bounded cycle traversal could not inspect the full graph."""
+
+
 _DEPENDENCY_RELATIONS = {
     RootQuestion: {
         "relevant": "relevant_dependencies",
@@ -189,6 +195,8 @@ def _dependency_cycle_issues(
     *,
     previous_name: str | None,
     overrides: Mapping[str, tuple[Mapping[str, Any], Mapping[str, Any], str]],
+    cycle_loader=None,
+    cycle_search_limit: int | None = None,
 ) -> list[ValidationIssue]:
     name = owner.get("name")
     if not name:
@@ -198,12 +206,21 @@ def _dependency_cycle_issues(
     edges = _cycle_edges(owner, values, question_type)
     visited = set(aliases)
     frontier = {edge.target for edge in edges} - visited
-    while frontier and len(visited) < _MAX_CYCLE_SEARCH_NODES:
+    search_limit = cycle_search_limit or _MAX_CYCLE_SEARCH_NODES
+    loader = cycle_loader or _load_cycle_expressions
+    while frontier and len(visited) < search_limit:
+        if (
+            cycle_search_limit is not None
+            and len(visited) + len(frontier) > search_limit
+        ):
+            raise CycleTraversalLimitExceeded(
+                f"Dependency graph exceeded the {search_limit} node search limit."
+            )
         visited.update(frontier)
         loaded = {
             target: overrides[target] for target in frontier if target in overrides
         }
-        loaded.update(_load_cycle_expressions(frontier - set(loaded)))
+        loaded.update(loader(frontier - set(loaded)))
         next_frontier = set()
         for target_owner, target_values, target_type in loaded.values():
             for edge in _cycle_edges(target_owner, target_values, target_type):
@@ -215,6 +232,11 @@ def _dependency_cycle_issues(
                 if target not in visited:
                     next_frontier.add(target)
         frontier = next_frontier
+
+    if frontier and cycle_search_limit is not None:
+        raise CycleTraversalLimitExceeded(
+            f"Dependency graph exceeded the {search_limit} node search limit."
+        )
 
     return [
         dependency_cycle_issue(cycle, layer="model")
@@ -236,6 +258,8 @@ def validate_expression_fields(
         Mapping[str, tuple[Mapping[str, Any], Mapping[str, Any], str]] | None
     ) = None,
     check_cycles: bool = True,
+    cycle_loader=None,
+    cycle_search_limit: int | None = None,
 ) -> list[ValidationIssue]:
     """Validate an owner's expression fields against the codebook.
 
@@ -296,6 +320,8 @@ def validate_expression_fields(
                 question_type,
                 previous_name=previous_name,
                 overrides=cycle_overrides or {},
+                cycle_loader=cycle_loader,
+                cycle_search_limit=cycle_search_limit,
             )
         )
     return issues
@@ -339,6 +365,7 @@ def sync_expression_dependencies(instance: Any) -> None:
 
 __all__ = [
     "GENERATED_METADATA_NAMES",
+    "CycleTraversalLimitExceeded",
     "ReferenceScope",
     "expression_references",
     "load_reference_scope",
