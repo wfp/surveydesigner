@@ -1,4 +1,10 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  useRef,
+  useImperativeHandle,
+} from "react";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -32,7 +38,7 @@ import { fetchOrganizations } from "../../redux/actions/organizationsActions";
 import { indicatorAreasActions } from "../../redux/reducers/indicatorAreasReducer";
 import { indicatorsActions } from "../../redux/reducers/indicatorsReducer";
 import { renderTooltipMarkdown } from "../../utils";
-import { SurveysProps } from "./Surveys.interface";
+import { SurveysHandle, SurveysProps } from "./Surveys.interface";
 import { Organization, SavedSurvey, SurveyCategory } from "../../types/api";
 import {
   clearModuleDependentSurveyData,
@@ -115,12 +121,15 @@ function formatCategoryOptionLabel(category: SurveyCategory) {
   return <CategoryOptionLabel category={category} />;
 }
 
-function Surveys({
-  next,
-  frontendContent,
-  selectedSurveyToEdit,
-  onModuleCriteriaChange,
-}: SurveysProps) {
+function Surveys(
+  {
+    next,
+    frontendContent,
+    selectedSurveyToEdit,
+    onModuleCriteriaChange,
+  }: SurveysProps,
+  ref: React.ForwardedRef<SurveysHandle>,
+) {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const surveyForm = useAppSelector((state) => state.surveyForm);
@@ -400,6 +409,12 @@ function Surveys({
     dispatch(fetchSurveys(preserveDefinitions));
   };
 
+  // Clearing the organizations also clears category, type, mode, context and
+  // any module selections, while keeping the survey title.
+  useImperativeHandle(ref, () => ({
+    clearFilters: () => updateOrganizationDependencies([]),
+  }));
+
   function attributeOnChange(checked: boolean, id: number) {
     const attrs = getValues("attributes");
 
@@ -413,14 +428,14 @@ function Surveys({
     }
   }
 
-  const isLoading = surveys.isLoading || organizations.isLoading;
   const haveData = !!surveys.data && !!organizations.data;
   const haveOrganizations = !!organizations.data;
   const isOrganizationsLoading = organizations.isLoading;
 
   return (
     <form>
-      {isLoading && <InlineLoading description="loading..." />}
+      {/* Survey option refetches show their spinner in the wizard header */}
+      {isOrganizationsLoading && <InlineLoading description="loading..." />}
       {haveOrganizations && !isOrganizationsLoading && (
         <div className="d-flex survey-definition-layout">
           <div className="flex-column survey-definition-column">
@@ -791,4 +806,4 @@ function Surveys({
   );
 }
 
-export default Surveys;
+export default React.forwardRef(Surveys);
