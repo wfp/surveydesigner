@@ -427,10 +427,10 @@ class ChoiceGroupFile(BaseWFPModelMixin):
             filename = os.path.basename(self.csv_file.name)
 
             if hasattr(self.csv_file, "size"):
-                max_size = 10 * 1024 * 1024
+                max_size = 40 * 1024 * 1024
                 if self.csv_file.size > max_size:
                     raise ValidationError(
-                        f"File size exceeds the maximum allowed size of 10MB. Current file size: {self.csv_file.size / (1024 * 1024):.2f}MB"
+                        f"File size exceeds the maximum allowed size of 40MB. Current file size: {self.csv_file.size / (1024 * 1024):.2f}MB"
                     )
 
             existing = ChoiceGroupFile.objects.exclude(pk=self.pk if self.pk else None)
