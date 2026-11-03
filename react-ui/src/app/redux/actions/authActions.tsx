@@ -7,7 +7,7 @@ import { API } from "../../utils";
 export const logout = createAppAsyncThunk(
   "auth/LOGOUT",
   (_, { dispatch, getState }) => {
-    dispatch(authActions.clearData);
+    dispatch(authActions.clearData());
     window.location.href = `${import.meta.env.VITE_APP_API_ENDPOINT}/auth/logout/`;
   }
 );

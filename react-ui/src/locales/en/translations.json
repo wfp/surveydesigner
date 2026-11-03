@@ -1,4 +1,26 @@
 {
+    "notifications": {
+        "title": "Notifications",
+        "unreadCount_one": "Notifications: {{count}} unread",
+        "unreadCount_other": "Notifications: {{count}} unread",
+        "loading": "Loading notifications…",
+        "empty": "You're all caught up. No notifications to show.",
+        "loadError": "Notifications could not be loaded. Please try again.",
+        "actionError": "Your change could not be saved. Please try the action again.",
+        "detailError": "This update is unavailable or could not be loaded.",
+        "retry": "Try again",
+        "retryRead": "Try marking as read again",
+        "new": "New",
+        "read": "Read",
+        "dismiss": "Dismiss",
+        "dismissNamed": "Dismiss {{title}}",
+        "close": "Close",
+        "viewAll": "View all notifications",
+        "latestRelease": "Latest release",
+        "releaseNotes": "Release notes",
+        "back": "Back to notifications",
+        "version": "Version {{version}}"
+    },
     "deleteSavedSurveyModal": {
         "delete": "Are you sure you want to delete the survey.",
         "actionCannotBeUndone": "This action cannot be undone.",

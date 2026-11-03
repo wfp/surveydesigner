@@ -2,7 +2,7 @@ import React from "react";
 import "@testing-library/jest-dom";
 import { Provider } from "react-redux";
 import { MemoryRouter } from "react-router-dom";
-import { render } from "../../utils/tests";
+import { render, screen } from "../../utils/tests";
 import Nav from "./index";
 import { createTestStore } from "../../redux/store";
 
@@ -19,7 +19,7 @@ describe("Nav", async () => {
       },
     };
 
-    const store = createTestStore();
+    const store = createTestStore(window.initialState);
 
     const { container } = render(<Nav />, {
       wrapper: ({ children }) => (
@@ -29,6 +29,9 @@ describe("Nav", async () => {
       ),
     });
 
+    expect(
+      screen.getByRole("button", { name: /notifications/i }),
+    ).toBeInTheDocument();
     expect(container).toMatchSnapshot();
   });
 
@@ -44,7 +47,7 @@ describe("Nav", async () => {
       },
     };
 
-    const store = createTestStore();
+    const store = createTestStore(window.initialState);
 
     const { container } = render(<Nav />, {
       wrapper: ({ children }) => (
@@ -54,6 +57,9 @@ describe("Nav", async () => {
       ),
     });
 
+    expect(
+      screen.queryByRole("button", { name: /notifications/i }),
+    ).not.toBeInTheDocument();
     expect(container).toMatchSnapshot();
   });
 });

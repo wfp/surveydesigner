@@ -1,4 +1,26 @@
 {
+    "notifications": {
+        "title": "Notificações",
+        "unreadCount_one": "Notificações: {{count}} não lida",
+        "unreadCount_other": "Notificações: {{count}} não lidas",
+        "loading": "A carregar notificações…",
+        "empty": "Está em dia. Não há notificações para mostrar.",
+        "loadError": "Não foi possível carregar as notificações. Tente novamente.",
+        "actionError": "Não foi possível guardar a alteração. Tente novamente.",
+        "detailError": "Esta atualização está indisponível ou não pôde ser carregada.",
+        "retry": "Tentar novamente",
+        "retryRead": "Tentar marcar como lida novamente",
+        "new": "Nova",
+        "read": "Lida",
+        "dismiss": "Dispensar",
+        "dismissNamed": "Dispensar {{title}}",
+        "close": "Fechar",
+        "viewAll": "Ver todas as notificações",
+        "latestRelease": "Última versão",
+        "releaseNotes": "Notas da versão",
+        "back": "Voltar às notificações",
+        "version": "Versão {{version}}"
+    },
     "deleteSavedSurveyModal": {
         "delete": "Tem certeza de que deseja excluir a pesquisa.",
         "actionCannotBeUndone": "Essa ação não pode ser desfeita.",
