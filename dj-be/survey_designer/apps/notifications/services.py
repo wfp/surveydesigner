@@ -6,7 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .const import NotificationStatus, ReleaseStatus
-from .models import Notification, NotificationTranslation, Release
+from .models import Notification, NotificationRead, NotificationTranslation, Release
 
 logger = logging.getLogger(__name__)
 
@@ -259,3 +259,38 @@ def currently_published_notifications():
             release__published_at__lte=now,
         ),
     )
+
+
+@transaction.atomic
+def acknowledge_notification(*, notification_id, actor, action):
+    """Acknowledge the exact eligible message for this actor, never the latest item."""
+    if not (actor and actor.is_authenticated and actor.is_active and actor.pk):
+        raise PermissionDenied("An active authenticated account is required.")
+    if action not in ("read", "dismiss"):
+        raise ValidationError({"action": "Choose 'read' or 'dismiss'."})
+
+    from .selectors import notifications_for_user
+
+    # Keep dismissed items eligible for retries without exposing them in GET feeds.
+    eligible_id = (
+        notifications_for_user(actor, include_dismissed=True)
+        .prefetch_related(None)
+        .values_list("pk", flat=True)
+        .get(pk=notification_id)
+    )
+    now = timezone.now()
+    state, created = NotificationRead.objects.select_for_update().get_or_create(
+        notification_id=eligible_id,
+        user_id=actor.pk,
+        defaults={"read_at": now, "dismissed": action == "dismiss"},
+    )
+    fields = []
+    if state.read_at is None:
+        state.read_at = now
+        fields.append("read_at")
+    if action == "dismiss" and not state.dismissed:
+        state.dismissed = True
+        fields.append("dismissed")
+    if fields:
+        state.save(update_fields=fields)
+    return state, created or bool(fields)

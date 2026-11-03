@@ -10,8 +10,8 @@ def _authenticated_user(user):
     return bool(user and user.is_authenticated and user.is_active and user.pk)
 
 
-def notifications_for_user(user):
-    """Visible active feed; the same queryset must be used for list and detail."""
+def notifications_for_user(user, *, include_dismissed=False):
+    """Visible feed; include_dismissed is only for idempotent acknowledgement writes."""
     queryset = currently_published_notifications()
     if not _authenticated_user(user):
         return queryset.none()
@@ -22,10 +22,11 @@ def notifications_for_user(user):
     user_state = NotificationRead.objects.filter(
         notification_id=OuterRef("pk"), user_id=user.pk
     )
+    queryset = queryset.filter(Exists(matching_audience))
+    if not include_dismissed:
+        queryset = queryset.exclude(Exists(user_state.filter(dismissed=True)))
     return (
-        queryset.filter(Exists(matching_audience))
-        .exclude(Exists(user_state.filter(dismissed=True)))
-        .annotate(is_read=Exists(user_state.filter(read_at__isnull=False)))
+        queryset.annotate(is_read=Exists(user_state.filter(read_at__isnull=False)))
         .select_related("release")
         .prefetch_related("translations")
     )
