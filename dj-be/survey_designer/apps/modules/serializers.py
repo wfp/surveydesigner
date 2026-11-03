@@ -185,7 +185,7 @@ class UploadXLSFormSerializer(GenerateXLSFormSerializer):
     project_id = serializers.IntegerField(allow_null=True)
 
 
-class SubmodulesOrderValidationSerializer(serializers.Serializer):
+class SubmoduleCompositionValidationSerializer(serializers.Serializer):
     messages = serializers.ListField(child=serializers.CharField())
 
     class Meta:

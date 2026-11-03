@@ -29,6 +29,7 @@ function ModuleListItem({
   collapseAll,
   setCollapseAll,
   watchAllFields,
+  validationSubmoduleId,
 }: ModuleListItemProps) {
   const modulesData = useModules();
   const [expanded, setExpanded] = useState(
@@ -109,6 +110,19 @@ function ModuleListItem({
       saveAndSetExpanded(!collapseAll.isChecked);
     }
   }, [collapseAll]);
+
+  useEffect(() => {
+    if (
+      validationSubmoduleId !== null &&
+      validationSubmoduleId !== undefined &&
+      sortedSubmodules.some(
+        (submodule) => submodule.id === validationSubmoduleId,
+      ) &&
+      !expanded
+    ) {
+      saveAndSetExpanded(true);
+    }
+  }, [validationSubmoduleId]);
 
   function getModuleLabel(module: Module) {
     let label = (
@@ -227,6 +241,8 @@ function ModuleListItem({
                           handleSubmoduleChange,
                           selectedIndicatorSubmoduleIdMap,
                           selectedIndicatorMatchingSubmoduleIdMap,
+                          isValidationTarget:
+                            validationSubmoduleId === submodule.id && expanded,
                         }}
                       />
                     ))}

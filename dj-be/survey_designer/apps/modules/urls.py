@@ -7,9 +7,10 @@ from .views import (
     IndicatorViewSet,
     ModuleViewSet,
     PreviewXLSForm,
-    SubmodulesOrderValidationView,
+    SubmoduleCompositionValidationView,
     SubmoduleViewSet,
     UploadXLSForm,
+    ValidateXLSForm,
 )
 
 router = routers.SimpleRouter()
@@ -25,9 +26,10 @@ urlpatterns.extend(
         path("generate-doc/", GenerateDocForm.as_view(), name="generate_doc_form"),
         path("upload/", UploadXLSForm.as_view(), name="upload_xls_form"),
         path("preview/", PreviewXLSForm.as_view(), name="preview_xls_form"),
+        path("validate/", ValidateXLSForm.as_view(), name="validate_xls_form"),
         path(
             "order-validation/",
-            SubmodulesOrderValidationView.as_view(),
+            SubmoduleCompositionValidationView.as_view(),
             name="submodule_order_validation",
         ),
     ]

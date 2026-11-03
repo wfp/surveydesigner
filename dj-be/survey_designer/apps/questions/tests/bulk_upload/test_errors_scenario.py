@@ -3,9 +3,9 @@ from io import BytesIO
 import pytest
 from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
-from openpyxl.writer.excel import save_virtual_workbook
 from organization.models import Organization
 from questions.services import DataImport
+from questions.services.workbook import save_virtual_workbook
 
 _TEST_PARAMETER_NAMES = "upload_organizations_names, module_name, submodule_name, question_name, errors_count, errors_dict"
 

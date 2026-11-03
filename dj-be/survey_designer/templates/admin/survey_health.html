@@ -1,0 +1,138 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/admin/survey_health.css' %}">
+{% endblock %}
+
+{% block extrahead %}
+  {{ block.super }}
+  {{ health_models|json_script:"survey-health-models" }}
+  <script src="{% static 'js/admin/survey_health.js' %}" defer></script>
+{% endblock %}
+
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; Survey health
+  </div>
+{% endblock %}
+
+{% block content_title %}{% endblock %}
+
+{% block content %}
+  <div id="survey-health" data-scan-url="{{ health_scan_url }}">
+    <div class="survey-health-heading">
+      <div>
+        <h1>Survey health</h1>
+        <p class="survey-health-scope">
+          Check saved expression fields on root questions, sub-questions, repeat sections, and calculations.
+          This uses the same save-time expression checks as the admin forms. Composed-survey, publish, XForm,
+          and external choice validations are outside this check.
+        </p>
+      </div>
+      <div class="survey-health-actions">
+        <button type="button" class="button default" id="survey-health-run">Run health check</button>
+        <button type="button" class="button" id="survey-health-stop" disabled>Stop</button>
+      </div>
+    </div>
+
+    <div id="survey-health-status" class="survey-health-status" role="status" aria-live="polite">
+      Ready to check survey data.
+    </div>
+    <div id="survey-health-progress" class="survey-health-progress" hidden aria-hidden="true">
+      <div
+        id="survey-health-progress-track"
+        class="survey-health-progress-track"
+        role="progressbar"
+        aria-label="Survey health check progress"
+      ><span></span></div>
+      <span id="survey-health-progress-label">Starting…</span>
+    </div>
+
+    <section class="survey-health-summary" aria-label="Health check summary">
+      <div class="survey-health-card">
+        <span class="survey-health-card-label">Checked objects</span>
+        <strong id="survey-health-checked">0</strong>
+      </div>
+      <div class="survey-health-card">
+        <span class="survey-health-card-label">Failing objects</span>
+        <strong id="survey-health-failing">0</strong>
+      </div>
+      <div class="survey-health-card">
+        <span class="survey-health-card-label">Issues</span>
+        <strong id="survey-health-issues">0</strong>
+      </div>
+      <div class="survey-health-card survey-health-card-warning">
+        <span class="survey-health-card-label">Scan errors</span>
+        <strong id="survey-health-scan-errors">0</strong>
+      </div>
+    </section>
+
+    <div id="survey-health-incomplete" class="messagelist" hidden role="alert"></div>
+
+    <section id="survey-health-results" aria-labelledby="survey-health-results-title">
+      <div class="survey-health-results-heading">
+        <h2 id="survey-health-results-title">Results</h2>
+        <span id="survey-health-results-count" class="survey-health-results-count">No results yet</span>
+      </div>
+
+      <div class="survey-health-filters" aria-label="Filter results">
+        <div>
+          <label for="survey-health-filter-model">Object type</label>
+          <select id="survey-health-filter-model">
+            <option value="">All object types</option>
+            {% for model in health_models %}
+              <option value="{{ model.key }}">{{ model.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="survey-health-filter-field">Field</label>
+          <select id="survey-health-filter-field">
+            <option value="">All fields</option>
+            <option value="relevant">Relevant</option>
+            <option value="constraint">Constraint</option>
+            <option value="required">Required</option>
+            <option value="read_only">Read only</option>
+            <option value="default">Default</option>
+            <option value="choice_filter">Choice filter</option>
+            <option value="calculation">Calculation</option>
+            <option value="repeat_count">Repeat count</option>
+          </select>
+        </div>
+        <div>
+          <label for="survey-health-filter-code">Error code</label>
+          <input id="survey-health-filter-code" type="search" autocomplete="off" placeholder="e.g. EXPRESSION_…">
+        </div>
+        <div class="survey-health-filter-text">
+          <label for="survey-health-filter-text">Search findings</label>
+          <input id="survey-health-filter-text" type="search" autocomplete="off" placeholder="Name, why, or expression">
+        </div>
+      </div>
+
+      <div id="survey-health-empty" class="survey-health-empty">
+        Run the check to see findings here.
+      </div>
+      <div id="survey-health-list" class="survey-health-list" aria-live="polite"></div>
+      <nav id="survey-health-pagination" class="survey-health-pagination" aria-label="Health results pages" hidden>
+        <button type="button" class="button" id="survey-health-prev">Previous</button>
+        <span id="survey-health-page-label"></span>
+        <button type="button" class="button" id="survey-health-next">Next</button>
+      </nav>
+    </section>
+
+    <section id="survey-health-scan-errors-section" class="survey-health-scan-errors" hidden aria-labelledby="survey-health-scan-errors-title">
+      <h2 id="survey-health-scan-errors-title">Scan errors</h2>
+      <p>These objects could not be checked reliably. They are not counted as validation failures.</p>
+      <div id="survey-health-scan-errors-list"></div>
+    </section>
+
+    <p class="survey-health-limitations">
+      Health results stay in this browser tab and are not saved. Correct an object from its edit link, then run the
+      check again to read the current data.
+    </p>
+    <form id="survey-health-csrf-form" hidden>{% csrf_token %}</form>
+  </div>
+{% endblock %}

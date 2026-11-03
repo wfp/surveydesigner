@@ -1007,8 +1007,11 @@ def test_root_question_admin_edit_form_errors_in_equations(
     # Check that the form was not submitted successfully
     assert response.status_code == 200
     decoded_content = response.content.decode()
-    assert "Invalid constraint - Questions not found: nonexistent" in decoded_content
-    assert "Invalid relevant - Questions not found: nonexistent" in decoded_content
+    for field_name in ("constraint", "relevant", "choice_filter", "calculation"):
+        assert (
+            f"RootQuestion 'TestQuestion1' field '{field_name}' references "
+            "'nonexistent', but no question with that exact name exists."
+        ) in decoded_content
 
 
 def test_root_question_admin_edit_passes_with_no_question_names_in_equations(
@@ -1029,9 +1032,9 @@ def test_root_question_admin_edit_passes_with_no_question_names_in_equations(
             "label": "Test Question",
             "type": "integer",
             "constraint": ". >= 0",
-            "relevant": ". >= 1",
+            "relevant": "1 >= 1",
             "choice_filter": ". >= 2",
-            "calculation": ". >= 3",
+            "calculation": "3 + 1",
             "base_question-TOTAL_FORMS": 0,
             "base_question-INITIAL_FORMS": 0,
             "constraint_translations-TOTAL_FORMS": 0,
@@ -1046,9 +1049,9 @@ def test_root_question_admin_edit_passes_with_no_question_names_in_equations(
     root_question_1.refresh_from_db()
 
     assert root_question_1.constraint == ". >= 0"
-    assert root_question_1.relevant == ". >= 1"
+    assert root_question_1.relevant == "1 >= 1"
     assert root_question_1.choice_filter == ". >= 2"
-    assert root_question_1.calculation == ". >= 3"
+    assert root_question_1.calculation == "3 + 1"
 
 
 def test_choice_group_edit_is_active_choices(logged_admin_client, choices_1):
