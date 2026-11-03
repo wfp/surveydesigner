@@ -2,6 +2,7 @@ from core.admin import AdminUserTrackingMixin, CollationSafeSearchAdminMixin
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
 
+from .const import NotificationStatus
 from .forms import (
     NotificationAdminForm,
     NotificationTranslationAdminForm,
@@ -16,7 +17,44 @@ from .models import (
     Release,
     ReleaseTranslation,
 )
-from .services import can_publish_release, publish_release
+from .services import (
+    can_publish_release,
+    deactivate_notification,
+    publish_notification,
+    publish_release,
+    validation_error_message,
+)
+
+
+def notification_content_is_locked(notification):
+    return bool(
+        notification
+        and (
+            notification.status == NotificationStatus.EXPIRED
+            or (
+                notification.is_active
+                and notification.status
+                in (NotificationStatus.SCHEDULED, NotificationStatus.PUBLISHED)
+            )
+        )
+    )
+
+
+class NotificationEditableInline(admin.TabularInline):
+    def has_add_permission(self, request, obj=None):
+        return not notification_content_is_locked(obj) and super().has_add_permission(
+            request, obj
+        )
+
+    def has_change_permission(self, request, obj=None):
+        return not notification_content_is_locked(
+            obj
+        ) and super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        return not notification_content_is_locked(
+            obj
+        ) and super().has_delete_permission(request, obj)
 
 
 class ReleaseTranslationInline(admin.TabularInline):
@@ -26,14 +64,14 @@ class ReleaseTranslationInline(admin.TabularInline):
     extra = 0
 
 
-class NotificationTranslationInline(admin.TabularInline):
+class NotificationTranslationInline(NotificationEditableInline):
     model = NotificationTranslation
     form = NotificationTranslationAdminForm
     fields = ("language", "title", "abstract", "label")
     extra = 0
 
 
-class NotificationAudienceInline(admin.TabularInline):
+class NotificationAudienceInline(NotificationEditableInline):
     model = NotificationAudience
     fields = ("group",)
     autocomplete_fields = ("group",)
@@ -140,17 +178,9 @@ class ReleaseAdmin(NotificationContentAdmin):
                     release_id=release.pk, actor=request.user
                 )
             except ValidationError as exc:
-                details = (
-                    "; ".join(
-                        f"{field}: {'; '.join(errors)}"
-                        for field, errors in exc.message_dict.items()
-                    )
-                    if hasattr(exc, "message_dict")
-                    else "; ".join(exc.messages)
-                )
                 self.message_user(
                     request,
-                    f"Release {release.business_version}: {details}",
+                    f"Release {release.business_version}: {validation_error_message(exc)}",
                     level=messages.ERROR,
                 )
                 continue
@@ -181,6 +211,7 @@ class ReleaseAdmin(NotificationContentAdmin):
 @admin.register(Notification)
 class NotificationAdmin(NotificationContentAdmin):
     form = NotificationAdminForm
+    actions = ("publish_notifications", "deactivate_notifications")
     inlines = (NotificationTranslationInline, NotificationAudienceInline)
     autocomplete_fields = ("release",)
     list_display = (
@@ -206,6 +237,68 @@ class NotificationAdmin(NotificationContentAdmin):
             },
         ),
     )
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = super().get_readonly_fields(request, obj)
+        if obj and obj.status != NotificationStatus.DRAFT:
+            fields += ("is_active",)
+        if notification_content_is_locked(obj):
+            fields += (
+                "release",
+                "title",
+                "abstract",
+                "body",
+                "publish_at",
+                "expires_at",
+            )
+        return fields
+
+    @admin.action(
+        permissions=("change",),
+        description="Publish or schedule selected notifications",
+    )
+    def publish_notifications(self, request, queryset):
+        counts = {"published": 0, "scheduled": 0, "unchanged": 0}
+        for notification in queryset.order_by("pk"):
+            try:
+                updated, changed = publish_notification(
+                    notification_id=notification.pk, actor=request.user
+                )
+            except ValidationError as exc:
+                self.message_user(
+                    request,
+                    f"Notification {notification.pk}: {validation_error_message(exc)}",
+                    level=messages.ERROR,
+                )
+                continue
+            if changed:
+                counts[updated.status] += 1
+                self.log_change(request, updated, f"Notification {updated.status}.")
+            else:
+                counts["unchanged"] += 1
+        if any(counts.values()):
+            self.message_user(
+                request,
+                f"Notifications: {counts['published']} published, {counts['scheduled']} scheduled, "
+                f"{counts['unchanged']} unchanged. Scheduled transitions require the RQ worker.",
+                level=messages.SUCCESS,
+            )
+
+    @admin.action(
+        permissions=("change",), description="Deactivate selected notifications"
+    )
+    def deactivate_notifications(self, request, queryset):
+        count = 0
+        for notification in queryset.order_by("pk"):
+            updated, changed = deactivate_notification(
+                notification_id=notification.pk, actor=request.user
+            )
+            if changed:
+                count += 1
+                self.log_change(request, updated, "Notification deactivated.")
+        self.message_user(
+            request, f"Deactivated {count} notification(s).", level=messages.SUCCESS
+        )
 
 
 @admin.register(NotificationRead)
