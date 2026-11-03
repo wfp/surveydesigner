@@ -1,0 +1,95 @@
+.notification-menu {
+  position: relative;
+  &__trigger {
+    gap: 0.5rem;
+  }
+  &__marker {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    background: var(--interactive-01, #007dbc);
+  }
+  &__panel {
+    position: absolute;
+    inset-inline-end: 0;
+    top: 100%;
+    z-index: 30;
+    width: min(25rem, calc(100vw - 2rem));
+    max-height: 75vh;
+    overflow-y: auto;
+    background: var(--ui-01, #fff);
+    color: var(--text-01, #172b4d);
+    border: 1px solid var(--ui-03, #dfe6ed);
+    border-radius: 0.25rem;
+    box-shadow: 0 0.25rem 1rem #0002;
+    padding: 1rem;
+    text-align: start;
+  }
+  &__heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    h2 {
+      font-size: 1.125rem;
+    }
+  }
+  &__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding-top: 1rem;
+  }
+}
+.notification-feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  &__item {
+    padding: 1rem;
+    border-bottom: 1px solid var(--ui-03, #dfe6ed);
+    border-inline-start: 0.2rem solid transparent;
+    display: grid;
+    gap: 0.5rem;
+    justify-items: start;
+    overflow-wrap: anywhere;
+    time {
+      font-size: 0.875rem;
+      color: var(--text-02, #5a6872);
+    }
+    p {
+      margin: 0;
+    }
+    &--unread {
+      border-inline-start-color: var(--interactive-01, #007dbc);
+      background: var(--ui-02, #f4f8fb);
+      > a {
+        font-weight: 700;
+      }
+    }
+  }
+}
+.notification-content {
+  max-width: 55rem;
+  padding: 1.5rem 0 3rem;
+  overflow-wrap: anywhere;
+  &__body {
+    margin: 1.5rem 0;
+    line-height: 1.65;
+    ul,
+    ol {
+      padding-inline-start: 1.5rem;
+    }
+    pre {
+      overflow-x: auto;
+    }
+  }
+}
+@media (max-width: 768px) {
+  .notification-menu__panel {
+    position: fixed;
+    inset-inline: 1rem;
+    top: 5rem;
+    width: auto;
+  }
+}
