@@ -253,5 +253,9 @@ def currently_published_notifications():
     ).filter(
         Q(expires_at__isnull=True) | Q(expires_at__gt=now),
         Q(release__isnull=True)
-        | Q(release__is_active=True, release__status=ReleaseStatus.PUBLISHED),
+        | Q(
+            release__is_active=True,
+            release__status=ReleaseStatus.PUBLISHED,
+            release__published_at__lte=now,
+        ),
     )
