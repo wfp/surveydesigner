@@ -1,7 +1,9 @@
 from datetime import timedelta
 
 import pytest
-from django.contrib import admin as django_admin
+from django.contrib import admin as django_admin, messages
+from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
+from django.contrib.admin.models import CHANGE, LogEntry
 from django.contrib.auth.models import Group, Permission
 from django.urls import reverse
 from django.utils import timezone
@@ -408,3 +410,156 @@ def test_read_states_do_not_change_when_notification_content_is_edited(
     state.refresh_from_db()
     assert state.read_at == now
     assert state.dismissed is True
+
+
+def publish_action(client, *releases):
+    return client.post(
+        reverse("admin:notifications_release_changelist"),
+        {
+            "action": "publish_releases",
+            "index": "0",
+            ACTION_CHECKBOX_NAME: [str(release.pk) for release in releases],
+        },
+        follow=True,
+    )
+
+
+def test_publish_action_uses_saved_inline_translations(logged_admin_client, admin):
+    response = logged_admin_client.post(
+        reverse("admin:notifications_release_add"),
+        {
+            **release_data(),
+            **management("translations", total=1),
+            "translations-0-language": "fr",
+            "translations-0-title": "Version francaise",
+            "translations-0-label": "<p>Notes francaises.</p>",
+        },
+    )
+    assert response.status_code == 302
+    release = Release.objects.get()
+    response = publish_action(logged_admin_client, release)
+    release.refresh_from_db()
+
+    assert response.status_code == 200
+    assert release.status == ReleaseStatus.PUBLISHED
+    notification = release.notification
+    assert notification.status == NotificationStatus.DRAFT
+    assert (
+        notification.translations.get(language="fr").label == "<p>Notes francaises.</p>"
+    )
+    assert any(
+        message.level == messages.SUCCESS for message in response.context["messages"]
+    )
+    assert (
+        LogEntry.objects.filter(
+            user=admin,
+            content_type__app_label="notifications",
+            content_type__model="release",
+            object_id=str(release.pk),
+            action_flag=CHANGE,
+        ).count()
+        == 1
+    )
+
+
+def test_publish_action_is_idempotent(logged_admin_client):
+    release = Release.objects.create(
+        business_version="2.0.1", title="Release", body="Release notes"
+    )
+    publish_action(logged_admin_client, release)
+    release.refresh_from_db()
+    published_at = release.published_at
+    response = publish_action(logged_admin_client, release)
+    release.refresh_from_db()
+
+    assert Notification.objects.count() == 1
+    assert release.published_at == published_at
+    assert any(
+        "already published" in str(message) for message in response.context["messages"]
+    )
+
+
+def test_publish_action_reports_validation_errors_without_publishing_invalid_release(
+    logged_admin_client,
+):
+    release = Release.objects.create(
+        business_version="invalid", title="Release", body=""
+    )
+    response = publish_action(logged_admin_client, release)
+    release.refresh_from_db()
+
+    assert response.status_code == 200
+    errors = [
+        str(message)
+        for message in response.context["messages"]
+        if message.level == messages.ERROR
+    ]
+    assert len(errors) == 1
+    assert "Release invalid" in errors[0]
+    assert "body:" in errors[0]
+    assert "required before publication" in errors[0]
+    assert release.status == ReleaseStatus.DRAFT
+    assert Notification.objects.count() == 0
+
+
+def test_publish_batch_reports_each_failed_release_and_keeps_valid_success(
+    logged_admin_client,
+):
+    valid = Release.objects.create(
+        business_version="valid", title="Valid release", body="Release notes"
+    )
+    invalid = Release.objects.create(
+        business_version="invalid", title="Invalid release"
+    )
+    response = publish_action(logged_admin_client, valid, invalid)
+    valid.refresh_from_db()
+    invalid.refresh_from_db()
+
+    assert valid.status == ReleaseStatus.PUBLISHED
+    assert invalid.status == ReleaseStatus.DRAFT
+    assert Notification.objects.count() == 1
+    levels = {message.level for message in response.context["messages"]}
+    assert messages.SUCCESS in levels
+    assert messages.ERROR in levels
+
+
+def test_release_editor_without_notification_permissions_cannot_publish(
+    django_client, user, rf
+):
+    user.user_permissions.add(
+        Permission.objects.get(
+            content_type__app_label="notifications", codename="change_release"
+        )
+    )
+    release = Release.objects.create(
+        business_version="2.0.1", title="Release", body="Release notes"
+    )
+    request = rf.get("/admin/notifications/release/")
+    request.user = user
+    assert "publish_releases" not in django_admin.site._registry[Release].get_actions(
+        request
+    )
+    django_client.force_login(user)
+    publish_action(django_client, release)
+    release.refresh_from_db()
+    assert release.status == ReleaseStatus.DRAFT
+    assert Notification.objects.count() == 0
+
+
+def test_editing_published_release_does_not_overwrite_its_notification(
+    logged_admin_client,
+):
+    release = Release.objects.create(
+        business_version="2.0.1", title="Original title", body="Original notes"
+    )
+    publish_action(logged_admin_client, release)
+    response = logged_admin_client.post(
+        reverse("admin:notifications_release_change", args=(release.pk,)),
+        {**release_data(), "title": "Edited title", "body": "Edited notes"},
+    )
+    assert response.status_code == 302
+    release.refresh_from_db()
+    assert release.title == "Edited title"
+    assert release.status == ReleaseStatus.PUBLISHED
+    assert release.notification.title == "Original title"
+    assert release.notification.body == "Original notes"

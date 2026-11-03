@@ -1,5 +1,6 @@
 from core.admin import AdminUserTrackingMixin, CollationSafeSearchAdminMixin
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.core.exceptions import ValidationError
 
 from .forms import (
     NotificationAdminForm,
@@ -15,6 +16,7 @@ from .models import (
     Release,
     ReleaseTranslation,
 )
+from .services import can_publish_release, publish_release
 
 
 class ReleaseTranslationInline(admin.TabularInline):
@@ -71,6 +73,7 @@ class NotificationContentAdmin(
 @admin.register(Release)
 class ReleaseAdmin(NotificationContentAdmin):
     form = ReleaseAdminForm
+    actions = ("publish_releases",)
     inlines = (ReleaseTranslationInline,)
     list_display = (
         "business_version",
@@ -123,6 +126,56 @@ class ReleaseAdmin(NotificationContentAdmin):
             },
         ),
     )
+
+    def has_publish_permission(self, request):
+        return can_publish_release(request.user)
+
+    @admin.action(permissions=("publish",), description="Publish selected releases")
+    def publish_releases(self, request, queryset):
+        published = 0
+        unchanged = 0
+        for release in queryset.order_by("pk"):
+            try:
+                notification, created = publish_release(
+                    release_id=release.pk, actor=request.user
+                )
+            except ValidationError as exc:
+                details = (
+                    "; ".join(
+                        f"{field}: {'; '.join(errors)}"
+                        for field, errors in exc.message_dict.items()
+                    )
+                    if hasattr(exc, "message_dict")
+                    else "; ".join(exc.messages)
+                )
+                self.message_user(
+                    request,
+                    f"Release {release.business_version}: {details}",
+                    level=messages.ERROR,
+                )
+                continue
+            if created:
+                published += 1
+                self.log_change(
+                    request,
+                    release,
+                    f"Published release and created draft notification {notification.pk}.",
+                )
+            else:
+                unchanged += 1
+        if published:
+            self.message_user(
+                request,
+                f"Published {published} release(s) and created their draft notifications. "
+                "Review notification audiences and timing before delivery is enabled.",
+                level=messages.SUCCESS,
+            )
+        if unchanged:
+            self.message_user(
+                request,
+                f"{unchanged} release(s) were already published; nothing was changed.",
+                level=messages.INFO,
+            )
 
 
 @admin.register(Notification)
