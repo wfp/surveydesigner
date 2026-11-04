@@ -139,6 +139,9 @@ test("notifications retain read items, dismiss only the selected item, and keep 
   await page.goto("/notifications");
   const bell = page.getByRole("button", { name: "Notifications: 1 unread" });
   await expect(bell).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("notification-list-desktop.png"),
+  });
   await bell.click();
   const panel = page.getByRole("region", { name: "Notifications" });
   await expect(panel).toBeVisible();
@@ -158,6 +161,12 @@ test("notifications retain read items, dismiss only the selected item, and keep 
   await expect
     .poll(() => api.acknowledgements)
     .toEqual([{ id: 1, action: "read", csrf: "browser-test-token" }]);
+  await expect(
+    page.getByRole("button", { name: "Dismiss", exact: true }),
+  ).toBeEnabled();
+  await page.screenshot({
+    path: testInfo.outputPath("notification-detail-desktop.png"),
+  });
   await page.getByRole("button", { name: "Notifications: 1 unread" }).click();
   await expect(panel.getByText("Read", { exact: true })).toBeVisible();
   await expect(panel.getByRole("link", { name: notice.title })).toBeVisible();
@@ -197,6 +206,10 @@ test("mobile panel supports keyboard opening and Escape", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await consumerAPI(page);
   await page.goto("/notifications");
+  await expect(page.getByRole("link", { name: notice.title })).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("notification-list-mobile.png"),
+  });
   await page.getByRole("button", { name: "Menu", exact: true }).click();
   const bell = page.getByRole("button", { name: "Notifications: 1 unread" });
   await bell.focus();
