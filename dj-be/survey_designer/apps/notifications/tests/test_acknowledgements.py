@@ -183,12 +183,10 @@ def test_unsupported_action_is_rejected_without_writing_state(notice, user, acti
     assert NotificationRead.objects.count() == 0
 
 
-@pytest.mark.parametrize("mode", ("empty", "removed", "unrelated", "superuser"))
+@pytest.mark.parametrize("mode", ("removed", "unrelated", "superuser"))
 def test_audience_cannot_be_bypassed(notice, user, admin, mode):
     actor = user
-    if mode == "empty":
-        notice.audience.clear()
-    elif mode == "removed":
+    if mode == "removed":
         user.groups.clear()
     elif mode == "unrelated":
         user.groups.clear()
@@ -221,12 +219,25 @@ def test_lifecycle_restrictions_apply_to_acknowledgements(notice, user, mode):
 
 def test_missing_and_unavailable_ids_use_same_error(notice, user):
     for notification_id in (notice.pk + 1000, notice.pk):
-        notice.audience.clear()
+        user.groups.clear()
         with pytest.raises(Notification.DoesNotExist):
             acknowledge_notification(
                 notification_id=notification_id, actor=user, action="read"
             )
     assert NotificationRead.objects.count() == 0
+
+
+def test_broadcast_can_be_read_and_dismissed_by_user_without_groups(notice, user):
+    notice.audience.clear()
+    user.groups.clear()
+    state, _ = acknowledge_notification(
+        notification_id=notice.pk, actor=user, action="read"
+    )
+    assert state.state == "read"
+    state, _ = acknowledge_notification(
+        notification_id=notice.pk, actor=user, action="dismiss"
+    )
+    assert state.state == "dismissed"
 
 
 def test_dismiss_retries_still_require_current_access(notice, user):

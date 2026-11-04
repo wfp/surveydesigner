@@ -16,13 +16,13 @@ def notifications_for_user(user, *, include_dismissed=False):
     if not _authenticated_user(user):
         return queryset.none()
 
-    matching_audience = NotificationAudience.objects.filter(
-        notification_id=OuterRef("pk"), group_id__in=user.groups.values("pk")
-    )
+    audience = NotificationAudience.objects.filter(notification_id=OuterRef("pk"))
+    matching_audience = audience.filter(group_id__in=user.groups.values("pk"))
     user_state = NotificationRead.objects.filter(
         notification_id=OuterRef("pk"), user_id=user.pk
     )
-    queryset = queryset.filter(Exists(matching_audience))
+    # No audience entries means a broadcast to all active authenticated users.
+    queryset = queryset.filter(~Exists(audience) | Exists(matching_audience))
     if not include_dismissed:
         queryset = queryset.exclude(Exists(user_state.filter(dismissed=True)))
     return (
@@ -38,12 +38,15 @@ def releases_for_user(user):
         is_active=True,
         status=ReleaseStatus.PUBLISHED,
         published_at__lte=timezone.now(),
+        notification__isnull=False,
     )
     if not _authenticated_user(user):
         return queryset.none()
 
-    matching_audience = NotificationAudience.objects.filter(
-        notification__release_id=OuterRef("pk"),
-        group_id__in=user.groups.values("pk"),
+    audience = NotificationAudience.objects.filter(
+        notification__release_id=OuterRef("pk")
     )
-    return queryset.filter(Exists(matching_audience)).prefetch_related("translations")
+    matching_audience = audience.filter(group_id__in=user.groups.values("pk"))
+    return queryset.filter(
+        ~Exists(audience) | Exists(matching_audience)
+    ).prefetch_related("translations")

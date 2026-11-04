@@ -143,7 +143,6 @@ def test_feed_keeps_read_items_excludes_dismissed_and_orders_by_publication(
 @pytest.mark.parametrize(
     "condition",
     [
-        "no_audience",
         "wrong_group",
         "draft",
         "scheduled",
@@ -158,9 +157,7 @@ def test_feed_keeps_read_items_excludes_dismissed_and_orders_by_publication(
 def test_hidden_notifications_are_unavailable_on_all_notification_routes(
     consumer, notice, condition
 ):
-    if condition == "no_audience":
-        notice.audience.clear()
-    elif condition == "wrong_group":
+    if condition == "wrong_group":
         notice.audience.set([Group.objects.create(name="Other readers")])
     elif condition in ("draft", "scheduled", "expired"):
         notice.status = condition
@@ -202,6 +199,57 @@ def test_superuser_still_requires_matching_audience(api_client, admin, notice, r
         ).status_code
         == 404
     )
+
+
+def test_empty_audience_reaches_signed_in_users_without_groups(
+    consumer, user, notice, release, api_client
+):
+    notice.audience.clear()
+    user.groups.clear()
+    for url in (
+        "/api/notifications/",
+        f"/api/notifications/{notice.pk}/",
+        "/api/releases/latest/",
+        f"/api/releases/{release.pk}/",
+    ):
+        assert consumer.get(url).status_code == 200
+    assert consumer.get("/api/notifications/").json()[0]["is_read"] is False
+    url = f"/api/notifications/{notice.pk}/acknowledge/"
+    assert consumer.post(url, {"action": "read"}, format="json").status_code == 200
+    assert consumer.get("/api/notifications/").json()[0]["is_read"] is True
+    assert consumer.post(url, {"action": "dismiss"}, format="json").status_code == 200
+    assert consumer.get("/api/notifications/").json() == []
+    assert consumer.get(f"/api/notifications/{notice.pk}/").status_code == 404
+    assert consumer.get(f"/api/releases/{release.pk}/").status_code == 200
+    api_client.force_authenticate(user=None)
+    assert api_client.get("/api/notifications/").status_code == 403
+
+
+@pytest.mark.parametrize(
+    "condition", ("draft", "scheduled", "expired", "inactive", "future", "elapsed")
+)
+def test_broadcasts_still_enforce_publication_and_timing(consumer, notice, condition):
+    notice.audience.clear()
+    if condition == "inactive":
+        notice.is_active = False
+    elif condition == "future":
+        notice.publish_at = timezone.now() + timedelta(hours=1)
+    elif condition == "elapsed":
+        notice.expires_at = timezone.now() - timedelta(seconds=1)
+    else:
+        notice.status = condition
+    notice.save()
+    assert consumer.get("/api/notifications/").json() == []
+    assert consumer.get(f"/api/notifications/{notice.pk}/").status_code == 404
+    assert (
+        consumer.post(
+            f"/api/notifications/{notice.pk}/acknowledge/",
+            {"action": "read"},
+            format="json",
+        ).status_code
+        == 404
+    )
+    assert not NotificationRead.objects.exists()
 
 
 def test_language_selection_and_whole_message_fallback(consumer, notice, release):
@@ -390,7 +438,7 @@ def test_missing_ids_return_404(consumer):
 
 
 @pytest.mark.parametrize(
-    "condition", ["draft", "inactive", "future", "missing_date", "no_audience"]
+    "condition", ["draft", "inactive", "future", "missing_date", "wrong_group"]
 )
 def test_unavailable_release_cannot_be_retrieved(consumer, notice, release, condition):
     if condition == "draft":
@@ -402,7 +450,7 @@ def test_unavailable_release_cannot_be_retrieved(consumer, notice, release, cond
     elif condition == "missing_date":
         release.published_at = None
     else:
-        notice.audience.clear()
+        notice.audience.set([Group.objects.create(name="Other release readers")])
     release.save()
     assert consumer.get(f"/api/releases/{release.pk}/").status_code == 404
     assert consumer.get("/api/releases/latest/").status_code == 404
@@ -440,12 +488,13 @@ def test_latest_release_uses_only_eligible_published_notes(
         status=ReleaseStatus.PUBLISHED,
         published_at=timezone.now(),
     )
-    Notification.objects.create(
+    hidden_notice = Notification.objects.create(
         release=hidden,
         title="Hidden",
         body="Notes",
         status=NotificationStatus.PUBLISHED,
     )
+    hidden_notice.audience.add(Group.objects.create(name="Other release audience"))
     result = consumer.get("/api/releases/latest/").json()
     assert result["id"] == release.pk
     assert result["business_version"] == "2.1.0"

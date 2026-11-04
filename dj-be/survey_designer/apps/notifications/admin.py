@@ -226,7 +226,16 @@ class NotificationAdmin(NotificationContentAdmin):
     search_fields = ("title", "abstract", "release__business_version")
     list_select_related = ("release", "created_by", "updated_by")
     fieldsets = (
-        ("Notification", {"fields": ("release", "status", "is_active")}),
+        (
+            "Notification",
+            {
+                "fields": ("release", "status", "is_active"),
+                "description": (
+                    "Leave Audience groups empty to reach all signed-in users. "
+                    "Select groups to restrict this notification to their members."
+                ),
+            },
+        ),
         ("English content", {"fields": ("title", "abstract", "body")}),
         ("Timing", {"fields": ("publish_at", "expires_at")}),
         (

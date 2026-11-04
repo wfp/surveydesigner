@@ -62,6 +62,14 @@ def test_notification_models_are_registered(model):
     assert django_admin.site.is_registered(model)
 
 
+def test_admin_explains_empty_audience_broadcast(logged_admin_client):
+    response = logged_admin_client.get(reverse("admin:notifications_notification_add"))
+    assert response.status_code == 200
+    assert (
+        b"Leave Audience groups empty to reach all signed-in users." in response.content
+    )
+
+
 @pytest.mark.parametrize(
     "model", (ReleaseTranslation, NotificationTranslation, NotificationAudience)
 )
