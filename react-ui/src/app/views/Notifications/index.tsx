@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { Button, Loading, Module, ModuleBody } from "@wfp/react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faArrowLeft,
+  faArrowRight,
+  faXmark,
+} from "@fortawesome/free-solid-svg-icons";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import MainLayout from "../../components/Layout";
@@ -17,10 +23,15 @@ export default function NotificationsPage() {
   const { t } = useTranslation();
   return (
     <MainLayout title={t("notifications.title")}>
-      <Module>
-        <ModuleBody>
+      <Module className="notifications-page">
+        <ModuleBody className="notifications-page__body">
           <NotificationFeed />
-          <Link to="/releases/latest">{t("notifications.latestRelease")}</Link>
+          <div className="notifications-page__footer">
+            <Link to="/releases/latest">
+              {t("notifications.latestRelease")}
+              <FontAwesomeIcon icon={faArrowRight} aria-hidden="true" />
+            </Link>
+          </div>
         </ModuleBody>
       </Module>
     </MainLayout>
@@ -105,17 +116,20 @@ export function NotificationContentPage({
       : content.released_at || content.published_at);
   return (
     <MainLayout title={title}>
-      <Module>
-        <ModuleBody>
-          <Link to="/notifications">{t("notifications.back")}</Link>
+      <Module className="notifications-page">
+        <ModuleBody className="notification-details">
+          <Link className="notification-details__back" to="/notifications">
+            <FontAwesomeIcon icon={faArrowLeft} aria-hidden="true" />
+            {t("notifications.back")}
+          </Link>
           {loading && (
-            <p role="status">
+            <p className="notification-feed__status" role="status">
               <Loading small withOverlay={false} />
               {t("notifications.loading")}
             </p>
           )}
           {!!error && (
-            <div role="alert">
+            <div className="notification-feedback" role="alert">
               <p>{t("notifications.detailError")}</p>
               <Button
                 kind="secondary"
@@ -132,22 +146,24 @@ export function NotificationContentPage({
               dir="auto"
             >
               <h2>{content.title}</h2>
-              {"business_version" in content && (
-                <p>
-                  {t("notifications.version", {
-                    version: content.business_version,
-                  })}
-                </p>
-              )}
-              {date && (
-                <p>
+              <div className="notification-content__meta">
+                {"business_version" in content && (
+                  <span>
+                    {t("notifications.version", {
+                      version: content.business_version,
+                    })}
+                  </span>
+                )}
+                {date && (
                   <time dateTime={date}>
                     {formatNotificationDate(date, language)}
                   </time>
-                </p>
-              )}
+                )}
+              </div>
               {"abstract" in content && content.abstract && (
-                <p>{content.abstract}</p>
+                <p className="notification-content__summary">
+                  {content.abstract}
+                </p>
               )}
               {/* The authenticated consumer API sanitizes body HTML; titles/abstracts remain text. */}
               <div
@@ -158,36 +174,47 @@ export function NotificationContentPage({
               {!release && (
                 <>
                   {!!actionError && (
-                    <p role="alert">{t("notifications.actionError")}</p>
-                  )}
-                  {readFailed && (
-                    <Button
-                      small
-                      kind="secondary"
-                      disabled={pendingIds.includes(content.id)}
-                      onClick={() => {
-                        retryRead();
-                      }}
-                    >
-                      {t("notifications.retryRead")}
-                    </Button>
-                  )}
-                  {"release_id" in content && content.release_id && (
-                    <p>
-                      <Link to={`/releases/${content.release_id}`}>
-                        {t("notifications.releaseNotes")}
-                      </Link>
+                    <p className="notification-feedback" role="alert">
+                      {t("notifications.actionError")}
                     </p>
                   )}
-                  <Button
-                    kind="ghost"
-                    disabled={pendingIds.includes(content.id)}
-                    onClick={() => {
-                      dismiss();
-                    }}
-                  >
-                    {t("notifications.dismiss")}
-                  </Button>
+                  <div className="notification-content__actions">
+                    {"release_id" in content && content.release_id && (
+                      <Link to={`/releases/${content.release_id}`}>
+                        {t("notifications.releaseNotes")}
+                        <FontAwesomeIcon
+                          icon={faArrowRight}
+                          aria-hidden="true"
+                        />
+                      </Link>
+                    )}
+                    <div className="notification-content__buttons">
+                      {readFailed && (
+                        <Button
+                          small
+                          kind="secondary"
+                          disabled={pendingIds.includes(content.id)}
+                          onClick={() => {
+                            retryRead();
+                          }}
+                        >
+                          {t("notifications.retryRead")}
+                        </Button>
+                      )}
+                      <Button
+                        kind="secondary"
+                        icon={
+                          <FontAwesomeIcon icon={faXmark} aria-hidden="true" />
+                        }
+                        disabled={pendingIds.includes(content.id)}
+                        onClick={() => {
+                          dismiss();
+                        }}
+                      >
+                        {t("notifications.dismiss")}
+                      </Button>
+                    </div>
+                  </div>
                 </>
               )}
             </article>

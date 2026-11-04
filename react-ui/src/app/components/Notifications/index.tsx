@@ -1,13 +1,19 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Button, Loading, Tag } from "@wfp/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBell } from "@fortawesome/free-solid-svg-icons";
+import { faBell, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useNotifications } from "../../contexts/NotificationsContext";
 import { formatNotificationDate } from "../../utils/notifications";
 
-export function NotificationFeed({ onNavigate }: { onNavigate?: () => void }) {
+export function NotificationFeed({
+  onNavigate,
+  compact = false,
+}: {
+  onNavigate?: () => void;
+  compact?: boolean;
+}) {
   const { t } = useTranslation();
   const {
     notifications,
@@ -20,15 +26,15 @@ export function NotificationFeed({ onNavigate }: { onNavigate?: () => void }) {
     acknowledge,
   } = useNotifications();
   return (
-    <div aria-busy={loading}>
-      {loading && (
-        <div role="status">
+    <div className="notification-feed-wrapper" aria-busy={loading}>
+      {loading && notifications.length === 0 && (
+        <div className="notification-feed__status" role="status">
           <Loading small withOverlay={false} />
           {t("notifications.loading")}
         </div>
       )}
       {!!error && (
-        <div role="alert">
+        <div className="notification-feedback" role="alert">
           <p>{t("notifications.loadError")}</p>
           <Button
             small
@@ -41,11 +47,20 @@ export function NotificationFeed({ onNavigate }: { onNavigate?: () => void }) {
           </Button>
         </div>
       )}
-      {!!actionError && <p role="alert">{t("notifications.actionError")}</p>}
-      {!loading && !error && notifications.length === 0 && (
-        <p>{t("notifications.empty")}</p>
+      {!!actionError && (
+        <p className="notification-feedback" role="alert">
+          {t("notifications.actionError")}
+        </p>
       )}
-      <ul className="notification-feed">
+      {!loading && !error && notifications.length === 0 && (
+        <div className="notification-feed__empty">
+          <FontAwesomeIcon icon={faBell} aria-hidden="true" />
+          <p>{t("notifications.empty")}</p>
+        </div>
+      )}
+      <ul
+        className={`notification-feed${compact ? " notification-feed--compact" : ""}`}
+      >
         {notifications.map((item) => (
           <li
             lang={item.language}
@@ -53,19 +68,35 @@ export function NotificationFeed({ onNavigate }: { onNavigate?: () => void }) {
             key={item.id}
             className={`notification-feed__item${item.is_read ? "" : " notification-feed__item--unread"}`}
           >
-            <Tag type={item.is_read ? "custom" : "info"}>
-              {t(item.is_read ? "notifications.read" : "notifications.new")}
-            </Tag>
-            <Link to={`/notifications/${item.id}`} onClick={onNavigate}>
-              {item.title}
-            </Link>
-            <time dateTime={item.publish_at}>
-              {formatNotificationDate(item.publish_at, language)}
-            </time>
-            {item.abstract && <p>{item.abstract}</p>}
+            <div className="notification-feed__content">
+              <div className="notification-feed__meta">
+                <Tag
+                  className="notification-feed__badge"
+                  type={item.is_read ? "custom" : "info"}
+                >
+                  {t(item.is_read ? "notifications.read" : "notifications.new")}
+                </Tag>
+                <time dateTime={item.publish_at}>
+                  {formatNotificationDate(item.publish_at, language)}
+                </time>
+              </div>
+              <Link
+                className="notification-feed__title"
+                to={`/notifications/${item.id}`}
+                onClick={onNavigate}
+              >
+                {item.title}
+              </Link>
+              {item.abstract && (
+                <p className="notification-feed__summary">{item.abstract}</p>
+              )}
+            </div>
             <Button
               small
               kind="ghost"
+              className="notification-feed__dismiss"
+              icon={<FontAwesomeIcon icon={faXmark} aria-hidden="true" />}
+              title={t("notifications.dismiss")}
               disabled={pendingIds.includes(item.id)}
               aria-label={t("notifications.dismissNamed", {
                 title: item.title,
@@ -74,7 +105,7 @@ export function NotificationFeed({ onNavigate }: { onNavigate?: () => void }) {
                 acknowledge(item.id, "dismiss");
               }}
             >
-              {t("notifications.dismiss")}
+              {compact ? undefined : t("notifications.dismiss")}
             </Button>
           </li>
         ))}
@@ -87,6 +118,7 @@ export default function NotificationBell() {
   const { t } = useTranslation();
   const { notifications, refresh } = useNotifications();
   const [open, setOpen] = useState(false);
+  const [panelTop, setPanelTop] = useState(80);
   const wrapper = useRef<HTMLLIElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const location = useLocation();
@@ -97,6 +129,11 @@ export default function NotificationBell() {
   }, [location.pathname]);
   useEffect(() => {
     if (!open) return undefined;
+    const positionPanel = () => {
+      if (trigger.current)
+        setPanelTop(trigger.current.getBoundingClientRect().bottom + 8);
+    };
+    positionPanel();
     const outside = (event: MouseEvent) => {
       if (!wrapper.current?.contains(event.target as Node)) setOpen(false);
     };
@@ -112,10 +149,12 @@ export default function NotificationBell() {
     document.addEventListener("mousedown", outside);
     document.addEventListener("keydown", escape);
     document.addEventListener("focusin", focusOutside);
+    window.addEventListener("resize", positionPanel);
     return () => {
       document.removeEventListener("mousedown", outside);
       document.removeEventListener("keydown", escape);
       document.removeEventListener("focusin", focusOutside);
+      window.removeEventListener("resize", positionPanel);
     };
   }, [open]);
 
@@ -137,32 +176,43 @@ export default function NotificationBell() {
           setOpen(!open);
         }}
       >
-        <FontAwesomeIcon icon={faBell} aria-hidden="true" />
+        <span className="notification-menu__icon">
+          <FontAwesomeIcon icon={faBell} aria-hidden="true" />
+          {unread > 0 && (
+            <span className="notification-menu__marker" aria-hidden="true" />
+          )}
+        </span>
         <span>{t("notifications.title")}</span>
-        {unread > 0 && (
-          <span className="notification-menu__marker" aria-hidden="true" />
-        )}
       </Button>
       {open && (
         <section
           id="notification-panel"
           aria-labelledby="notification-panel-heading"
           className="notification-menu__panel"
+          style={
+            {
+              "--notification-panel-top": `${panelTop}px`,
+            } as React.CSSProperties
+          }
         >
           <div className="notification-menu__heading">
             <h2 id="notification-panel-heading">{t("notifications.title")}</h2>
             <Button
               small
               kind="ghost"
+              className="notification-menu__close"
+              aria-label={t("notifications.close")}
+              title={t("notifications.close")}
+              icon={<FontAwesomeIcon icon={faXmark} aria-hidden="true" />}
               onClick={() => {
                 setOpen(false);
                 trigger.current?.focus();
               }}
-            >
-              {t("notifications.close")}
-            </Button>
+            />
           </div>
-          <NotificationFeed onNavigate={() => setOpen(false)} />
+          <div className="notification-menu__body">
+            <NotificationFeed compact onNavigate={() => setOpen(false)} />
+          </div>
           <div className="notification-menu__links">
             <Link to="/notifications" onClick={() => setOpen(false)}>
               {t("notifications.viewAll")}
