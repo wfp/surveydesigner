@@ -46,8 +46,19 @@ def test_matching_group_sees_notification_without_read_side_effects(user, notice
     assert NotificationRead.objects.count() == 0
 
 
-def test_empty_audience_is_not_a_broadcast(user, notice):
+def test_empty_audience_is_a_broadcast_to_authenticated_users_without_groups(
+    user, notice
+):
     notice.audience.clear()
+    user.groups.clear()
+    assert notifications_for_user(user).get() == notice
+    assert NotificationRead.objects.count() == 0
+
+
+def test_broadcast_still_excludes_anonymous_and_inactive_users(user, notice):
+    notice.audience.clear()
+    assert not notifications_for_user(AnonymousUser()).exists()
+    user.is_active = False
     assert not notifications_for_user(user).exists()
 
 
@@ -143,7 +154,7 @@ def test_linked_release_must_be_active_and_published(user, notice):
 
 
 def test_detail_lookup_cannot_bypass_feed_filters(user, notice):
-    notice.audience.clear()
+    user.groups.clear()
     with pytest.raises(Notification.DoesNotExist):
         notifications_for_user(user).get(pk=notice.pk)
 
@@ -171,7 +182,28 @@ def test_release_catalogue_inherits_audience_and_hides_unlinked_content(user, no
     assert list(releases_for_user(user)) == [release]
     with pytest.raises(Release.DoesNotExist):
         releases_for_user(user).get(pk=other.pk)
+    user.groups.clear()
+    assert not releases_for_user(user).exists()
     notice.audience.clear()
+    assert list(releases_for_user(user)) == [release]
+
+
+def test_broadcast_dismissal_is_per_user_and_retains_release_notes(user, admin, notice):
+    release = published_release()
+    notice.release = release
+    notice.save()
+    notice.audience.clear()
+    user.groups.clear()
+    assert notifications_for_user(user).get() == notice
+    assert notifications_for_user(admin).get() == notice
+    NotificationRead.objects.create(
+        notification=notice, user=user, read_at=timezone.now(), dismissed=True
+    )
+    assert not notifications_for_user(user).exists()
+    assert notifications_for_user(admin).get() == notice
+    assert releases_for_user(user).get() == release
+    assert not releases_for_user(AnonymousUser()).exists()
+    user.is_active = False
     assert not releases_for_user(user).exists()
 
 
