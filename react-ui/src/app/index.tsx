@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import React, { ReactNode, useEffect } from "react";
+import React, { ReactNode, useEffect, useState } from "react";
+import { Loading } from "@wfp/react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -33,6 +34,7 @@ import ScrollToTop from "./utils/scrollToTop";
 import { API, VERSION } from "./utils";
 import { useTranslation } from "react-i18next";
 import { loadUserData } from "./redux/actions/authActions";
+import { NotificationsProvider } from "./contexts/NotificationsContext";
 
 if (import.meta.env.PROD) {
   Sentry.init({
@@ -46,11 +48,14 @@ if (import.meta.env.PROD) {
 
 interface PrivateRouteProps {
   children: ReactNode;
+  ready: boolean;
 }
 
-function PrivateRoute({ children }: PrivateRouteProps) {
+function PrivateRoute({ children, ready }: PrivateRouteProps) {
   const auth = useAppSelector((state) => state.auth);
   const location = useLocation();
+
+  if (!ready) return <Loading withOverlay small={false} />;
 
   return auth.is_logged ? (
     children
@@ -67,11 +72,18 @@ const ApiKeys = lazy(() => import("./views/APIKeys"));
 const Faq = lazy(() => import("./views/Faq"));
 const NotFound = lazy(() => import("./views/Error/NotFound"));
 const SharedLinkLandingPage = lazy(() => import("./views/SharedLink"));
+const NotificationsPage = lazy(() => import("./views/Notifications"));
+const NotificationContentPage = lazy(() =>
+  import("./views/Notifications").then((module) => ({
+    default: module.NotificationContentPage,
+  })),
+);
 
 function App() {
   const { i18n } = useTranslation();
   window.global = window;
   const dispatch = useAppDispatch();
+  const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
     API.defaults.headers.common["Accept-Language"] = i18n.language;
@@ -90,49 +102,81 @@ function App() {
   }, []);
 
   useEffect(() => {
-    dispatch(loadUserData());
+    let active = true;
+    dispatch(loadUserData()).finally(() => {
+      if (active) setAuthReady(true);
+    });
+    return () => {
+      active = false;
+    };
   }, [dispatch]);
 
   return (
     <Router>
       <ScrollToTop />
       <CookieConsent />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route
-          path="/design/:step"
-          element={
-            <PrivateRoute>
-              <SurveyWizard />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/api-keys"
-          element={
-            <PrivateRoute>
-              <ApiKeys />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/help"
-          element={
-            <PrivateRoute>
-              <Faq />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/survey/copy/:uuid"
-          element={
-            <PrivateRoute>
-              <SharedLinkLandingPage />
-            </PrivateRoute>
-          }
-        />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <NotificationsProvider>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route
+            path="/design/:step"
+            element={
+              <PrivateRoute ready={authReady}>
+                <SurveyWizard />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/api-keys"
+            element={
+              <PrivateRoute ready={authReady}>
+                <ApiKeys />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/help"
+            element={
+              <PrivateRoute ready={authReady}>
+                <Faq />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/survey/copy/:uuid"
+            element={
+              <PrivateRoute ready={authReady}>
+                <SharedLinkLandingPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <PrivateRoute ready={authReady}>
+                <NotificationsPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/notifications/:id"
+            element={
+              <PrivateRoute ready={authReady}>
+                <NotificationContentPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/releases/:id"
+            element={
+              <PrivateRoute ready={authReady}>
+                <NotificationContentPage release />
+              </PrivateRoute>
+            }
+          />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </NotificationsProvider>
     </Router>
   );
 }

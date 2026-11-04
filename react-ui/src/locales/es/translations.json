@@ -1,4 +1,26 @@
 {
+    "notifications": {
+        "title": "Notificaciones",
+        "unreadCount_one": "Notificaciones: {{count}} sin leer",
+        "unreadCount_other": "Notificaciones: {{count}} sin leer",
+        "loading": "Cargando notificaciones…",
+        "empty": "Estás al día. No hay notificaciones.",
+        "loadError": "No se pudieron cargar las notificaciones. Inténtalo de nuevo.",
+        "actionError": "No se pudo guardar el cambio. Vuelve a intentarlo.",
+        "detailError": "Esta actualización no está disponible o no se pudo cargar.",
+        "retry": "Reintentar",
+        "retryRead": "Volver a marcar como leída",
+        "new": "Nueva",
+        "read": "Leída",
+        "dismiss": "Descartar",
+        "dismissNamed": "Descartar {{title}}",
+        "close": "Cerrar",
+        "viewAll": "Ver todas las notificaciones",
+        "latestRelease": "Última versión",
+        "releaseNotes": "Notas de la versión",
+        "back": "Volver a notificaciones",
+        "version": "Versión {{version}}"
+    },
     "deleteSavedSurveyModal": {
         "delete": "¿Estás seguro de que deseas eliminar la encuesta.",
         "actionCannotBeUndone": "Esta acción no se puede deshacer.",

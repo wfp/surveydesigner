@@ -18,6 +18,7 @@ import { NavLink } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../redux/store";
 import { logout } from "../../redux/actions/authActions";
 import { languageSelect } from "../languageSelect";
+import NotificationBell from "../Notifications";
 
 function Nav() {
   const { t } = useTranslation();
@@ -109,6 +110,7 @@ function Nav() {
       pageWidth="lg"
     >
       {cmsNavigationItem}
+      {auth.is_logged && <NotificationBell />}
       <MainNavigationItem>
         <NavLink to="/help" className="d-flex align-items-center">
           <FontAwesomeIcon
