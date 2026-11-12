@@ -7,3 +7,7 @@ export interface SurveysProps {
   selectedSurveyToEdit: SavedSurvey | null;
   onModuleCriteriaChange: () => void;
 }
+
+export interface SurveysHandle {
+  clearFilters: () => void;
+}
