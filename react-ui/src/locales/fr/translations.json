@@ -1,4 +1,26 @@
 {
+    "notifications": {
+        "title": "Notifications",
+        "unreadCount_one": "Notifications : {{count}} non lue",
+        "unreadCount_other": "Notifications : {{count}} non lues",
+        "loading": "Chargement des notifications…",
+        "empty": "Vous êtes à jour. Aucune notification à afficher.",
+        "loadError": "Impossible de charger les notifications. Veuillez réessayer.",
+        "actionError": "Votre modification n'a pas pu être enregistrée. Réessayez l'action.",
+        "detailError": "Cette mise à jour est indisponible ou n'a pas pu être chargée.",
+        "retry": "Réessayer",
+        "retryRead": "Réessayer de marquer comme lue",
+        "new": "Nouvelle",
+        "read": "Lue",
+        "dismiss": "Masquer",
+        "dismissNamed": "Masquer {{title}}",
+        "close": "Fermer",
+        "viewAll": "Voir toutes les notifications",
+        "latestRelease": "Dernière version",
+        "releaseNotes": "Notes de version",
+        "back": "Retour aux notifications",
+        "version": "Version {{version}}"
+    },
     "deleteSavedSurveyModal": {
         "delete": "Êtes-vous sûr de vouloir supprimer l'enquête.",
         "actionCannotBeUndone": "Cette action ne peut pas être annulée.",

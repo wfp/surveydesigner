@@ -58,7 +58,8 @@ healthcheck:
 	$(PYTHON) manage.py health_check
 
 worker:
-	$(PYTHON) manage.py rqworker --pid /tmp/generic-worker.pid generic & \
+	$(PYTHON) manage.py reconcile_notifications
+	$(PYTHON) manage.py rqworker --with-scheduler --pid /tmp/generic-worker.pid generic & \
 	$(PYTHON) manage.py rqworker --pid /tmp/generate-doc-worker.pid generate-doc & \
 	$(PYTHON) manage.py rqworker --pid /tmp/email-worker.pid send-email
 
