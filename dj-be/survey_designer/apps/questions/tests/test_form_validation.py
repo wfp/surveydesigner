@@ -1,0 +1,2649 @@
+import io
+
+import pytest
+from django.core.files.base import ContentFile
+from django.test import override_settings
+from openpyxl import Workbook, load_workbook
+from questions.models import ChoiceGroup
+from questions.services import QuestionsExport, XLSForm
+from questions.services.form_validation import (
+    ArtifactInfrastructureError,
+    ArtifactInputError,
+    ExternalChoiceFileSource,
+    GeneratedSurveyArtifact,
+    ValidationIssue,
+    build_generated_artifact,
+    compute_artifact_hash,
+    materialize_external_files,
+    resolve_external_choice_files,
+    validate_codebook_integrity,
+    validate_generated_artifact,
+    validate_xml_compatibility,
+)
+from questions.services.xml_conversion import XMLConversion
+
+
+def _codebook_workbook(
+    survey_rows,
+    choice_rows=(),
+    *,
+    export_columns=False,
+    label_column="label",
+    suffix_rows=(),
+    recall_period_rows=(),
+    survey_columns=None,
+    choice_columns=None,
+):
+    workbook = Workbook()
+    survey = workbook.active
+    survey.title = "survey"
+    default_survey_columns = (
+        [
+            "type",
+            "name",
+            "choice_list",
+            "suffix1",
+            "suffix2",
+            "recall_period",
+        ]
+        if export_columns
+        else ["type", "name"]
+    )
+    survey.append(survey_columns or default_survey_columns)
+    for row in survey_rows:
+        survey.append(row)
+
+    choices = workbook.create_sheet("choices")
+    default_choice_columns = (
+        ["choice_list", "name", label_column]
+        if export_columns
+        else ["list_name", "name", label_column]
+    )
+    choices.append(choice_columns or default_choice_columns)
+    for row in choice_rows:
+        choices.append(row)
+
+    if export_columns or suffix_rows:
+        suffixes = workbook.create_sheet("suffixes")
+        suffixes.append(["name", "description", "type", "choicelist", "suffix"])
+        for row in suffix_rows:
+            suffixes.append(row)
+
+    if export_columns or recall_period_rows:
+        recall_periods = workbook.create_sheet("recall_periods")
+        recall_periods.append(["name", "description"])
+        for row in recall_period_rows:
+            recall_periods.append(row)
+
+    output = io.BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def _choice_filter_workbook(
+    expression,
+    *,
+    source_question="region",
+    source_values=("north",),
+    emitted_filter_column="choice_filter_name",
+    filter_values=("north",),
+):
+    choice_rows = [("regions", value, "", f"Region {value}") for value in source_values]
+    choice_rows.extend(
+        ("cities", f"city_{index}", value, f"City {index}")
+        for index, value in enumerate(filter_values, start=1)
+    )
+    return _codebook_workbook(
+        [
+            ("select_one regions", source_question, ""),
+            ("select_one cities", "city", expression),
+        ],
+        choice_rows,
+        survey_columns=["type", "name", "choice_filter"],
+        choice_columns=[
+            "list_name",
+            "name",
+            emitted_filter_column,
+            "label",
+        ],
+    )
+
+
+def _configure_generated_choice_filter(
+    source_question,
+    filtered_question,
+    source_choices,
+    filtered_choices,
+):
+    source_question.type = "select_one"
+    source_question.choices = source_choices
+    source_question.save(update_fields=["type", "choices"])
+    filtered_question.type = "select_one"
+    filtered_question.choices = filtered_choices
+    filtered_question.choice_filter = f"choice_filter_name=${{{source_question.name}}}"
+    filtered_question.save(update_fields=["type", "choices", "choice_filter"])
+    filtered_choices.choice_filter_list = source_choices
+    filtered_choices.save(update_fields=["choice_filter_list"])
+
+    source_values = list(source_choices.choices.order_by("order", "id"))
+    for choice, source_value in zip(
+        filtered_choices.choices.order_by("order", "id"), source_values
+    ):
+        choice.choice_filter_name = source_value
+        choice.save(update_fields=["choice_filter_name"])
+
+
+class ConversionMustNotRun:
+    def __init__(self, xlsx_file):
+        raise AssertionError("pyxform must not run for an invalid codebook")
+
+
+def test_validation_issue_serializes_structured_composition_diagnostics():
+    issue = ValidationIssue(
+        code="SELECTED_SCOPE_DEPENDENCY_NOT_EMITTED",
+        layer="composition",
+        severity="error",
+        message="A selected question has an unselected dependency.",
+        owner={"model": "RootQuestion", "id": 7, "name": "question_a"},
+        submodule={"model": "Submodule", "id": 3, "name": "food"},
+        dependency={
+            "name": "question_b",
+            "status": "not_emitted",
+            "target": {"model": "RootQuestion", "id": 8},
+        },
+        field="relevant",
+    )
+
+    assert issue.as_dict() == {
+        "code": "SELECTED_SCOPE_DEPENDENCY_NOT_EMITTED",
+        "layer": "composition",
+        "severity": "error",
+        "message": "A selected question has an unselected dependency.",
+        "owner": {"model": "RootQuestion", "id": 7, "name": "question_a"},
+        "submodule": {"model": "Submodule", "id": 3, "name": "food"},
+        "dependency": {
+            "name": "question_b",
+            "status": "not_emitted",
+            "target": {"model": "RootQuestion", "id": 8},
+        },
+        "field": "relevant",
+    }
+
+
+def _external_choice_source(
+    content=b"name,label\na,Choice A\n",
+    *,
+    filename="choices.csv",
+    file_obj=None,
+    question_type="select_one_from_file",
+    parameters="",
+    choice_filter="",
+):
+    return ExternalChoiceFileSource(
+        filename=filename,
+        file_obj=file_obj or ContentFile(content, name=filename),
+        owner={"model": "RootQuestion", "id": 7, "name": "question_a"},
+        file_owner={"model": "ChoiceGroupFile", "id": 11, "name": "choices"},
+        question_type=question_type,
+        parameters=parameters,
+        choice_filter=choice_filter,
+    )
+
+
+def test_artifact_hash_is_order_independent_for_external_files():
+    first = compute_artifact_hash(b"xlsx", {"b.csv": b"2", "a.csv": b"1"})
+    second = compute_artifact_hash(b"xlsx", {"a.csv": b"1", "b.csv": b"2"})
+
+    assert first == second
+    assert first.startswith("sha256:")
+    assert first != compute_artifact_hash(b"different", {"a.csv": b"1", "b.csv": b"2"})
+
+
+def test_build_generated_artifact_generates_and_reads_each_external_file_once():
+    class ReadOnceFile:
+        def __init__(self, content):
+            self.content = content
+            self.open_mode = None
+            self.read_count = 0
+            self.close_count = 0
+
+        def open(self, mode):
+            self.open_mode = mode
+            return self
+
+        def read(self):
+            self.read_count += 1
+            return self.content
+
+        def close(self):
+            self.close_count += 1
+
+    external = ReadOnceFile(b"name\nvalue\n")
+
+    class Form:
+        id_name = "generated-form"
+
+        def __init__(self):
+            self.generate_count = 0
+            self.external_files = {"choices.csv": external}
+
+        def generate(self):
+            self.generate_count += 1
+            return b"xlsx-bytes"
+
+    form = Form()
+    artifact = build_generated_artifact(form)
+
+    assert artifact.xlsx_bytes == b"xlsx-bytes"
+    assert artifact.external_files == {"choices.csv": b"name\nvalue\n"}
+    assert form.generate_count == 1
+    assert external.open_mode == "rb"
+    assert external.read_count == 1
+    assert external.close_count == 1
+
+
+def test_compatibility_requires_referenced_csv_in_exact_artifact():
+    xml = (
+        '<h:html xmlns:h="http://www.w3.org/1999/xhtml" '
+        'xmlns:xf="http://www.w3.org/2002/xforms">'
+        "<h:head><xf:model><xf:instance><data/></xf:instance>"
+        '<xf:instance id="choices" src="jr://file-csv/choices.csv"/>'
+        "</xf:model></h:head><h:body/></h:html>"
+    )
+
+    issues = validate_xml_compatibility(xml)
+    assert [issue.code for issue in issues] == ["EXTERNAL_FILE_MISSING"]
+    assert validate_xml_compatibility(xml, {"choices.csv": b"data"}) == []
+
+
+def _xform(model="", body=""):
+    return (
+        '<h:html xmlns="http://www.w3.org/2002/xforms" '
+        'xmlns:h="http://www.w3.org/1999/xhtml" '
+        'xmlns:jr="http://openrosa.org/javarosa">'
+        "<h:head><model><instance><data><q/><r/></data></instance>"
+        f"{model}</model></h:head><h:body>{body}</h:body></h:html>"
+    )
+
+
+_XPATH_LOCATIONS = (
+    ("relevant", lambda value: _xform(f'<bind nodeset="/data/q" relevant="{value}"/>')),
+    (
+        "read_only",
+        lambda value: _xform(f'<bind nodeset="/data/q" readonly="{value}"/>'),
+    ),
+    (
+        "default",
+        lambda value: _xform(
+            f'<setvalue event="odk-instance-first-load" ref="/data/q" value="{value}"/>'
+        ),
+    ),
+    (
+        "choice_filter",
+        lambda value: _xform(
+            body=f'<select1 ref="/data/q"><itemset nodeset="{value}"/></select1>'
+        ),
+    ),
+    (
+        "repeat_count",
+        lambda value: _xform(body=f'<repeat nodeset="/data/q" jr:count="{value}"/>'),
+    ),
+)
+
+
+@pytest.mark.parametrize("column, build", _XPATH_LOCATIONS)
+def test_compatibility_compiles_every_emitted_xpath(column, build):
+    issues = validate_xml_compatibility(build(" /data/r  ="))
+
+    assert [issue.code for issue in issues] == ["XPATH_SYNTAX_INVALID"]
+    assert (issues[0].column, issues[0].field, issues[0].layer) == (
+        column,
+        "/data/q",
+        "compatibility",
+    )
+    assert validate_xml_compatibility(build("jr:choice-name( /data/r , 'x')")) == []
+
+
+def test_validation_result_normalizes_compatibility_issues():
+    class Conversion:
+        def __init__(self, xlsx_file):
+            self.xlsx_file = xlsx_file
+            self.errors = []
+            self.warnings = ["non-blocking warning"]
+
+        def run(self):
+            return (
+                '<h:html xmlns:h="http://www.w3.org/1999/xhtml" '
+                'xmlns:xf="http://www.w3.org/2002/xforms">'
+                "<h:head><xf:model><xf:instance><data/></xf:instance>"
+                "</xf:model></h:head><h:body/></h:html>"
+            )
+
+    artifact = GeneratedSurveyArtifact(_codebook_workbook([("text", "notes")]))
+    result = validate_generated_artifact(artifact, converter_cls=Conversion)
+
+    assert result.valid is True
+    assert result.errors == ()
+    assert result.warnings[0].as_dict() == {
+        "code": "PYXFORM_WARNING",
+        "layer": "pyxform",
+        "severity": "warning",
+        "message": "non-blocking warning",
+    }
+    assert result.as_dict()["validator"] == {
+        "pyxform": "4.5.0",
+        "compatibility": "1.1",
+    }
+
+
+@pytest.mark.parametrize("question_type", ["select_one", "select_multiple"])
+def test_codebook_validation_accepts_internal_select_with_emitted_choices(
+    question_type,
+):
+    xlsx = _codebook_workbook(
+        [(f"{question_type} foods", "preferred_food")],
+        [("foods", "rice", "Rice")],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_codebook_validation_reports_internal_select_without_choice_list():
+    xlsx = _codebook_workbook([("select_one", "preferred_food")])
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_LIST_MISSING"]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_CHOICE_LIST_MISSING",
+        "layer": "composition",
+        "severity": "error",
+        "message": "Question 'preferred_food' uses select_one but does not specify a choice list.",
+        "owner": {"model": "question", "name": "preferred_food"},
+        "field": "choices",
+        "sheet": "survey",
+        "column": "type",
+        "row": 2,
+    }
+
+
+def test_codebook_validation_reports_choice_list_without_emitted_rows():
+    xlsx = _codebook_workbook([("select_multiple foods", "preferred_foods")])
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_LIST_NOT_EMITTED"]
+    assert "choice list 'foods'" in issues[0].message
+
+
+def test_codebook_validation_uses_export_choice_list_column():
+    xlsx = _codebook_workbook(
+        [("select_one", "preferred_food", "foods")],
+        [("foods", "rice", "Rice")],
+        export_columns=True,
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+@pytest.mark.parametrize("missing_value", [None, "", "   "])
+def test_codebook_validation_reports_missing_choice_value(missing_value):
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [("foods", missing_value, "Rice")],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_VALUE_MISSING"]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_CHOICE_VALUE_MISSING",
+        "layer": "composition",
+        "severity": "error",
+        "message": "Choice list 'foods' has an emitted choice with no value.",
+        "owner": {"model": "choice_list", "name": "foods"},
+        "field": "name",
+        "sheet": "choices",
+        "column": "name",
+        "row": 2,
+    }
+
+
+@pytest.mark.parametrize("missing_label", [None, "", "   "])
+@pytest.mark.parametrize("label_column", ["label", "label::English (en)"])
+def test_codebook_validation_reports_missing_english_label(
+    missing_label,
+    label_column,
+):
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [("foods", "rice", missing_label)],
+        label_column=label_column,
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_LABEL_MISSING"]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_CHOICE_LABEL_MISSING",
+        "layer": "composition",
+        "severity": "error",
+        "message": "Choice 'rice' in choice list 'foods' has no English label.",
+        "owner": {"model": "choice", "name": "rice", "choice_list": "foods"},
+        "field": "label",
+        "sheet": "choices",
+        "column": label_column,
+        "row": 2,
+    }
+
+
+def test_codebook_validation_accepts_numeric_choice_value():
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [("foods", 0, "None")],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_codebook_validation_reports_duplicate_value_in_same_list():
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [
+            ("foods", "rice", "Rice"),
+            ("foods", "rice", "Rice duplicate"),
+        ],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_VALUE_DUPLICATE"]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_CHOICE_VALUE_DUPLICATE",
+        "layer": "composition",
+        "severity": "error",
+        "message": "Choice value 'rice' is duplicated in choice list 'foods'; it was first emitted at row 2.",
+        "owner": {"model": "choice", "name": "rice", "choice_list": "foods"},
+        "field": "name",
+        "sheet": "choices",
+        "column": "name",
+        "row": 3,
+    }
+
+
+def test_codebook_validation_reports_every_duplicate_after_first_row():
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [
+            ("foods", "rice", "Rice"),
+            ("foods", "rice", "Rice duplicate"),
+            ("foods", "rice", "Rice duplicate again"),
+        ],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.row for issue in issues] == [3, 4]
+    assert all("first emitted at row 2" in issue.message for issue in issues)
+
+
+def test_codebook_validation_allows_same_value_in_different_lists():
+    xlsx = _codebook_workbook(
+        [
+            ("select_one foods", "preferred_food"),
+            ("select_one drinks", "preferred_drink"),
+        ],
+        [
+            ("foods", "other", "Other food"),
+            ("drinks", "other", "Other drink"),
+        ],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_codebook_validation_compares_choice_values_case_sensitively():
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [
+            ("foods", "Other", "Uppercase"),
+            ("foods", "other", "Lowercase"),
+        ],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+@pytest.mark.parametrize(
+    "first_value, duplicate_value",
+    [(" rice ", "rice"), (1, "1")],
+)
+def test_codebook_validation_uses_emitted_value_normalization_for_duplicates(
+    first_value,
+    duplicate_value,
+):
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [
+            ("foods", first_value, "First"),
+            ("foods", duplicate_value, "Duplicate"),
+        ],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_VALUE_DUPLICATE"]
+
+
+def test_duplicate_choice_value_blocks_pyxform_conversion():
+    artifact = GeneratedSurveyArtifact(
+        _codebook_workbook(
+            [("select_one foods", "preferred_food")],
+            [
+                ("foods", "rice", "Rice"),
+                ("foods", "rice", "Rice duplicate"),
+            ],
+        )
+    )
+
+    result = validate_generated_artifact(artifact, converter_cls=ConversionMustNotRun)
+
+    assert result.valid is False
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_CHOICE_VALUE_DUPLICATE"
+    ]
+
+
+def test_codebook_export_layout_reports_duplicate_choice_value():
+    xlsx = _codebook_workbook(
+        [("select_one", "preferred_food", "foods")],
+        [
+            ("foods", "rice", "Rice"),
+            ("foods", "rice", "Rice duplicate"),
+        ],
+        export_columns=True,
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_VALUE_DUPLICATE"]
+
+
+@pytest.mark.parametrize(
+    "list_name",
+    ["foods", "_foods", "food-list", "food.list", "food_1", "éfoods"],
+)
+def test_codebook_validation_accepts_compatible_choice_list_names(list_name):
+    xlsx = _codebook_workbook(
+        [(f"select_one {list_name}", "preferred_food")],
+        [(list_name, "rice", "Rice")],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+@pytest.mark.parametrize(
+    "list_name",
+    ["1foods", "food list", "food$list", "food/list", "food:items"],
+)
+def test_codebook_validation_reports_invalid_choice_list_name(list_name):
+    xlsx = _codebook_workbook(
+        [(f"select_one {list_name}", "preferred_food")],
+        [(list_name, "rice", "Rice")],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_LIST_NAME_INVALID"]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_CHOICE_LIST_NAME_INVALID",
+        "layer": "composition",
+        "severity": "error",
+        "message": f"Choice list name '{list_name}' is invalid. Names must begin with a letter or underscore and contain only letters, digits, underscores, hyphens, or periods.",
+        "owner": {"model": "choice_list", "name": list_name},
+        "field": "list_name",
+        "sheet": "choices",
+        "column": "list_name",
+        "row": 2,
+    }
+
+
+def test_invalid_unemitted_choice_list_name_is_reported_at_question():
+    xlsx = _codebook_workbook([("select_one 1foods", "preferred_food")])
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [
+        "CODEBOOK_CHOICE_LIST_NAME_INVALID",
+        "CODEBOOK_CHOICE_LIST_NOT_EMITTED",
+    ]
+    assert issues[0].sheet == "survey"
+    assert issues[0].row == 2
+    assert issues[0].owner == {"model": "question", "name": "preferred_food"}
+
+
+def test_codebook_validation_reports_choice_row_without_list_name():
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [("", "rice", "Rice")],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [
+        "CODEBOOK_CHOICE_LIST_NAME_MISSING",
+        "CODEBOOK_CHOICE_LIST_NOT_EMITTED",
+    ]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_CHOICE_LIST_NAME_MISSING",
+        "layer": "composition",
+        "severity": "error",
+        "message": "An emitted choice row does not specify a choice list name.",
+        "owner": {"model": "choice", "name": "rice"},
+        "field": "list_name",
+        "sheet": "choices",
+        "column": "list_name",
+        "row": 2,
+    }
+
+
+@pytest.mark.parametrize("choice_value", ["with space", "with\tspace"])
+def test_codebook_validation_rejects_whitespace_in_select_multiple_value(
+    choice_value,
+):
+    xlsx = _codebook_workbook(
+        [("select_multiple foods", "preferred_foods")],
+        [("foods", choice_value, "Value")],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_VALUE_INVALID"]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_CHOICE_VALUE_INVALID",
+        "layer": "composition",
+        "severity": "error",
+        "message": f"Choice value '{choice_value}' in choice list 'foods' contains whitespace, which is not supported by select_multiple questions.",
+        "owner": {
+            "model": "choice",
+            "name": choice_value,
+            "choice_list": "foods",
+        },
+        "field": "name",
+        "sheet": "choices",
+        "column": "name",
+        "row": 2,
+    }
+
+
+def test_codebook_validation_allows_whitespace_in_select_one_value():
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [("foods", "white rice", "White rice")],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_codebook_validation_uses_strictest_type_for_shared_choice_list():
+    xlsx = _codebook_workbook(
+        [
+            ("select_one foods", "preferred_food"),
+            ("select_multiple foods", "preferred_foods"),
+        ],
+        [("foods", "white rice", "White rice")],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_VALUE_INVALID"]
+
+
+@pytest.mark.parametrize(
+    "choice_value",
+    ["1", "1.5", "-1", "a-b", "a.b", "a/b", "a:b", "é"],
+)
+def test_codebook_validation_accepts_compatible_select_multiple_values(choice_value):
+    xlsx = _codebook_workbook(
+        [("select_multiple foods", "preferred_foods")],
+        [("foods", choice_value, "Value")],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_choice_value_syntax_validation_supports_codebook_export_layout():
+    xlsx = _codebook_workbook(
+        [("select_multiple", "preferred_foods", "foods")],
+        [("foods", "white rice", "White rice")],
+        export_columns=True,
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_VALUE_INVALID"]
+
+
+def test_invalid_choice_syntax_blocks_pyxform_conversion():
+    artifact = GeneratedSurveyArtifact(
+        _codebook_workbook(
+            [("select_multiple foods", "preferred_foods")],
+            [("foods", "white rice", "White rice")],
+        )
+    )
+
+    result = validate_generated_artifact(artifact, converter_cls=ConversionMustNotRun)
+
+    assert result.valid is False
+    assert [issue.code for issue in result.errors] == ["CODEBOOK_CHOICE_VALUE_INVALID"]
+
+
+def test_codebook_validation_reports_missing_generated_name():
+    xlsx = _codebook_workbook([("text", "")])
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_GENERATED_NAME_MISSING"]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_GENERATED_NAME_MISSING",
+        "layer": "composition",
+        "severity": "error",
+        "message": "Survey row 2 of type 'text' requires a generated name.",
+        "owner": {"model": "question", "type": "text"},
+        "field": "name",
+        "sheet": "survey",
+        "column": "name",
+        "row": 2,
+    }
+
+
+def test_codebook_validation_allows_unnamed_closing_rows():
+    xlsx = _codebook_workbook(
+        [
+            ("begin_group", "household"),
+            ("end_group", ""),
+            ("begin_repeat", "members"),
+            ("end repeat", ""),
+        ]
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["1question", "question name", "question$name", "question/name", "question:name"],
+)
+def test_codebook_validation_reports_invalid_generated_name(name):
+    xlsx = _codebook_workbook([("text", name)])
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_GENERATED_NAME_INVALID"]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_GENERATED_NAME_INVALID",
+        "layer": "composition",
+        "severity": "error",
+        "message": f"Generated question name '{name}' is invalid. Names must begin with a letter or underscore and contain only letters, digits, underscores, hyphens, or periods.",
+        "owner": {"model": "question", "name": name, "type": "text"},
+        "field": "name",
+        "sheet": "survey",
+        "column": "name",
+        "row": 2,
+    }
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["question", "_question", "question-1", "question.1", "question_1", "équestion"],
+)
+def test_codebook_validation_accepts_compatible_generated_name(name):
+    xlsx = _codebook_workbook([("text", name)])
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_codebook_validation_rejects_reserved_generated_name():
+    xlsx = _codebook_workbook([("text", "meta")])
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_GENERATED_NAME_INVALID"]
+    assert issues[0].message == (
+        "Generated question name 'meta' is reserved and cannot be emitted on the "
+        "survey sheet."
+    )
+
+
+def test_codebook_validation_reports_duplicate_generated_name_across_row_types():
+    xlsx = _codebook_workbook(
+        [
+            ("begin_group", "household"),
+            ("text", "household"),
+            ("end_group", ""),
+        ]
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_GENERATED_NAME_DUPLICATE"]
+    assert issues[0].as_dict() == {
+        "code": "CODEBOOK_GENERATED_NAME_DUPLICATE",
+        "layer": "composition",
+        "severity": "error",
+        "message": "Generated question name 'household' duplicates a group first emitted at survey row 2.",
+        "owner": {
+            "model": "question",
+            "name": "household",
+            "type": "text",
+            "first_model": "group",
+            "first_row": 2,
+        },
+        "field": "name",
+        "sheet": "survey",
+        "column": "name",
+        "row": 3,
+    }
+
+
+def test_codebook_validation_reports_every_generated_name_duplicate_after_first():
+    xlsx = _codebook_workbook(
+        [("text", "shared"), ("integer", "shared"), ("decimal", "shared")]
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.row for issue in issues] == [3, 4]
+    assert all(issue.code == "CODEBOOK_GENERATED_NAME_DUPLICATE" for issue in issues)
+    assert all("first emitted at survey row 2" in issue.message for issue in issues)
+
+
+def test_codebook_validation_compares_generated_names_case_sensitively():
+    xlsx = _codebook_workbook([("text", "Household"), ("text", "household")])
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_questions_export_layout_does_not_apply_final_name_collision_rule():
+    xlsx = _codebook_workbook(
+        [("text", "shared", ""), ("text", "shared", "")],
+        export_columns=True,
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_invalid_generated_name_blocks_pyxform_conversion():
+    artifact = GeneratedSurveyArtifact(_codebook_workbook([("text", "1invalid")]))
+
+    result = validate_generated_artifact(artifact, converter_cls=ConversionMustNotRun)
+
+    assert result.valid is False
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_GENERATED_NAME_INVALID"
+    ]
+
+
+def test_codebook_export_accepts_valid_suffix_and_recall_period_composition():
+    xlsx = _codebook_workbook(
+        [("select_one", "food_adult_male_7d", "yes_no", "_adult", "_male", "_7d")],
+        [("yes_no", "yes", "Yes")],
+        export_columns=True,
+        suffix_rows=[
+            ("_adult", "Adult", "text", "", "_male"),
+            ("_male", "Male", "select_one", "yes_no", ""),
+        ],
+        recall_period_rows=[("_7d", "Last seven days")],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_real_codebook_export_with_suffix_and_recall_period_passes(
+    sub_question_1,
+    sub_question_2,
+):
+    base_question_model = type(sub_question_1.base_question)
+    export = QuestionsExport(languages=[("en", "English")])
+    xlsx = export.generate_from_questions(
+        base_question_model.objects.filter(
+            id__in=[
+                sub_question_1.base_question.id,
+                sub_question_2.base_question.id,
+            ]
+        )
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_questions_export_validation_reports_database_owners(
+    root_question_2,
+    sub_question_1,
+    sub_question_2,
+    choices_1,
+    suffix_1,
+    recall_period_1,
+):
+    type(root_question_2).objects.filter(id=root_question_2.id).update(choices=None)
+    first_choice = choices_1.choices.order_by("order", "id").first()
+    type(first_choice).objects.filter(id=first_choice.id).update(label="")
+    type(suffix_1).objects.filter(id=suffix_1.id).update(type="unsupported")
+    type(recall_period_1).objects.filter(id=recall_period_1.id).update(
+        name="invalid recall period"
+    )
+
+    base_question_model = type(root_question_2.base_question)
+    export = QuestionsExport(languages=[("en", "English")])
+    xlsx = export.generate_from_questions(
+        base_question_model.objects.filter(
+            id__in=[
+                root_question_2.base_question.id,
+                sub_question_1.base_question.id,
+                sub_question_2.base_question.id,
+            ]
+        )
+    )
+
+    issues = validate_codebook_integrity(xlsx, export.row_source_map)
+    owners_by_code = {issue.code: issue.owner for issue in issues}
+
+    assert owners_by_code["CODEBOOK_CHOICE_LIST_MISSING"] == {
+        "model": "RootQuestion",
+        "id": root_question_2.id,
+        "name": root_question_2.name,
+    }
+    assert owners_by_code["CODEBOOK_CHOICE_LABEL_MISSING"] == {
+        "model": "ChoiceGroup",
+        "id": choices_1.id,
+        "name": choices_1.name,
+    }
+    assert owners_by_code["CODEBOOK_SUFFIX_TYPE_UNSUPPORTED"] == {
+        "model": "Suffix",
+        "id": suffix_1.id,
+        "name": suffix_1.name,
+    }
+    assert owners_by_code["CODEBOOK_RECALL_PERIOD_NAME_INVALID"] == {
+        "model": "RecallPeriod",
+        "id": recall_period_1.id,
+        "name": "invalid recall period",
+    }
+
+
+@pytest.mark.parametrize(
+    "survey_row, expected_code, expected_field",
+    [
+        (
+            ("text", "food_missing", "", "_missing", "", ""),
+            "CODEBOOK_SUFFIX_NOT_EMITTED",
+            "suffix1",
+        ),
+        (
+            ("text", "food_7d", "", "", "", "_7d"),
+            "CODEBOOK_RECALL_PERIOD_NOT_EMITTED",
+            "recall_period",
+        ),
+    ],
+)
+def test_codebook_export_reports_non_emitted_generated_reference(
+    survey_row,
+    expected_code,
+    expected_field,
+):
+    xlsx = _codebook_workbook([survey_row], export_columns=True)
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [expected_code]
+    assert issues[0].field == expected_field
+    assert issues[0].owner == {"model": "question", "name": survey_row[1]}
+
+
+def test_codebook_export_reports_suffix_2_without_suffix_1():
+    xlsx = _codebook_workbook(
+        [("text", "food_male", "", "", "_male", "")],
+        export_columns=True,
+        suffix_rows=[("_male", "Male", "text", "", "")],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_NESTED_SUFFIX_INVALID"]
+    assert "without suffix 1" in issues[0].message
+
+
+def test_codebook_export_reports_incompatible_nested_suffix():
+    xlsx = _codebook_workbook(
+        [("text", "food_adult_male", "", "_adult", "_male", "")],
+        export_columns=True,
+        suffix_rows=[
+            ("_adult", "Adult", "text", "", "_female"),
+            ("_male", "Male", "text", "", ""),
+        ],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_NESTED_SUFFIX_INVALID"]
+    assert "not nested under suffix 1 '_adult'" in issues[0].message
+
+
+@pytest.mark.parametrize(
+    "suffix_row, expected_code",
+    [
+        (("_adult", "Adult", "same", "", ""), "CODEBOOK_SUFFIX_TYPE_UNSUPPORTED"),
+        (
+            ("_adult", "Adult", "select_one", "", ""),
+            "CODEBOOK_SUFFIX_CHOICE_LIST_MISSING",
+        ),
+        (
+            ("_adult", "Adult", "select_one", "missing", ""),
+            "CODEBOOK_SUFFIX_CHOICE_LIST_NOT_EMITTED",
+        ),
+        (
+            ("_adult", "Adult", "text", "yes_no", ""),
+            "CODEBOOK_SUFFIX_CHOICE_LIST_INCOMPATIBLE",
+        ),
+    ],
+)
+def test_codebook_export_reports_invalid_suffix_definition(
+    suffix_row,
+    expected_code,
+):
+    xlsx = _codebook_workbook(
+        [],
+        export_columns=True,
+        suffix_rows=[suffix_row],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [expected_code]
+    assert issues[0].owner["model"] == "suffix"
+
+
+def test_codebook_export_reports_effective_suffix_type_mismatch():
+    xlsx = _codebook_workbook(
+        [("integer", "food_adult", "", "_adult", "", "")],
+        export_columns=True,
+        suffix_rows=[("_adult", "Adult", "text", "", "")],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_SUFFIX_TYPE_INCOMPATIBLE"]
+
+
+def test_codebook_export_reports_effective_suffix_choice_list_mismatch():
+    xlsx = _codebook_workbook(
+        [("select_one", "food_adult", "list_b", "_adult", "", "")],
+        [("list_a", "yes", "Yes"), ("list_b", "yes", "Yes")],
+        export_columns=True,
+        suffix_rows=[("_adult", "Adult", "select_one", "list_a", "")],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [
+        "CODEBOOK_SUFFIX_CHOICE_LIST_INCOMPATIBLE"
+    ]
+
+
+@pytest.mark.parametrize(
+    "suffix_rows, expected_code",
+    [
+        (
+            [("", "Description", "text", "", "")],
+            "CODEBOOK_SUFFIX_NAME_MISSING",
+        ),
+        (
+            [("1invalid", "Description", "text", "", "")],
+            "CODEBOOK_SUFFIX_NAME_INVALID",
+        ),
+        (
+            [
+                ("_adult", "First", "text", "", ""),
+                ("_adult", "Second", "text", "", ""),
+            ],
+            "CODEBOOK_SUFFIX_NAME_DUPLICATE",
+        ),
+    ],
+)
+def test_codebook_export_reports_invalid_suffix_name(suffix_rows, expected_code):
+    xlsx = _codebook_workbook(
+        [],
+        export_columns=True,
+        suffix_rows=suffix_rows,
+    )
+
+    assert [issue.code for issue in validate_codebook_integrity(xlsx)] == [
+        expected_code
+    ]
+
+
+@pytest.mark.parametrize(
+    "recall_rows, expected_code",
+    [
+        ([("", "Last seven days")], "CODEBOOK_RECALL_PERIOD_NAME_MISSING"),
+        ([("7 days", "Last seven days")], "CODEBOOK_RECALL_PERIOD_NAME_INVALID"),
+        (
+            [("_7d", "First"), ("_7d", "Second")],
+            "CODEBOOK_RECALL_PERIOD_NAME_DUPLICATE",
+        ),
+    ],
+)
+def test_codebook_export_reports_invalid_recall_period_name(
+    recall_rows,
+    expected_code,
+):
+    xlsx = _codebook_workbook(
+        [],
+        export_columns=True,
+        recall_period_rows=recall_rows,
+    )
+
+    assert [issue.code for issue in validate_codebook_integrity(xlsx)] == [
+        expected_code
+    ]
+
+
+def test_final_artifact_reports_unsupported_generated_type():
+    xlsx = _codebook_workbook([("same", "food_adult")])
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_GENERATED_TYPE_UNSUPPORTED"]
+    assert issues[0].owner == {
+        "model": "question",
+        "name": "food_adult",
+        "type": "same",
+    }
+
+
+def test_final_artifact_reports_missing_generated_type():
+    xlsx = _codebook_workbook([("", "food_adult")])
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_GENERATED_TYPE_UNSUPPORTED"]
+    assert "has no type" in issues[0].message
+
+
+def test_final_artifact_uses_source_context_for_nested_suffix_validation():
+    xlsx = _codebook_workbook([("text", "food_adult_male")])
+    source_map = {
+        ("survey", 2): {
+            "model": "SubQuestion",
+            "id": 42,
+            "name": "food_adult_male",
+            "suffix": {
+                "model": "Suffix",
+                "id": 10,
+                "name": "_adult",
+                "nested_suffixes": (),
+            },
+            "suffix_2": {"model": "Suffix", "id": 11, "name": "_male"},
+            "recall_period": None,
+            "effective_type": "text",
+            "effective_choice_list": "",
+        }
+    }
+
+    issues = validate_codebook_integrity(xlsx, source_map)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_NESTED_SUFFIX_INVALID"]
+    assert issues[0].owner == {
+        "model": "SubQuestion",
+        "id": 42,
+        "name": "food_adult_male",
+    }
+
+
+def test_final_artifact_reports_invalid_suffix_name_with_suffix_owner():
+    xlsx = _codebook_workbook([("text", "food_adult")])
+    source_map = {
+        ("survey", 2): {
+            "model": "SubQuestion",
+            "id": 42,
+            "name": "food_adult",
+            "suffix": {
+                "model": "Suffix",
+                "id": 10,
+                "name": "bad suffix",
+                "nested_suffixes": (),
+            },
+            "suffix_2": None,
+            "recall_period": None,
+            "effective_type": "text",
+            "effective_choice_list": "",
+        }
+    }
+
+    issues = validate_codebook_integrity(xlsx, source_map)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_SUFFIX_NAME_INVALID"]
+    assert issues[0].owner == {
+        "model": "Suffix",
+        "id": 10,
+        "name": "bad suffix",
+    }
+
+
+def test_codebook_validation_does_not_decide_non_english_label_fallback():
+    xlsx = _codebook_workbook(
+        [("select_one foods", "preferred_food")],
+        [("foods", "rice", "")],
+        label_column="label::French (fr)",
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_codebook_validation_ignores_external_selects():
+    xlsx = _codebook_workbook([("select_one_from_file foods.csv", "preferred_food")])
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "choice_filter_name=${region}",
+        "${region}=choice_filter_name",
+        "selected(${region}, choice_filter_name)",
+    ],
+)
+def test_codebook_validation_accepts_emitted_choice_filter_schema(expression):
+    xlsx = _choice_filter_workbook(expression)
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_codebook_validation_reports_unknown_choice_filter_column():
+    xlsx = _choice_filter_workbook("unknown_column=${region}")
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [
+        "CODEBOOK_CHOICE_FILTER_COLUMN_NOT_EMITTED"
+    ]
+    assert issues[0].owner == {
+        "model": "question",
+        "name": "city",
+        "type": "select_one cities",
+    }
+
+
+def test_codebook_validation_reports_choice_filter_column_case_mismatch():
+    xlsx = _choice_filter_workbook(
+        "choice_filter_name=${region}",
+        emitted_filter_column="Choice_Filter_Name",
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [
+        "CODEBOOK_CHOICE_FILTER_COLUMN_CASE_MISMATCH"
+    ]
+    assert "available column: 'Choice_Filter_Name'" in issues[0].message
+
+
+def test_codebook_validation_reports_empty_choice_filter_column():
+    xlsx = _choice_filter_workbook("choice_filter_name=${region}", filter_values=("",))
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [
+        "CODEBOOK_CHOICE_FILTER_COLUMN_VALUES_MISSING"
+    ]
+
+
+def test_codebook_validation_reports_unavailable_choice_filter_question():
+    xlsx = _choice_filter_workbook("choice_filter_name=${not_selected}")
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [
+        "CODEBOOK_CHOICE_FILTER_QUESTION_NOT_EMITTED"
+    ]
+
+
+def test_codebook_validation_reports_choice_filter_question_case_mismatch():
+    xlsx = _choice_filter_workbook(
+        "choice_filter_name=${region}", source_question="Region"
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [
+        "CODEBOOK_CHOICE_FILTER_QUESTION_CASE_MISMATCH"
+    ]
+    assert "available question: 'Region'" in issues[0].message
+
+
+def test_codebook_validation_reports_unavailable_choice_filter_value():
+    xlsx = _choice_filter_workbook(
+        "choice_filter_name=${region}", filter_values=("south",)
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == [
+        "CODEBOOK_CHOICE_FILTER_VALUE_NOT_EMITTED"
+    ]
+    assert "'south'" in issues[0].message
+
+
+def test_codebook_validation_reports_uncorrelated_choice_filter():
+    xlsx = _codebook_workbook(
+        [
+            ("select_one regions", "region", ""),
+            ("select_one districts", "district", ""),
+            (
+                "select_one cities",
+                "city",
+                "concat(${region}, ${district}) = concat(region_code, district_code)",
+            ),
+        ],
+        [
+            ("regions", "north", "", "", "North"),
+            ("districts", "central", "", "", "Central"),
+            ("cities", "city_1", "north", "central", "City 1"),
+        ],
+        survey_columns=["type", "name", "choice_filter"],
+        choice_columns=[
+            "list_name",
+            "name",
+            "region_code",
+            "district_code",
+            "label",
+        ],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_CHOICE_FILTER_UNCORRELATED"]
+
+
+def test_codebook_validation_skips_external_choice_filter_schema():
+    xlsx = _codebook_workbook(
+        [("select_one_from_file cities.csv", "city", "unknown=${missing}")],
+        survey_columns=["type", "name", "choice_filter"],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+@pytest.mark.parametrize(
+    "expression_column",
+    [
+        "relevant",
+        "constraint",
+        "calculation",
+        "repeat_count",
+        "required",
+        "default",
+        "read_only",
+        "disabled",
+        "parameters",
+        "label",
+        "hint",
+    ],
+)
+def test_codebook_validation_reports_general_reference_case_mismatch(
+    expression_column,
+):
+    xlsx = _codebook_workbook(
+        [
+            ("integer", "Age", ""),
+            ("calculate", "result", "${age}"),
+        ],
+        survey_columns=["type", "name", expression_column],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_REFERENCE_CASE_MISMATCH"]
+    assert issues[0].field == expression_column
+    assert issues[0].owner == {
+        "model": "question",
+        "name": "result",
+        "type": "calculate",
+    }
+    assert "references 'age'" in issues[0].message
+    assert "available exact name: 'Age'" in issues[0].message
+
+
+def test_codebook_validation_accepts_exact_case_reference():
+    xlsx = _codebook_workbook(
+        [("integer", "Age", ""), ("calculate", "result", "${Age}")],
+        survey_columns=["type", "name", "calculation"],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_codebook_validation_reports_all_case_variant_candidates():
+    xlsx = _codebook_workbook(
+        [
+            ("integer", "Age", ""),
+            ("integer", "age", ""),
+            ("calculate", "result", "${AGE}"),
+        ],
+        survey_columns=["type", "name", "calculation"],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_REFERENCE_CASE_MISMATCH"]
+    assert "available exact name: 'Age', 'age'" in issues[0].message
+
+
+def test_codebook_validation_checks_last_saved_reference_case():
+    xlsx = _codebook_workbook(
+        [("integer", "Age", ""), ("calculate", "result", "${last-saved#age}")],
+        survey_columns=["type", "name", "calculation"],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_REFERENCE_CASE_MISMATCH"]
+    assert "references 'age'" in issues[0].message
+
+
+def test_codebook_validation_reports_missing_reference():
+    xlsx = _codebook_workbook(
+        [("calculate", "result", "${not_emitted}")],
+        survey_columns=["type", "name", "calculation"],
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_REFERENCE_NOT_EMITTED"]
+    assert issues[0].owner == {
+        "model": "question",
+        "name": "result",
+        "type": "calculate",
+    }
+    assert issues[0].field == "calculation"
+    assert "references 'not_emitted'" in issues[0].message
+
+
+def test_generated_survey_blocks_reference_to_unselected_question(
+    submodule_1,
+    root_question_1,
+    root_question_3,
+):
+    root_question_1.relevant = f"${{{root_question_3.name}}} > 0"
+    root_question_1.save(update_fields=["relevant"])
+    form = XLSForm(
+        name="Unselected question reference",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == ["CODEBOOK_REFERENCE_NOT_EMITTED"]
+    assert result.errors[0].owner == {
+        "model": "RootQuestion",
+        "id": root_question_1.id,
+        "name": root_question_1.name,
+    }
+    assert result.errors[0].field == "relevant"
+    assert root_question_3.name in result.errors[0].message
+
+
+def test_composition_errors_block_pyxform_conversion():
+    artifact = GeneratedSurveyArtifact(
+        _codebook_workbook([("select_one foods", "preferred_food")])
+    )
+
+    result = validate_generated_artifact(artifact, converter_cls=ConversionMustNotRun)
+
+    assert result.valid is False
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_CHOICE_LIST_NOT_EMITTED"
+    ]
+
+
+def test_generated_survey_reports_internal_select_without_choice_group(
+    submodule_1,
+    root_question_2,
+):
+    root_question_2.choices = None
+    root_question_2.save(update_fields=["choices"])
+    form = XLSForm(
+        name="Missing choice group",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == ["CODEBOOK_CHOICE_LIST_MISSING"]
+    assert result.errors[0].owner == {
+        "model": "question",
+        "name": root_question_2.name,
+    }
+
+
+def test_generated_survey_reports_choice_group_without_active_choices(
+    submodule_1,
+    root_question_2,
+    choices_1,
+):
+    choices_1.choices.update(is_active=False)
+    form = XLSForm(
+        name="Inactive choices",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_CHOICE_LIST_NOT_EMITTED"
+    ]
+    assert f"choice list '{choices_1.name}'" in result.errors[0].message
+
+
+def test_generated_survey_reports_blank_choice_value(
+    submodule_1,
+    root_question_2,
+    choices_1,
+):
+    choice = choices_1.choices.first()
+    choices_1.choices.filter(id=choice.id).update(name="   ")
+    form = XLSForm(
+        name="Blank choice value",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == ["CODEBOOK_CHOICE_VALUE_MISSING"]
+    assert result.errors[0].owner == {
+        "model": "choice_list",
+        "name": choices_1.name,
+    }
+
+
+def test_generated_survey_reports_blank_english_choice_label(
+    submodule_1,
+    root_question_2,
+    choices_1,
+):
+    choice = choices_1.choices.first()
+    choices_1.choices.filter(id=choice.id).update(label="   ")
+    form = XLSForm(
+        name="Blank choice label",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+        languages=["en"],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == ["CODEBOOK_CHOICE_LABEL_MISSING"]
+    assert result.errors[0].owner == {
+        "model": "choice",
+        "name": choice.name,
+        "choice_list": choices_1.name,
+    }
+
+
+def test_generated_survey_reports_invalid_choice_list_name(
+    submodule_1,
+    root_question_2,
+    choices_1,
+):
+    choices_1.name = "1invalid"
+    choices_1.save(update_fields=["name"])
+    form = XLSForm(
+        name="Invalid choice list name",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_CHOICE_LIST_NAME_INVALID"
+    ]
+    assert result.errors[0].owner == {
+        "model": "choice_list",
+        "name": "1invalid",
+    }
+
+
+def test_generated_select_multiple_reports_choice_value_with_whitespace(
+    submodule_1,
+    root_question_2,
+    choices_1,
+):
+    choice = choices_1.choices.first()
+    choices_1.choices.filter(id=choice.id).update(name="with space")
+    form = XLSForm(
+        name="Invalid choice value",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == ["CODEBOOK_CHOICE_VALUE_INVALID"]
+    assert result.errors[0].owner == {
+        "model": "choice",
+        "name": "with space",
+        "choice_list": choices_1.name,
+    }
+
+
+def test_generated_survey_reports_missing_question_name(
+    submodule_1,
+    root_question_1,
+):
+    root_question_1.name = ""
+    root_question_1.save(update_fields=["name"])
+    form = XLSForm(
+        name="Missing generated name",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_GENERATED_NAME_MISSING"
+    ]
+    assert result.errors[0].owner == {"model": "question", "type": "integer"}
+
+
+def test_generated_survey_reports_invalid_question_name(
+    submodule_1,
+    root_question_1,
+):
+    root_question_1.name = "1invalid"
+    root_question_1.save(update_fields=["name"])
+    form = XLSForm(
+        name="Invalid generated name",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_GENERATED_NAME_INVALID"
+    ]
+    assert result.errors[0].owner == {
+        "model": "question",
+        "name": "1invalid",
+        "type": "integer",
+    }
+
+
+def test_generated_survey_reports_root_and_subquestion_name_collision(
+    submodule_1,
+    root_question_1,
+    sub_question_1,
+):
+    type(sub_question_1).objects.filter(id=sub_question_1.id).update(
+        name=root_question_1.name
+    )
+    sub_question_1.refresh_from_db()
+    form = XLSForm(
+        name="Duplicate generated name",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[sub_question_1.id],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_GENERATED_NAME_DUPLICATE"
+    ]
+    assert result.errors[0].owner["model"] == "question"
+    assert result.errors[0].owner["name"] == root_question_1.name
+    assert result.errors[0].owner["first_model"] == "question"
+    assert result.errors[0].owner["first_row"] < result.errors[0].row
+
+
+def test_generated_survey_reports_invalid_nested_suffix_relationship(
+    submodule_1,
+    sub_question_4,
+):
+    sub_question_4.suffix.nested_suffixes.remove(sub_question_4.suffix_2)
+    form = XLSForm(
+        name="Invalid nested suffix",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[sub_question_4.id],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == ["CODEBOOK_NESTED_SUFFIX_INVALID"]
+    assert result.errors[0].owner == {
+        "model": "SubQuestion",
+        "id": sub_question_4.id,
+        "name": sub_question_4.name,
+    }
+
+
+def test_generated_survey_accepts_valid_nested_suffix_relationship(
+    submodule_1,
+    sub_question_4,
+):
+    sub_question_4.suffix.nested_suffixes.add(sub_question_4.suffix_2)
+    form = XLSForm(
+        name="Valid nested suffix",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[sub_question_4.id],
+        submodules_order=[submodule_1.id],
+    )
+
+    artifact = build_generated_artifact(form)
+
+    assert artifact.row_source_map
+    assert (
+        validate_codebook_integrity(artifact.xlsx_bytes, artifact.row_source_map) == []
+    )
+
+
+def test_generated_survey_keeps_automatic_other_suffix_behavior(
+    submodule_1,
+    sub_question_1,
+):
+    sub_question_1.suffix.name = "_oth"
+    sub_question_1.suffix.save(update_fields=["name"])
+    sub_question_1.save()
+    form = XLSForm(
+        name="Automatic other suffix",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    artifact = build_generated_artifact(form)
+    emitted_sources = list(artifact.row_source_map.values())
+
+    assert any(
+        source.get("model") == "SubQuestion" and source.get("id") == sub_question_1.id
+        for source in emitted_sources
+    )
+    assert (
+        validate_codebook_integrity(artifact.xlsx_bytes, artifact.row_source_map) == []
+    )
+
+
+def test_generated_survey_reports_recall_period_without_name(
+    submodule_1,
+    sub_question_2,
+    recall_period_1,
+):
+    type(recall_period_1).objects.filter(id=recall_period_1.id).update(name="")
+    form = XLSForm(
+        name="Missing recall-period name",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[sub_question_2.id],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_RECALL_PERIOD_NAME_MISSING"
+    ]
+    assert result.errors[0].owner == {
+        "model": "SubQuestion",
+        "id": sub_question_2.id,
+        "name": sub_question_2.name,
+    }
+
+
+def test_generated_survey_accepts_valid_choice_filter(
+    submodule_1,
+    root_question_1,
+    root_question_2,
+    choices_1,
+    choices_2,
+):
+    _configure_generated_choice_filter(
+        root_question_1, root_question_2, choices_2, choices_1
+    )
+    form = XLSForm(
+        name="Valid choice filter",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+    artifact = build_generated_artifact(form)
+
+    result = validate_generated_artifact(artifact)
+
+    assert result.valid is True
+    assert result.errors == ()
+
+
+def test_generated_survey_reports_choice_filter_without_configured_source_list(
+    submodule_1,
+    root_question_1,
+    root_question_2,
+    choices_1,
+    choices_2,
+):
+    _configure_generated_choice_filter(
+        root_question_1, root_question_2, choices_2, choices_1
+    )
+    choices_1.choice_filter_list = None
+    choices_1.save(update_fields=["choice_filter_list"])
+    form = XLSForm(
+        name="Missing filter source list",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_CHOICE_FILTER_SOURCE_LIST_MISSING"
+    ]
+    assert result.errors[0].owner == {
+        "model": "RootQuestion",
+        "id": root_question_2.id,
+        "name": root_question_2.name,
+    }
+
+
+def test_generated_survey_reports_incompatible_choice_filter_source_list(
+    submodule_1,
+    root_question_1,
+    root_question_2,
+    choices_1,
+    choices_2,
+):
+    _configure_generated_choice_filter(
+        root_question_1, root_question_2, choices_2, choices_1
+    )
+    choices_1.choice_filter_list = ChoiceGroup.objects.create(name="OtherSourceList")
+    choices_1.save(update_fields=["choice_filter_list"])
+    form = XLSForm(
+        name="Incompatible filter source list",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_CHOICE_FILTER_SOURCE_LIST_INCOMPATIBLE"
+    ]
+
+
+def test_generated_survey_reports_unavailable_choice_filter_value(
+    submodule_1,
+    root_question_1,
+    root_question_2,
+    choices_1,
+    choices_2,
+):
+    _configure_generated_choice_filter(
+        root_question_1, root_question_2, choices_2, choices_1
+    )
+    source_choice = choices_2.choices.order_by("order", "id").first()
+    source_choice.is_active = False
+    source_choice.save(update_fields=["is_active"])
+    form = XLSForm(
+        name="Unavailable filter value",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_CHOICE_FILTER_VALUE_NOT_EMITTED"
+    ]
+    assert f"'{source_choice.name}'" in result.errors[0].message
+
+
+def test_generated_survey_reports_reference_case_mismatch_with_question_owner(
+    submodule_1,
+    root_question_1,
+    root_question_2,
+):
+    root_question_2.relevant = f"${{{root_question_1.name.lower()}}} > 0"
+    root_question_2.save(update_fields=["relevant"])
+    form = XLSForm(
+        name="Question reference case mismatch",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_REFERENCE_CASE_MISMATCH"
+    ]
+    assert result.errors[0].owner == {
+        "model": "RootQuestion",
+        "id": root_question_2.id,
+        "name": root_question_2.name,
+    }
+    assert result.errors[0].field == "relevant"
+
+
+def test_generated_survey_reports_reference_case_mismatch_with_module_owner(
+    submodule_1,
+    root_question_1,
+):
+    module = submodule_1.module
+    module.relevant = f"${{{root_question_1.name.lower()}}} > 0"
+    module.save(update_fields=["relevant"])
+    form = XLSForm(
+        name="Module reference case mismatch",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_REFERENCE_CASE_MISMATCH"
+    ]
+    assert result.errors[0].owner == {
+        "model": "Module",
+        "id": module.id,
+        "name": module.name,
+    }
+    assert result.errors[0].field == "relevant"
+
+
+def test_generated_survey_reports_reference_case_mismatch_with_submodule_owner(
+    submodule_1,
+    root_question_1,
+):
+    submodule_1.relevant = f"${{{root_question_1.name.lower()}}} > 0"
+    submodule_1.save(update_fields=["relevant"])
+    form = XLSForm(
+        name="Submodule reference case mismatch",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_REFERENCE_CASE_MISMATCH"
+    ]
+    assert result.errors[0].owner == {
+        "model": "Submodule",
+        "id": submodule_1.id,
+        "name": submodule_1.name,
+    }
+
+
+def test_generated_survey_reports_reference_case_mismatch_with_repeat_owner(
+    submodule_1,
+    root_question_1,
+    repeat_section_1,
+):
+    repeat_section_1.repeat_count = f"${{{root_question_1.name.lower()}}}"
+    repeat_section_1.save(update_fields=["repeat_count"])
+    form = XLSForm(
+        name="Repeat reference case mismatch",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == [
+        "CODEBOOK_REFERENCE_CASE_MISMATCH"
+    ]
+    assert result.errors[0].owner == {
+        "model": "RepeatSection",
+        "id": repeat_section_1.id,
+        "name": repeat_section_1.name,
+    }
+    assert result.errors[0].field == "repeat_count"
+
+
+def test_empty_external_file_is_a_structured_input_error():
+    with pytest.raises(ArtifactInputError) as raised:
+        materialize_external_files(
+            {"choices.csv": ContentFile(b"", name="choices.csv")}
+        )
+
+    assert isinstance(raised.value.issue, ValidationIssue)
+    assert raised.value.issue.code == "EXTERNAL_FILE_EMPTY"
+
+
+def test_external_choice_resolver_preserves_validated_filename_and_bytes():
+    content = b"name,label,region\na,Choice A,north\n"
+    source = _external_choice_source(
+        content,
+        choice_filter="region=${selected_region}",
+    )
+
+    assert resolve_external_choice_files([source]) == {"choices.csv": content}
+
+
+def test_external_choice_resolver_supports_custom_value_and_label_columns():
+    content = b"code,title\na,Choice A\n"
+    source = _external_choice_source(
+        content,
+        parameters="value=code label=title",
+    )
+
+    assert resolve_external_choice_files([source]) == {"choices.csv": content}
+
+
+@pytest.mark.parametrize(
+    ("content", "expected_code"),
+    [
+        (b"name\na\n", "EXTERNAL_FILE_REQUIRED_COLUMN_MISSING"),
+        (b"name,Label\na,Choice A\n", "EXTERNAL_FILE_COLUMN_CASE_MISMATCH"),
+        (b"name,label\na\n", "EXTERNAL_FILE_ROW_MALFORMED"),
+        (b"name,label\n,Choice A\n", "EXTERNAL_FILE_CHOICE_VALUE_MISSING"),
+        (
+            b"name,label\na,Choice A\na,Choice B\n",
+            "EXTERNAL_FILE_CHOICE_VALUE_DUPLICATE",
+        ),
+        (b"name,label\na,\n", "EXTERNAL_FILE_CHOICE_LABEL_MISSING"),
+        (b"name,label\n", "EXTERNAL_FILE_CHOICES_MISSING"),
+        (b"\xff\xfe", "EXTERNAL_FILE_ENCODING_INVALID"),
+    ],
+)
+def test_external_choice_resolver_reports_invalid_csv(content, expected_code):
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([_external_choice_source(content)])
+
+    issue = raised.value.issue
+    assert issue.code == expected_code
+    assert issue.owner == {
+        "model": "RootQuestion",
+        "id": 7,
+        "name": "question_a",
+    }
+    assert issue.field == "choices_file"
+    assert issue.sheet == "choices.csv"
+
+
+def test_external_choice_resolver_requires_choice_filter_columns():
+    source = _external_choice_source(
+        choice_filter="region=${selected_region}",
+    )
+
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_REQUIRED_COLUMN_MISSING"
+    assert raised.value.issue.column == "region"
+
+
+def test_external_choice_resolver_rejects_whitespace_for_multiple_choice_values():
+    source = _external_choice_source(
+        b"name,label\nwith space,Choice A\n",
+        question_type="select_multiple_from_file",
+    )
+
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_CHOICE_VALUE_INVALID"
+
+
+@pytest.mark.parametrize(
+    "filename", ["../choices.csv", "folder/choices.csv", "choices.txt"]
+)
+def test_external_choice_resolver_rejects_invalid_filename(filename):
+    file_obj = ContentFile(b"name,label\na,Choice A\n", name=filename)
+    source = _external_choice_source(filename=filename, file_obj=file_obj)
+
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_NAME_INVALID"
+
+
+def test_external_choice_resolver_reports_missing_linked_file():
+    source = ExternalChoiceFileSource(
+        filename="",
+        file_obj=None,
+        owner={"model": "RootQuestion", "id": 7, "name": "question_a"},
+        file_owner={"model": "ChoiceGroupFile", "id": 11, "name": "choices"},
+    )
+
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_MISSING"
+    assert "ChoiceGroupFile 'choices' (id 11)" in raised.value.issue.message
+
+
+def test_external_choice_resolver_rejects_case_colliding_filenames():
+    first = _external_choice_source(
+        filename="choices.csv",
+        file_obj=ContentFile(
+            b"name,label\na,Choice A\n",
+            name="choices.csv",
+        ),
+    )
+    second = _external_choice_source(
+        filename="Choices.csv",
+        file_obj=ContentFile(
+            b"name,label\nb,Choice B\n",
+            name="Choices.csv",
+        ),
+    )
+
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([first, second])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_NAME_DUPLICATE"
+
+
+def test_external_choice_resolver_reports_missing_storage_object():
+    class MissingFile:
+        name = "choices.csv"
+
+        @staticmethod
+        def open(mode):
+            raise FileNotFoundError("gone")
+
+    source = _external_choice_source(file_obj=MissingFile())
+
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_MISSING"
+    assert raised.value.issue.owner["name"] == "question_a"
+
+
+def test_external_choice_resolver_classifies_storage_failures_as_infrastructure():
+    class UnavailableFile:
+        name = "choices.csv"
+
+        @staticmethod
+        def open(mode):
+            raise PermissionError("credentials rejected")
+
+    source = _external_choice_source(file_obj=UnavailableFile())
+
+    with pytest.raises(ArtifactInfrastructureError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_STORAGE_UNAVAILABLE"
+    assert raised.value.issue.layer == "storage"
+    assert raised.value.issue.owner["id"] == 7
+
+
+@override_settings(EXTERNAL_CHOICE_FILE_MAX_BYTES=8)
+def test_external_choice_resolver_enforces_streamed_size_limit():
+    source = _external_choice_source(b"name,label\na,Choice A\n")
+
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_TOO_LARGE"
+
+
+@override_settings(EXTERNAL_CHOICE_FILE_MAX_ROWS=1)
+def test_external_choice_resolver_enforces_row_limit():
+    source = _external_choice_source(b"name,label\na,Choice A\nb,Choice B\n")
+
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_TOO_MANY_ROWS"
+
+
+@override_settings(EXTERNAL_CHOICE_FILE_READ_TIMEOUT_SECONDS=1)
+def test_external_choice_resolver_enforces_read_timeout(mocker):
+    source = _external_choice_source()
+    mocker.patch(
+        "questions.services.form_validation.time.monotonic",
+        side_effect=[0, 2],
+    )
+
+    with pytest.raises(ArtifactInfrastructureError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_READ_TIMEOUT"
+
+
+def test_generated_artifact_keeps_validated_external_bytes_after_source_changes():
+    class MutableFile:
+        name = "choices.csv"
+
+        def __init__(self):
+            self.content = b"name,label\na,Choice A\n"
+            self.position = 0
+
+        def open(self, mode):
+            self.position = 0
+            return self
+
+        def read(self, size=-1):
+            if self.position:
+                return b""
+            self.position = len(self.content)
+            return self.content
+
+        @staticmethod
+        def close():
+            return None
+
+    mutable_file = MutableFile()
+    source = _external_choice_source(file_obj=mutable_file)
+
+    class Form:
+        id_name = "generated-form"
+        row_source_map = {}
+        external_files = {"choices.csv": mutable_file}
+        external_file_sources = [source]
+
+        @staticmethod
+        def generate():
+            return b"xlsx-bytes"
+
+    artifact = build_generated_artifact(Form())
+    mutable_file.content = b"name,label\nb,Changed\n"
+
+    assert artifact.external_files == {"choices.csv": b"name,label\na,Choice A\n"}
+
+
+def test_xml_conversion_disables_java_validation(monkeypatch):
+    calls = {}
+
+    class Converted:
+        xform = "<xform/>"
+
+    def convert(xlsform, **kwargs):
+        calls.update(kwargs)
+        return Converted()
+
+    monkeypatch.setattr("questions.services.xml_conversion.xls2xform.convert", convert)
+
+    conversion = XMLConversion(io.BytesIO(b"xlsx"))
+    assert conversion.run() == "<xform/>"
+    assert calls["validate"] is False
+    assert calls["pretty_print"] is True
+    assert calls["enketo"] is False
+
+
+def _expression_survey(rows, columns=("relevant", "calculation", "repeat_count")):
+    survey_columns = ["type", "name", *columns]
+    width = len(survey_columns)
+    return _codebook_workbook(
+        [tuple(row) + (None,) * (width - len(row)) for row in rows],
+        survey_columns=survey_columns,
+    )
+
+
+def test_final_artifact_rejects_malformed_expression_before_conversion():
+    artifact = GeneratedSurveyArtifact(
+        _expression_survey(
+            [
+                ("integer", "size"),
+                ("integer", "age", "${size} ="),
+            ]
+        )
+    )
+
+    result = validate_generated_artifact(artifact, converter_cls=ConversionMustNotRun)
+
+    assert [issue.code for issue in result.errors] == ["EXPRESSION_INCOMPLETE"]
+    issue = result.errors[0]
+    assert issue.layer == "composition"
+    assert issue.owner == {"model": "question", "name": "age", "type": "integer"}
+    assert (issue.field, issue.sheet, issue.column, issue.row) == (
+        "relevant",
+        "survey",
+        "relevant",
+        3,
+    )
+
+
+def test_final_artifact_rejects_repeat_member_referenced_outside_the_repeat():
+    xlsx = _expression_survey(
+        [
+            ("integer", "size"),
+            ("begin_repeat", "household", None, None, "${size}"),
+            ("integer", "age"),
+            ("end_repeat",),
+            ("calculate", "oldest", None, "max(${age})"),
+            ("integer", "first_age", "${age} > 18"),
+        ]
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["EXPRESSION_REPEAT_CONTEXT_INVALID"]
+    assert issues[0].owner["name"] == "first_age"
+    assert issues[0].row == 7
+    assert "inside repeat 'household'" in issues[0].message
+
+
+def test_final_artifact_accepts_valid_repeat_references():
+    xlsx = _expression_survey(
+        [
+            ("integer", "size"),
+            ("begin_repeat", "household", None, None, "${size}"),
+            ("integer", "age"),
+            ("integer", "years_left", "${age} < 65", "65 - ${age}"),
+            ("end_repeat",),
+            ("calculate", "first_age", None, "${household}[1]/age"),
+        ]
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_final_artifact_rejects_repeat_count_from_its_own_member():
+    xlsx = _expression_survey(
+        [
+            ("begin_repeat", "household", None, None, "${age}"),
+            ("integer", "age"),
+            ("end_repeat",),
+        ]
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["EXPRESSION_REPEAT_CONTEXT_INVALID"]
+    assert issues[0].owner == {
+        "model": "repeat",
+        "name": "household",
+        "type": "begin_repeat",
+    }
+    assert issues[0].field == "repeat_count"
+
+
+def test_final_artifact_accepts_quoted_reference_to_own_repeat_member():
+    xlsx = _expression_survey(
+        [
+            ("begin_repeat", "r", "'${child}' != ''", None, "2"),
+            ("integer", "child"),
+            ("end_repeat",),
+        ]
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_final_artifact_rejects_non_numeric_repeat_count():
+    xlsx = _expression_survey(
+        [
+            ("date", "size"),
+            ("begin_repeat", "household", None, None, "${size}"),
+            ("integer", "age"),
+            ("end_repeat",),
+        ]
+    )
+
+    issues = [
+        issue
+        for issue in validate_codebook_integrity(xlsx)
+        if issue.code.startswith("EXPRESSION_")
+    ]
+
+    assert [issue.code for issue in issues] == ["EXPRESSION_RESULT_TYPE_INVALID"]
+    assert "of type 'date'" in issues[0].message
+
+
+def test_final_artifact_accepts_numeric_select_as_repeat_count():
+    xlsx = _codebook_workbook(
+        [
+            ("select_one sizes", "size", None),
+            ("begin_repeat", "household", "${size}"),
+            ("integer", "age", None),
+            ("end_repeat", None, None),
+        ],
+        [("sizes", "1", "One"), ("sizes", "2", "Two")],
+        survey_columns=["type", "name", "repeat_count"],
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_final_artifact_rejects_reference_across_a_nested_repeat():
+    xlsx = _expression_survey(
+        [
+            ("begin_repeat", "outer", None, None, "2"),
+            ("begin_repeat", "inner", None, None, "2"),
+            ("integer", "inner_value"),
+            ("end_repeat",),
+            ("calculate", "outside_inner", None, "${inner_value}"),
+            ("end_repeat",),
+        ]
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["EXPRESSION_REPEAT_CONTEXT_INVALID"]
+    assert issues[0].owner["name"] == "outside_inner"
+
+
+def test_final_artifact_rejects_generated_repeat_count_name_collision():
+    xlsx = _expression_survey(
+        [
+            ("integer", "household_count"),
+            ("begin_repeat", "household", None, None, "5"),
+            ("integer", "age"),
+            ("end_repeat",),
+        ]
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["CODEBOOK_GENERATED_NAME_DUPLICATE"]
+    assert issues[0].field == "repeat_count"
+    assert "generated node 'household_count'" in issues[0].message
+
+
+def test_plain_reference_repeat_count_does_not_generate_a_count_node():
+    xlsx = _expression_survey(
+        [
+            ("integer", "household_count"),
+            ("begin_repeat", "household", None, None, "${household_count}"),
+            ("integer", "age"),
+            ("end_repeat",),
+        ]
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_final_artifact_rejects_calculation_cycle():
+    xlsx = _expression_survey(
+        [
+            ("calculate", "a", None, "${b} + 1"),
+            ("calculate", "b", None, "${a} + 1"),
+        ]
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["EXPRESSION_DEPENDENCY_CYCLE"]
+    assert issues[0].row == 2
+    assert "a -> b -> a" in issues[0].message
+
+
+def test_final_artifact_rejects_self_referencing_relevant():
+    xlsx = _expression_survey([("integer", "a", "${a} > 1")])
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["EXPRESSION_DEPENDENCY_CYCLE"]
+    assert "a -> a" in issues[0].message
+
+
+def test_final_artifact_rejects_group_relevant_that_depends_on_its_own_member():
+    xlsx = _expression_survey(
+        [
+            ("begin_group", "section", "${inside} = 1"),
+            ("integer", "inside"),
+            ("end_group",),
+        ]
+    )
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["EXPRESSION_DEPENDENCY_CYCLE"]
+    assert issues[0].owner["name"] == "section"
+    assert "section -> inside -> section" in issues[0].message
+
+
+@pytest.mark.parametrize("expression", (". + 1", "/data/q + 1", "../q + 1"))
+def test_final_artifact_rejects_calculation_that_reads_itself(expression):
+    xlsx = _expression_survey([("integer", "q", None, expression)])
+
+    issues = validate_codebook_integrity(xlsx)
+
+    assert [issue.code for issue in issues] == ["EXPRESSION_DEPENDENCY_CYCLE"]
+    assert "q -> q" in issues[0].message
+
+
+def test_reference_inside_text_is_not_a_dependency_cycle():
+    xlsx = _expression_survey([("calculate", "q", None, "string-length('${q}')")])
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_deeply_nested_expression_does_not_break_the_gate():
+    xlsx = _expression_survey(
+        [("calculate", "q", None, "(" * 300 + "1 + 1" + ")" * 300)]
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_constraint_self_reference_is_not_a_dependency_cycle():
+    xlsx = _expression_survey(
+        [("integer", "a", "${a} > 0")],
+        columns=("constraint",),
+    )
+
+    assert validate_codebook_integrity(xlsx) == []
+
+
+def test_generated_survey_reports_malformed_subquestion_expression_owner(
+    submodule_1,
+    root_question_1,
+    sub_question_1,
+):
+    sub_question_1.relevant = f"${{{root_question_1.name}}} >"
+    sub_question_1.save(update_fields=["relevant"])
+    form = XLSForm(
+        name="Malformed subquestion expression",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[sub_question_1.id],
+        submodules_order=[submodule_1.id],
+    )
+
+    result = validate_generated_artifact(
+        build_generated_artifact(form), converter_cls=ConversionMustNotRun
+    )
+
+    assert [issue.code for issue in result.errors] == ["EXPRESSION_INCOMPLETE"]
+    assert result.errors[0].owner == {
+        "model": "SubQuestion",
+        "id": sub_question_1.id,
+        "name": sub_question_1.name,
+    }
+    assert result.errors[0].field == "relevant"
+
+
+def test_generated_survey_emits_valid_expressions_unchanged_and_passes(
+    submodule_1,
+    root_question_1,
+    root_question_2,
+):
+    expressions = {
+        "relevant": f"count-selected(${{{root_question_2.name}}}) > 0",
+        "constraint": ". >= 0 and . <= 7",
+        "required": "yes",
+    }
+    for field_name, expression in expressions.items():
+        setattr(root_question_1, field_name, expression)
+    root_question_1.save(update_fields=list(expressions))
+    form = XLSForm(
+        name="Valid expressions",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[],
+        submodules_order=[submodule_1.id],
+    )
+    artifact = build_generated_artifact(form)
+
+    result = validate_generated_artifact(artifact)
+
+    assert result.valid is True
+    survey = load_workbook(io.BytesIO(artifact.xlsx_bytes))["survey"]
+    headers = [cell.value for cell in survey[1]]
+    (row,) = [
+        row
+        for row in survey.iter_rows(min_row=2, values_only=True)
+        if row[headers.index("name")] == root_question_1.name
+    ]
+    for field_name, expression in expressions.items():
+        assert row[headers.index(field_name)] == expression

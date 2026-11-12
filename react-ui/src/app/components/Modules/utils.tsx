@@ -4,7 +4,9 @@ import "regenerator-runtime/runtime";
 import axios from "axios";
 import _ from "lodash";
 import React from "react";
+import type { ValidationIssue, ValidationResult } from "../../types/api";
 import { API } from "../../utils";
+import { formatValidationIssues } from "../../utils/apiError";
 
 export async function apiValidation(
   selectedSubmodules: number[],
@@ -29,15 +31,17 @@ export async function apiValidation(
       },
     })
     .then((res) => {
-      let ok = true;
-      let data = null;
-      if (res.data && res.data.length) {
-        ok = false;
-        data = res.data;
+      const response = res.data as ValidationResult | string[];
+      if (Array.isArray(response)) {
+        return {
+          ok: response.length === 0,
+          data: response.length ? response : null,
+        };
       }
+
       return {
-        ok,
-        data,
+        ok: response.valid,
+        data: response.valid ? null : response.errors,
       };
     })
     .catch((error) => ({
@@ -48,9 +52,28 @@ export async function apiValidation(
   return result;
 }
 
-export function getErrorDisplay(error: string | string[]) {
+export function getValidationSubmoduleId(
+  errors: Array<string | ValidationIssue> | null,
+) {
+  if (!errors) return null;
+
+  for (const error of errors) {
+    if (typeof error === "string") continue;
+    const submodule =
+      error.submodule ??
+      (error.owner?.model === "Submodule" ? error.owner : undefined);
+    if (typeof submodule?.id === "number") return submodule.id;
+  }
+
+  return null;
+}
+
+export function getErrorDisplay(
+  error: string | Array<string | ValidationIssue>,
+) {
   if (_.isArray(error)) {
-    const shouldScroll = error.length > 10;
+    const messages = formatValidationIssues(error);
+    const shouldScroll = messages.length > 10;
 
     return (
       <div
@@ -60,12 +83,13 @@ export function getErrorDisplay(error: string | string[]) {
             : "modules-validation-errors"
         }
       >
-        {error.map((e, index) => (
-          <div className="modules-validation-errors__item" key={`${index}-${e}`}>
-            <div className="modules-validation-errors__index">
-              {index + 1}.
-            </div>
-            <div>{e}</div>
+        {messages.map((message, index) => (
+          <div
+            className="modules-validation-errors__item"
+            key={`${index}-${message}`}
+          >
+            <div className="modules-validation-errors__index">{index + 1}.</div>
+            <div>{message}</div>
           </div>
         ))}
       </div>
