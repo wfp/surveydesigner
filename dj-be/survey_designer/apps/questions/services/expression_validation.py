@@ -238,6 +238,9 @@ class ExpressionAnalysis:
     constant: Any = None
     # Reads the owner's own value through ".".
     reads_context: bool = False
+    # One tuple per pulldata() call: each argument's text when it is a single
+    # quoted literal, otherwise None.
+    pulldata_calls: tuple[tuple[str | None, ...], ...] = ()
 
     @property
     def valid(self) -> bool:
@@ -448,6 +451,7 @@ class _Parser:
         self.raw_paths: list[ExpressionPath] = []
         self.predicate_depth = 0
         self.reads_context = False
+        self.pulldata_calls: list[tuple[str | None, ...]] = []
 
     @property
     def token(self) -> _Token:
@@ -661,17 +665,31 @@ class _Parser:
             return self.function_call()
         raise self.error("a value, reference, or function")
 
+    def literal_argument(self) -> str | None:
+        """The current argument's text when it is a single quoted literal."""
+
+        token = self.token
+        following = self.tokens[self.index + 1] if token.kind != "end" else token
+        if token.kind == "literal" and following.kind in (",", ")"):
+            return token.value[1:-1]
+        return None
+
     def function_call(self) -> str:
         function = self.advance()
         self.expect("(")
         self.functions.append(function.value)
+        arguments: list[str | None] = []
         if self.token.kind != ")":
+            arguments.append(self.literal_argument())
             self.expr()
             while self.token.kind == ",":
                 self.advance()
+                arguments.append(self.literal_argument())
                 self.expr()
         self.functions.pop()
         self.expect(")")
+        if function.value == "pulldata":
+            self.pulldata_calls.append(tuple(arguments))
         return _FUNCTION_RESULT_TYPES.get(function.value, "any")
 
 
@@ -727,6 +745,7 @@ def analyse_expression(expression: str) -> ExpressionAnalysis:
         result_type=result_type,
         constant=_constant(tokens),
         reads_context=parser.reads_context,
+        pulldata_calls=tuple(parser.pulldata_calls),
     )
 
 

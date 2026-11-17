@@ -36,6 +36,7 @@ class AdminPermissions:
             "RootQuestionConstraintMessageTranslation": default_actions,
             "SubQuestionConstraintMessageTranslation": default_actions,
             "RepeatSection": default_actions,
+            "PulldataFile": default_actions,
         },
         "change_requests": {
             "ChangeRequest": default_actions,
@@ -119,6 +120,7 @@ class ReadOnlyPermissions:
             "RootQuestionConstraintMessageTranslation": default_actions,
             "SubQuestionConstraintMessageTranslation": default_actions,
             "RepeatSection": default_actions,
+            "PulldataFile": default_actions,
         },
         "change_requests": {
             "ChangeRequest": default_actions,

@@ -13,6 +13,7 @@ from questions.models import (
     Calculation,
     ChoiceGroup,
     ChoiceGroupFile,
+    PulldataFile,
     RepeatSection,
     RootQuestion,
     SubQuestion,
@@ -76,6 +77,11 @@ def get_organizations(obj) -> QuerySet:
             module__submodules__root_questions__sub_questions__suffix_2__choices_file=obj
         )
         return Organization.objects.filter(q1 | q2 | q3).distinct()
+
+    if isinstance(obj, PulldataFile):
+        q1 = Q(module__submodules__root_questions__pulldata_files=obj)
+        q2 = Q(module__submodules__root_questions__sub_questions__pulldata_files=obj)
+        return Organization.objects.filter(q1 | q2).distinct()
 
     if isinstance(obj, Calculation):
         q = Q(module__submodules__root_questions__calculation=obj)

@@ -1,5 +1,6 @@
 import os
 import re
+import uuid
 
 from core.models import (
     BaseTranslationMixin,
@@ -11,6 +12,7 @@ from core.models import (
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.functions import Lower
 from django.utils.functional import cached_property
 
 from .const import QuestionType
@@ -34,6 +36,15 @@ class QuestionFieldsMixin(models.Model):
     default = models.TextField(blank=True)
     choice_filter = models.TextField(blank=True)
     calculation = models.TextField(blank=True)
+    pulldata_files = models.ManyToManyField(
+        "questions.PulldataFile",
+        blank=True,
+        verbose_name="Pull data files",
+        help_text=(
+            "CSV files used by pulldata() in this question. Each file name must "
+            "match the call: pulldata('wfl_0_2_girls', ...) needs wfl_0_2_girls.csv."
+        ),
+    )
 
     class Meta:
         abstract = True
@@ -458,6 +469,78 @@ class ChoiceGroupFile(BaseWFPModelMixin):
     def save(self, *args, **kwargs):
         if hasattr(self, "_request_user") and self._request_user:
             self.updated_by = self._request_user
+        super().save(*args, **kwargs)
+
+
+def pulldata_file_upload_to(instance, filename):
+    # A folder per upload keeps the original name: storage never has to rename
+    # the file to avoid a clash, so the name pulldata() uses stays intact.
+    return f"pulldata/{uuid.uuid4().hex}/{filename}"
+
+
+class PulldataFile(UserTrackingMixin, TimestampMixin):
+    """A CSV file that questions read with pulldata().
+
+    Each name is uploaded once; any number of questions and pulldata() calls
+    can use the same file.
+    """
+
+    file = models.FileField(upload_to=pulldata_file_upload_to, max_length=255)
+    # The name pulldata() uses, e.g. wfl_0_2_girls.csv.
+    filename = models.CharField(max_length=255, editable=False)
+    description = models.TextField(blank=True)
+    # Header names only; this deliberately contains no row-level metadata.
+    columns = models.JSONField(default=list, editable=False)
+
+    class Meta:
+        verbose_name = "Pull data file"
+        ordering = ("filename",)
+        constraints = [
+            models.UniqueConstraint(
+                Lower("filename"), name="questions_pulldatafile_unique_filename"
+            )
+        ]
+
+    def __str__(self):
+        return self.filename
+
+    def _has_pending_upload(self):
+        return bool(self.file and not getattr(self.file, "_committed", True))
+
+    def _refresh_columns_from_pending_upload(self):
+        if not self._has_pending_upload():
+            return
+        from .services.pulldata_csv import PulldataHeaderError, read_pulldata_headers
+
+        try:
+            self.columns = read_pulldata_headers(
+                self.file.file, filename=os.path.basename(self.file.name or "")
+            )
+        except PulldataHeaderError as exc:
+            raise ValidationError({"file": [str(exc)]}) from exc
+
+    def clean(self):
+        super().clean()
+        self._refresh_columns_from_pending_upload()
+
+    def save(self, *args, **kwargs):
+        pending_upload = self._has_pending_upload()
+        update_fields = kwargs.get("update_fields")
+        # A caller explicitly saving unrelated fields must not inspect or
+        # persist a file that was excluded from update_fields.  In particular,
+        # this keeps description-only saves storage-free and preserves Django's
+        # empty-update_fields no-op behavior.
+        if update_fields is not None and "file" not in update_fields:
+            pending_upload = False
+        if pending_upload:
+            self._refresh_columns_from_pending_upload()
+            self.filename = os.path.basename(self.file.name or "")
+        elif update_fields is None:
+            self.filename = os.path.basename(self.file.name or "")
+        if pending_upload and update_fields is not None:
+            update_fields = set(update_fields)
+            update_fields.update(("file", "filename", "columns"))
+            kwargs["update_fields"] = update_fields
         super().save(*args, **kwargs)
 
 

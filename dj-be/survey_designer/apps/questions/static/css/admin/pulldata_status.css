@@ -1,0 +1,61 @@
+/* Pull data file status under the calculation box (pulldata_status.js).
+   Colours come from the admin's message variables, so dark mode follows. */
+
+form .aligned div.help.pulldata-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 6px;
+  color: var(--body-fg);
+}
+
+form .aligned div.help.pulldata-status[hidden] {
+  display: none;
+}
+
+.pulldata-status__label {
+  color: var(--body-quiet-color);
+  font-weight: 600;
+}
+
+ul.pulldata-status__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+
+ul.pulldata-status__files li.pulldata-status__file {
+  list-style: none;
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--hairline-color);
+  border-radius: 4px;
+  background: var(--darkened-bg);
+  color: var(--body-fg);
+}
+
+ul.pulldata-status__files li.pulldata-status__file--attached {
+  background: var(--message-success-bg);
+}
+
+ul.pulldata-status__files li.pulldata-status__file--missing {
+  background: var(--message-error-bg);
+}
+
+ul.pulldata-status__files li.pulldata-status__file--unused {
+  background: var(--message-warning-bg);
+}
+
+.pulldata-status__problem,
+.pulldata-status__note {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.pulldata-status__problem {
+  color: var(--error-fg);
+}
