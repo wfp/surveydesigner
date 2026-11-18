@@ -1,14 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import "@testing-library/jest-dom";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const statusScript = fs.readFileSync(
-  path.resolve(
-    __dirname,
-    "../../dj-be/survey_designer/apps/questions/static/js/admin/pulldata_status.js",
-  ),
+  path.resolve(__dirname, "../../static/js/admin/pulldata_status.js"),
   "utf8",
 );
 
@@ -49,7 +45,11 @@ test("live pulldata feedback retires only marked server errors", async () => {
       </div>
     </div>
     <div class="form-row field-pulldata_files">
-      <select id="id_pulldata_files" name="pulldata_files" data-pulldata-status-url="/status">
+      <ul class="errorlist">
+        <li>Ambiguous pull data file: RootQuestion 'Q' uses pulldata('growth', ...) in 'calculation', but more than one uploaded asset is selected for 'growth.csv'. Select exactly one asset for this filename.</li>
+      </ul>
+      <select id="id_pulldata_files" name="pulldata_files" data-pulldata-status-url="/status"
+        data-pulldata-server-errors="">
         <option value="1" selected>growth.csv</option>
       </select>
     </div>
@@ -110,6 +110,14 @@ test("live pulldata feedback retires only marked server errors", async () => {
         "SubQuestion 'S' field 'calculation': Column 'stale' does not exist in 'growth.csv'.",
       ]),
     );
+  document
+    .querySelector('[name="pulldata_files"]')
+    .setAttribute(
+      "data-pulldata-server-errors",
+      JSON.stringify([
+        "Ambiguous pull data file: RootQuestion 'Q' uses pulldata('growth', ...) in 'calculation', but more than one uploaded asset is selected for 'growth.csv'. Select exactly one asset for this filename.",
+      ]),
+    );
   window.eval(statusScript);
   document.dispatchEvent(new Event("DOMContentLoaded"));
 
@@ -143,6 +151,10 @@ test("live pulldata feedback retires only marked server errors", async () => {
   expect(document.querySelector(".pulldata-status__problem")).toHaveTextContent(
     "old",
   );
+  expect(document.querySelector('[name="pulldata_files"]')).not.toHaveAttribute(
+    "data-pulldata-server-errors",
+  );
+  expect(document.querySelector(".field-pulldata_files .errorlist")).toBeNull();
 
   calculation.value = "pulldata('growth', 'new', 'id', 1)";
   calculation.dispatchEvent(new Event("input", { bubbles: true }));
@@ -167,7 +179,7 @@ test("live pulldata feedback retires only marked server errors", async () => {
   const subRow = document.querySelector(".field-sub-calculation");
   subRow.insertAdjacentHTML(
     "afterbegin",
-    "<ul class=\"errorlist\"><li>SubQuestion 'S' field 'calculation': Column 'new' does not exist in 'growth.csv'.</li></ul>",
+    '<ul class="errorlist"><li>SubQuestion \'S\' field \'calculation\': Column \'new\' does not exist in \'growth.csv\'.</li></ul>',
   );
   const subError = subRow.querySelector(".errorlist");
   subError.innerHTML =

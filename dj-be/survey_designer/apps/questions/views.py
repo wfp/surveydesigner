@@ -602,7 +602,7 @@ class PulldataFileAutocomplete(autocomplete.Select2QuerySetView):
         qs = PulldataFile.objects.all()
 
         if self.q:
-            qs = qs.filter(file__icontains=self.q)
+            qs = qs.filter(Q(file__icontains=self.q) | Q(description__icontains=self.q))
 
         return qs
 

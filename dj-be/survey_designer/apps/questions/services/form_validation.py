@@ -22,6 +22,7 @@ from typing import Any, Mapping, Sequence
 from xml.etree import ElementTree as ET
 
 from django.conf import settings
+from django.utils.translation import gettext as _
 from lxml import etree
 from openpyxl import load_workbook
 from pyxform.constants import NSMAP
@@ -160,6 +161,16 @@ class ExternalChoiceFileSource:
     question_type: str = ""
     parameters: str = ""
     choice_filter: str = ""
+
+
+@dataclass(frozen=True)
+class PulldataFileSource:
+    """One emitted question and the pull-data assets attached to it."""
+
+    owner: Mapping[str, Any]
+    values: Mapping[str, str]
+    attached_files: tuple[Any, ...] = ()
+    field: str = "pulldata_files"
 
 
 def compute_artifact_hash(
@@ -868,6 +879,410 @@ def resolve_external_choice_files(
             _validate_external_csv(source, content)
         materialized[filename] = content
     return materialized
+
+
+def _pulldata_file_owner(source: PulldataFileSource) -> str:
+    owner = source.owner or {}
+    model = owner.get("model", "Question")
+    name = owner.get("name") or owner.get("id") or "?"
+    return f"{model} '{name}'"
+
+
+def _pulldata_file_issue(
+    source: PulldataFileSource,
+    code: str,
+    message: str,
+    *,
+    filename: str | None = None,
+    field: str | None = None,
+) -> ValidationIssue:
+    return _issue(
+        code,
+        "composition",
+        message,
+        owner=source.owner,
+        field=field or source.field,
+        sheet="survey",
+        column=filename,
+    )
+
+
+def _pulldata_filename(file_obj: Any) -> str:
+    filename = str(getattr(file_obj, "filename", "") or "").strip()
+    if filename:
+        return filename
+    # ``file_obj`` is normally the model's FieldFile.  Reading ``.file`` on
+    # a FieldFile can open/download remote storage, so inspect only its stored
+    # name before entering the bounded storage read below.
+    stored_name = str(getattr(file_obj, "name", "") or "")
+    return os.path.basename(stored_name)
+
+
+def _read_pulldata_file(
+    source: PulldataFileSource, file_obj: Any, filename: str
+) -> tuple[bytes, list[str]]:
+    """Read one lookup CSV with the same bounded storage rules as choices."""
+
+    description = f"Pull data file '{filename}' for {_pulldata_file_owner(source)}"
+    # Do not access FieldFile.file here: that property can open/download
+    # remote storage before the bounded read and structured errors below.
+    stored_name = str(getattr(file_obj, "name", "") or "")
+    if (
+        not filename
+        or filename != os.path.basename(filename)
+        or "/" in filename
+        or "\\" in filename
+        or "\x00" in filename
+        or not filename.endswith(".csv")
+    ):
+        raise ArtifactInputError(
+            _pulldata_file_issue(
+                source,
+                "PULLDATA_FILE_NAME_INVALID",
+                _("%(description)s has an invalid preserved filename.")
+                % {"description": description},
+                filename=filename,
+            )
+        )
+    if stored_name and os.path.basename(stored_name) != filename:
+        raise ArtifactInputError(
+            _pulldata_file_issue(
+                source,
+                "PULLDATA_FILE_NAME_MISMATCH",
+                _(
+                    "%(description)s is referenced as '%(filename)s', but storage "
+                    "resolves it as '%(stored)s'."
+                )
+                % {
+                    "description": description,
+                    "filename": filename,
+                    "stored": os.path.basename(stored_name),
+                },
+                filename=filename,
+            )
+        )
+
+    max_bytes = int(
+        getattr(settings, "EXTERNAL_CHOICE_FILE_MAX_BYTES", 10 * 1024 * 1024)
+    )
+    timeout_seconds = float(
+        getattr(settings, "EXTERNAL_CHOICE_FILE_READ_TIMEOUT_SECONDS", 10)
+    )
+    started_at = time.monotonic()
+    try:
+        stream = file_obj.open("rb") or file_obj
+    except FileNotFoundError as exc:
+        raise ArtifactInputError(
+            _pulldata_file_issue(
+                source,
+                "PULLDATA_FILE_MISSING",
+                _("%(description)s could not be found in storage.")
+                % {"description": description},
+                filename=filename,
+            )
+        ) from exc
+    except Exception as exc:
+        raise ArtifactInfrastructureError(
+            _("Unable to open %(description)s: %(error)s")
+            % {"description": description, "error": exc},
+            issue=_pulldata_file_issue(
+                source,
+                "PULLDATA_FILE_STORAGE_UNAVAILABLE",
+                _("%(description)s could not be opened from storage.")
+                % {"description": description},
+                filename=filename,
+            ),
+        ) from exc
+
+    chunks: list[bytes] = []
+    total_bytes = 0
+    try:
+        while True:
+            try:
+                chunk = stream.read(64 * 1024)
+            except TypeError:
+                chunk = stream.read()
+            if not chunk:
+                break
+            if not isinstance(chunk, bytes):
+                raise ArtifactInfrastructureError(
+                    _("%(description)s did not return binary content.")
+                    % {"description": description},
+                    issue=_pulldata_file_issue(
+                        source,
+                        "PULLDATA_FILE_READ_FAILED",
+                        _("%(description)s did not return binary content.")
+                        % {"description": description},
+                        filename=filename,
+                    ),
+                )
+            total_bytes += len(chunk)
+            if total_bytes > max_bytes:
+                raise ArtifactInputError(
+                    _pulldata_file_issue(
+                        source,
+                        "PULLDATA_FILE_TOO_LARGE",
+                        _(
+                            "%(description)s exceeds the configured %(limit)s-byte limit."
+                        )
+                        % {"description": description, "limit": max_bytes},
+                        filename=filename,
+                    )
+                )
+            chunks.append(chunk)
+            if time.monotonic() - started_at > timeout_seconds:
+                raise ArtifactInputError(
+                    _pulldata_file_issue(
+                        source,
+                        "PULLDATA_FILE_READ_TIMEOUT",
+                        _(
+                            "%(description)s exceeded the configured %(limit)g-second read limit."
+                        )
+                        % {"description": description, "limit": timeout_seconds},
+                        filename=filename,
+                    )
+                )
+    except (ArtifactInputError, ArtifactInfrastructureError):
+        raise
+    except FileNotFoundError as exc:
+        raise ArtifactInputError(
+            _pulldata_file_issue(
+                source,
+                "PULLDATA_FILE_MISSING",
+                _("%(description)s disappeared while it was being read.")
+                % {"description": description},
+                filename=filename,
+            )
+        ) from exc
+    except Exception as exc:
+        raise ArtifactInfrastructureError(
+            _("Unable to read %(description)s: %(error)s")
+            % {"description": description, "error": exc},
+            issue=_pulldata_file_issue(
+                source,
+                "PULLDATA_FILE_READ_FAILED",
+                _("%(description)s could not be read from storage.")
+                % {"description": description},
+                filename=filename,
+            ),
+        ) from exc
+    finally:
+        try:
+            stream.close()
+        except Exception:
+            pass
+
+    if not chunks:
+        raise ArtifactInputError(
+            _pulldata_file_issue(
+                source,
+                "PULLDATA_FILE_EMPTY",
+                _("%(description)s is empty.") % {"description": description},
+                filename=filename,
+            )
+        )
+    content = b"".join(chunks)
+    try:
+        from .pulldata_csv import PulldataHeaderError, read_pulldata_headers
+
+        columns = read_pulldata_headers(io.BytesIO(content), filename=filename)
+    except PulldataHeaderError as exc:
+        raise ArtifactInputError(
+            _pulldata_file_issue(
+                source,
+                "PULLDATA_FILE_HEADER_INVALID",
+                str(exc),
+                filename=filename,
+            )
+        ) from exc
+    return content, columns
+
+
+class _PulldataMaterializedFile:
+    def __init__(self, filename: str, columns: Sequence[str]):
+        self.filename = filename
+        self.columns = list(columns)
+
+
+def _resolve_pulldata_files_with_sources(
+    sources: Sequence[PulldataFileSource] | None,
+) -> tuple[dict[str, bytes], dict[str, list[PulldataFileSource]]]:
+    """Validate emitted pulldata attachments and freeze their exact bytes."""
+
+    # Keep this import local: pulldata.py exposes ValidationIssue from this
+    # module, so importing it at module import time would create a cycle.
+    from .pulldata import validate_pulldata_files
+
+    materialized: dict[str, bytes] = {}
+    materialized_sources: dict[str, list[PulldataFileSource]] = defaultdict(list)
+    headers_by_asset: dict[tuple[Any, str], tuple[bytes, list[str]]] = {}
+
+    for source in sources or ():
+        attached_files = tuple(source.attached_files or ())
+        # Validate file names/mapping without inspecting metadata or storage.
+        attached_names = [_pulldata_filename(file_obj) for file_obj in attached_files]
+        shape_issues = validate_pulldata_files(
+            source.owner, source.values, attached_names
+        )
+        if shape_issues:
+            raise ArtifactInputError(shape_issues[0])
+
+        question_files: list[_PulldataMaterializedFile] = []
+        for file_obj, filename in zip(attached_files, attached_names):
+            asset_key = (
+                getattr(file_obj, "pk", None) or id(file_obj),
+                str(getattr(getattr(file_obj, "file", None), "name", "") or filename),
+            )
+            if asset_key not in headers_by_asset:
+                headers_by_asset[asset_key] = _read_pulldata_file(
+                    source, getattr(file_obj, "file", file_obj), filename
+                )
+            content, columns = headers_by_asset[asset_key]
+            question_files.append(_PulldataMaterializedFile(filename, columns))
+
+        # Re-run the same service against actual source headers.  This keeps
+        # generation strict even when legacy rows have stale/missing metadata.
+        column_issues = validate_pulldata_files(
+            source.owner, source.values, question_files
+        )
+        column_issues = [
+            issue
+            for issue in column_issues
+            if issue.code
+            in {
+                "PULLDATA_SOURCE_INVALID",
+                "PULLDATA_COLUMN_MISSING",
+                "PULLDATA_COLUMNS_UNAVAILABLE",
+            }
+        ]
+        if column_issues:
+            raise ArtifactInputError(column_issues[0])
+
+        for file_obj, filename in zip(attached_files, attached_names):
+            asset_key = (
+                getattr(file_obj, "pk", None) or id(file_obj),
+                str(getattr(getattr(file_obj, "file", None), "name", "") or filename),
+            )
+            content, _columns = headers_by_asset[asset_key]
+            existing_names = [
+                name for name in materialized if name.casefold() == filename.casefold()
+            ]
+            if existing_names and existing_names[0] != filename:
+                raise ArtifactInputError(
+                    _pulldata_file_issue(
+                        source,
+                        "PULLDATA_FILE_NAME_CONFLICT",
+                        _(
+                            "Pull data filenames '%(first)s' and '%(second)s' "
+                            "collide when case is ignored; preserve the original "
+                            "names and select only one filename."
+                        )
+                        % {"first": existing_names[0], "second": filename},
+                        filename=filename,
+                    )
+                )
+            if filename in materialized and materialized[filename] != content:
+                prior = materialized_sources[filename][0]
+                raise ArtifactInputError(
+                    _pulldata_file_issue(
+                        source,
+                        "PULLDATA_FILE_CONTENT_CONFLICT",
+                        _(
+                            "Pull data file '%(filename)s' has different content "
+                            "for %(first)s and %(second)s. Use one asset or rename "
+                            "the pulldata source."
+                        )
+                        % {
+                            "filename": filename,
+                            "first": _pulldata_file_owner(prior),
+                            "second": _pulldata_file_owner(source),
+                        },
+                        filename=filename,
+                    )
+                )
+            materialized.setdefault(filename, content)
+            if source not in materialized_sources[filename]:
+                materialized_sources[filename].append(source)
+    return materialized, dict(materialized_sources)
+
+
+def resolve_pulldata_files(
+    sources: Sequence[PulldataFileSource] | None,
+) -> dict[str, bytes]:
+    """Resolve emitted lookup CSVs without applying choice-list semantics."""
+
+    materialized, _sources = _resolve_pulldata_files_with_sources(sources)
+    return materialized
+
+
+def _merge_artifact_external_files(
+    groups: Sequence[tuple[Mapping[str, bytes], Mapping[str, Sequence[Any]]]],
+) -> dict[str, bytes]:
+    """Merge CSV sources while rejecting silent same-name overwrites."""
+
+    merged: dict[str, bytes] = {}
+    owners: dict[str, Sequence[Any]] = {}
+    for files, source_map in groups:
+        for filename, content in files.items():
+            matching_names = [
+                name for name in merged if name.casefold() == str(filename).casefold()
+            ]
+            if matching_names and matching_names[0] != filename:
+                raise ArtifactInputError(
+                    _issue(
+                        "EXTERNAL_FILE_NAME_DUPLICATE",
+                        "composition",
+                        _(
+                            "External files '%(first)s' and '%(second)s' collide "
+                            "when case is ignored; references must retain their "
+                            "original names."
+                        )
+                        % {"first": matching_names[0], "second": filename},
+                        field=filename,
+                    )
+                )
+            if filename in merged and merged[filename] != bytes(content):
+                prior_sources = owners.get(filename, ())
+                prior = prior_sources[0] if prior_sources else "another source"
+                current_sources = source_map.get(filename, ())
+                current = current_sources[0] if current_sources else "another source"
+                raise ArtifactInputError(
+                    _issue(
+                        "EXTERNAL_FILE_CONTENT_CONFLICT",
+                        "composition",
+                        _(
+                            "External file '%(filename)s' has different content "
+                            "between %(first)s and %(second)s; the survey cannot "
+                            "publish conflicting files under one name."
+                        )
+                        % {
+                            "filename": filename,
+                            "first": (
+                                _pulldata_file_owner(prior)
+                                if isinstance(prior, PulldataFileSource)
+                                else (
+                                    _external_file_description(prior)
+                                    if isinstance(prior, ExternalChoiceFileSource)
+                                    else str(prior)
+                                )
+                            ),
+                            "second": (
+                                _pulldata_file_owner(current)
+                                if isinstance(current, PulldataFileSource)
+                                else (
+                                    _external_file_description(current)
+                                    if isinstance(current, ExternalChoiceFileSource)
+                                    else str(current)
+                                )
+                            ),
+                        },
+                        field=filename,
+                    )
+                )
+            merged.setdefault(filename, bytes(content))
+            if filename not in owners:
+                owners[filename] = source_map.get(filename, ())
+    return merged
 
 
 def materialize_external_files(
@@ -2456,14 +2871,30 @@ def build_generated_artifact(xlsx_form: Any) -> GeneratedSurveyArtifact:
         raise ArtifactInfrastructureError(f"Unable to generate XLSX: {exc}") from exc
 
     external_sources = tuple(getattr(xlsx_form, "external_file_sources", ()))
-    external_files = resolve_external_choice_files(external_sources)
+    choice_files = resolve_external_choice_files(external_sources)
     source_filenames = {source.filename for source in external_sources}
     other_files = {
         filename: file_obj
-        for filename, file_obj in xlsx_form.external_files.items()
+        for filename, file_obj in getattr(xlsx_form, "external_files", {}).items()
         if filename not in source_filenames
     }
-    external_files.update(materialize_external_files(other_files))
+    other_materialized = materialize_external_files(other_files)
+    pulldata_files, pulldata_sources = _resolve_pulldata_files_with_sources(
+        tuple(getattr(xlsx_form, "pulldata_file_sources", ()))
+    )
+    choice_sources = {
+        filename: [source]
+        for filename in choice_files
+        for source in external_sources
+        if source.filename == filename
+    }
+    external_files = _merge_artifact_external_files(
+        (
+            (choice_files, choice_sources),
+            (pulldata_files, pulldata_sources),
+            (other_materialized, {}),
+        )
+    )
     return GeneratedSurveyArtifact(
         xlsx_bytes=xlsx_bytes,
         external_files=external_files,
@@ -2535,6 +2966,7 @@ __all__ = [
     "ArtifactInputError",
     "COMPATIBILITY_VERSION",
     "ExternalChoiceFileSource",
+    "PulldataFileSource",
     "GeneratedSurveyArtifact",
     "PYXFORM_VERSION",
     "ValidatorInfrastructureError",
@@ -2546,6 +2978,7 @@ __all__ = [
     "failed_validation_result",
     "materialize_external_files",
     "resolve_external_choice_files",
+    "resolve_pulldata_files",
     "validate_codebook_integrity",
     "validate_generated_artifact",
     "validate_xml_compatibility",

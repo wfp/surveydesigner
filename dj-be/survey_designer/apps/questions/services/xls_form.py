@@ -31,7 +31,8 @@ from questions.models import (
 )
 from survey_designer import ___version___ as SURVEY_DESIGNER_VERSION
 
-from .form_validation import ExternalChoiceFileSource
+from .expression_validation import QUESTION_EXPRESSION_FIELDS
+from .form_validation import ExternalChoiceFileSource, PulldataFileSource
 from .workbook import save_virtual_workbook
 
 
@@ -112,6 +113,7 @@ class XLSForm:
         self.processed_questions = set()
         self.external_files = {}
         self.external_file_sources = []
+        self.pulldata_file_sources = []
         self.row_source_map = {}
 
         self.wb = Workbook()
@@ -409,6 +411,23 @@ class XLSForm:
         if file_name and file_name not in self.external_files:
             self.external_files[file_name] = file_field
 
+    def _track_pulldata_files(self, question):
+        relation = getattr(question, "pulldata_files", None)
+        if relation is None:
+            attached_files = ()
+        else:
+            attached_files = tuple(relation.all())
+        self.pulldata_file_sources.append(
+            PulldataFileSource(
+                owner=self._reference_source(question),
+                values={
+                    field_name: str(getattr(question, field_name, "") or "")
+                    for field_name in QUESTION_EXPRESSION_FIELDS
+                },
+                attached_files=attached_files,
+            )
+        )
+
     @staticmethod
     def _reference_source(instance):
         if instance is None:
@@ -498,6 +517,11 @@ class XLSForm:
 
         if question.choices:
             self.choices_ids.add(question.choices.id)
+
+        # Track files only after a row is emitted.  This naturally excludes
+        # unselected subquestions and includes questions nested in repeats.
+        self._track_external_file(question)
+        self._track_pulldata_files(question)
 
     def add_repeat_section(self, repeat_section):
         self.increment_row_index()
@@ -742,7 +766,6 @@ class XLSForm:
     def add_root_question(self, root_question):
         self.processed_questions.add(root_question.name)
         self.add_question_row(root_question)
-        self._track_external_file(root_question)
 
         selected_suffixes = []
         for sub_question in root_question.sub_questions.order_by(
@@ -761,7 +784,6 @@ class XLSForm:
             ):
                 self.processed_questions.add(sub_question.name)
                 self.add_question_row(sub_question)
-                self._track_external_file(sub_question)
 
             if is_selected and suffix and suffix.name != "_oth":
                 selected_suffixes.append(sub_question.suffix)
