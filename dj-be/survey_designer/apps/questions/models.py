@@ -12,7 +12,6 @@ from core.models import (
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models.functions import Lower
 from django.utils.functional import cached_property
 
 from .const import QuestionType
@@ -491,15 +490,15 @@ class PulldataFile(UserTrackingMixin, TimestampMixin):
     description = models.TextField(blank=True)
     # Header names only; this deliberately contains no row-level metadata.
     columns = models.JSONField(default=list, editable=False)
+    # Exact upload bytes. Empty values are retained for rows created before
+    # SD-185 and are lazily backfilled when duplicate detection compares them.
+    sha256 = models.CharField(
+        max_length=64, blank=True, default="", editable=False, db_index=True
+    )
 
     class Meta:
         verbose_name = "Pull data file"
         ordering = ("filename",)
-        constraints = [
-            models.UniqueConstraint(
-                Lower("filename"), name="questions_pulldatafile_unique_filename"
-            )
-        ]
 
     def __str__(self):
         return self.filename
