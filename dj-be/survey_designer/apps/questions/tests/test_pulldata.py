@@ -1,3 +1,4 @@
+import hashlib
 import json
 import threading
 
@@ -305,6 +306,63 @@ def test_upload_keeps_the_original_file_name(db, media_root):
     assert pulldata_file.columns == ["Length", "minZScore", "maxZScore"]
     assert pulldata_file.file.name.startswith("pulldata/")
     assert pulldata_file.file.name.endswith("/growth.csv")
+    assert pulldata_file.sha256 == hashlib.sha256(CSV_CONTENT).hexdigest()
+
+
+def test_byte_identical_upload_is_detected_even_when_the_filename_differs(
+    db, media_root
+):
+    existing = PulldataFile.objects.create(file=_upload("growth.csv"))
+
+    form = PulldataFileAdminForm(
+        data={}, files={"file": _upload("renamed.csv", CSV_CONTENT)}
+    )
+
+    assert form.is_valid() is False
+    assert form.duplicate_file.pk == existing.pk
+    message = form.errors["file"][0]
+    assert "byte-identical" in message
+    assert "growth.csv" in message
+    assert "'growth'" in message
+    assert "'renamed'" in message
+
+
+def test_byte_identical_upload_with_the_same_filename_is_detected(db, media_root):
+    existing = PulldataFile.objects.create(file=_upload("growth.csv"))
+
+    form = PulldataFileAdminForm(
+        data={}, files={"file": _upload("growth.csv", CSV_CONTENT)}
+    )
+
+    assert form.is_valid() is False
+    assert form.duplicate_file.pk == existing.pk
+    assert "Use the existing asset" in form.errors["file"][0]
+
+
+def test_same_filename_different_bytes_remains_a_distinct_upload(db, media_root):
+    PulldataFile.objects.create(file=_upload("growth.csv"))
+
+    form = PulldataFileAdminForm(
+        data={}, files={"file": _upload("growth.csv", b"id,other\n1,2\n")}
+    )
+
+    assert form.is_valid(), form.errors
+
+
+def test_legacy_upload_is_lazily_hashed_for_duplicate_detection(db, media_root):
+    existing = PulldataFile.objects.create(file=_upload("legacy.csv"))
+    PulldataFile.objects.filter(pk=existing.pk).update(sha256="")
+
+    form = PulldataFileAdminForm(
+        data={}, files={"file": _upload("renamed.csv", CSV_CONTENT)}
+    )
+
+    assert form.is_valid() is False
+    assert form.duplicate_file.pk == existing.pk
+    assert (
+        PulldataFile.objects.get(pk=existing.pk).sha256
+        == hashlib.sha256(CSV_CONTENT).hexdigest()
+    )
 
 
 def test_header_reader_supports_bom_quoted_headers_and_restores_position():
@@ -344,6 +402,60 @@ def test_replacing_a_file_refreshes_its_columns(db, media_root):
 
     pulldata_file.refresh_from_db()
     assert pulldata_file.columns == ["key", "display"]
+
+
+def test_shared_replacement_rejects_missing_literal_columns_before_storage_write(
+    root_question_1, root_question_2, db, media_root, mocker
+):
+    pulldata_file = PulldataFile.objects.create(
+        file=_upload("shared-columns.csv", b"id,name\n1,Apple\n")
+    )
+    RootQuestion.objects.filter(pk=root_question_1.pk).update(
+        calculation="pulldata('shared-columns', 'name', 'id', 1)"
+    )
+    RootQuestion.objects.filter(pk=root_question_2.pk).update(
+        calculation="pulldata('shared-columns', 'label', 'id', 1)"
+    )
+    root_question_1.pulldata_files.add(pulldata_file)
+    root_question_2.pulldata_files.add(pulldata_file)
+    old_name = pulldata_file.file.name
+    storage_save = mocker.spy(pulldata_file.file.storage, "save")
+
+    pulldata_file.file = _upload("shared-columns.csv", b"id,other\n1,Apple\n")
+    with pytest.raises(ValidationError) as exc_info:
+        pulldata_file.save()
+
+    message = str(exc_info.value)
+    assert "RootQuestion" in message and "name" in message
+    assert "RootQuestion" in message and "label" in message
+    current = PulldataFile.objects.get(pk=pulldata_file.pk)
+    assert current.file.name == old_name
+    assert current.columns == ["id", "name"]
+    storage_save.assert_not_called()
+
+
+def test_shared_replacement_with_all_literal_columns_updates_digest(
+    root_question_1, root_question_2, db, media_root
+):
+    pulldata_file = PulldataFile.objects.create(
+        file=_upload("shared-valid.csv", b"id,name\n1,Apple\n")
+    )
+    RootQuestion.objects.filter(pk=root_question_1.pk).update(
+        calculation="pulldata('shared-valid', 'name', 'id', 1)"
+    )
+    RootQuestion.objects.filter(pk=root_question_2.pk).update(
+        calculation="pulldata('shared-valid', 'label', 'id', 1)"
+    )
+    root_question_1.pulldata_files.add(pulldata_file)
+    root_question_2.pulldata_files.add(pulldata_file)
+
+    replacement = b"id,name,label\n1,Apple,Apple\n"
+    pulldata_file.file = _upload("shared-valid.csv", replacement)
+    pulldata_file.save()
+
+    pulldata_file.refresh_from_db()
+    assert pulldata_file.columns == ["id", "name", "label"]
+    assert pulldata_file.sha256 == hashlib.sha256(replacement).hexdigest()
 
 
 def test_stale_metadata_save_preserves_replaced_file_state(db, media_root):
@@ -479,7 +591,9 @@ def test_file_names_may_repeat_across_distinct_assets(db, media_root):
 def test_upload_form_allows_another_asset_with_the_same_name(db, media_root):
     PulldataFile.objects.create(file=_upload("growth.csv"))
 
-    form = PulldataFileAdminForm(data={}, files={"file": _upload("GROWTH.csv")})
+    form = PulldataFileAdminForm(
+        data={}, files={"file": _upload("growth.csv", b"id,other\n1,2\n")}
+    )
 
     assert form.is_valid()
 
@@ -549,6 +663,34 @@ def test_admin_uploads_a_pull_data_file(logged_admin_client, media_root):
     pulldata_file = PulldataFile.objects.get()
     assert pulldata_file.filename == "wfl_0_2_girls.csv"
     assert pulldata_file.created_by.email == "admin@example.com"
+
+
+def test_admin_duplicate_popup_reuses_existing_asset_without_resending_file(
+    logged_admin_client, media_root
+):
+    existing = PulldataFile.objects.create(file=_upload("growth.csv"))
+    url = get_model_admin_base_url(PulldataFile, "_add")
+
+    first = logged_admin_client.post(
+        url,
+        {"file": _upload("renamed.csv", CSV_CONTENT), "_popup": "1"},
+    )
+
+    assert first.status_code == 200
+    assert "Use existing pull data file" in first.content.decode()
+    token = first.context["pulldata_duplicate_token"]
+    second = logged_admin_client.post(
+        url,
+        {
+            "_popup": "1",
+            "_use_existing": "1",
+            "_pulldata_duplicate_token": token,
+        },
+    )
+
+    assert second.status_code == 200
+    assert existing.pk == PulldataFile.objects.get().pk
+    assert "django-admin-popup-response-constants" in second.content.decode()
 
 
 # Saving questions

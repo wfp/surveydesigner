@@ -4,6 +4,7 @@
 ``wfl_0_2_girls.csv``: the first argument is the file name without ``.csv``.
 """
 
+import os
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
@@ -13,6 +14,7 @@ from django.utils.translation import gettext as _
 
 from .expression_validation import analyse_expression
 from .form_validation import ValidationIssue
+from .pulldata_csv import sha256_upload
 
 PULLDATA_FILE_EXTENSION = ".csv"
 PULLDATA_FILES_FIELD = "pulldata_files"
@@ -36,6 +38,87 @@ _FILE_NAME_RULE = (
     "File names must start with a letter or '_' and use only letters, digits, "
     "'_', '-' or '.'."
 )
+
+
+def pulldata_file_digest(file_obj) -> str | None:
+    """Calculate and return a stored asset's digest, if it can be read."""
+
+    stored_name = str(getattr(getattr(file_obj, "file", None), "name", "") or "")
+    if not stored_name:
+        return None
+    try:
+        with file_obj.file.open("rb") as opened:
+            return sha256_upload(opened)
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def find_duplicate_pulldata_file(uploaded, *, exclude_pk=None):
+    """Return ``(digest, existing asset)`` for an exact-byte match.
+
+    New rows use the indexed digest lookup. Rows created before SD-185 have an
+    empty digest; compare every readable legacy row on demand and cache each
+    result. Storage failures are ignored so an old inaccessible row cannot
+    block a new upload. The compare is a one-time lazy migration, and the
+    indexed lookup handles subsequent requests.
+    """
+
+    digest = sha256_upload(uploaded)
+    from questions.models import PulldataFile
+
+    candidates = PulldataFile.objects.filter(sha256=digest)
+    if exclude_pk is not None:
+        candidates = candidates.exclude(pk=exclude_pk)
+    candidate_rows = list(candidates.order_by("pk"))
+    upload_filename = os.path.basename(getattr(uploaded, "name", "") or "")
+    match = next(
+        (
+            candidate
+            for candidate in candidate_rows
+            if candidate.filename == upload_filename
+        ),
+        candidate_rows[0] if candidate_rows else None,
+    )
+    if match is not None:
+        return digest, match
+
+    legacy = PulldataFile.objects.filter(sha256="").exclude(file="")
+    if exclude_pk is not None:
+        legacy = legacy.exclude(pk=exclude_pk)
+    for candidate in legacy.order_by("pk").iterator(chunk_size=100):
+        candidate_path = str(getattr(candidate.file, "name", "") or "")
+        candidate_digest = pulldata_file_digest(candidate)
+        if not candidate_digest:
+            continue
+        if candidate_digest != digest:
+            # Keep the backfill one-way, including non-matches, so subsequent
+            # duplicate checks do not repeatedly download the same asset.
+            PulldataFile.objects.filter(
+                pk=candidate.pk, file=candidate_path, sha256=""
+            ).update(sha256=candidate_digest)
+            continue
+        updated = PulldataFile.objects.filter(
+            pk=candidate.pk, file=candidate_path, sha256=""
+        ).update(sha256=digest)
+        if updated:
+            candidate.sha256 = digest
+            return digest, candidate
+        # A concurrent replacement won the compare; only return a row whose
+        # current indexed digest still represents the uploaded bytes.
+        concurrent = PulldataFile.objects.filter(pk=candidate.pk, sha256=digest).first()
+        if concurrent is not None:
+            return digest, concurrent
+    return digest, None
+
+
+def pulldata_stem(filename: str) -> str:
+    """Return the literal pulldata() stem for a preserved CSV filename."""
+
+    return (
+        filename[: -len(PULLDATA_FILE_EXTENSION)]
+        if filename.endswith(PULLDATA_FILE_EXTENSION)
+        else filename
+    )
 
 
 def pulldata_filename_error(filename: str) -> str | None:
@@ -128,6 +211,61 @@ def pulldata_requirements(values: Mapping[str, str]) -> PulldataRequirements:
                 if argument is not None and (field_name, argument) not in references:
                     references.append((field_name, argument))
     return requirements
+
+
+def pulldata_replacement_column_errors(file_obj, columns: Iterable[str]) -> list[str]:
+    """Return literal column errors for questions attached to a replacement.
+
+    This intentionally does not run complete question validation. A file
+    replacement must preserve the literal return/lookup columns currently
+    consumed by every attached root or subquestion, while unrelated formula
+    or attachment problems remain the responsibility of question validation.
+    """
+
+    filename = str(getattr(file_obj, "filename", "") or "")
+    if not filename:
+        return []
+    available = set(columns or ())
+    values_by_question = []
+    for question in file_obj.rootquestion_set.all():
+        values_by_question.append(("RootQuestion", question))
+    for question in file_obj.subquestion_set.select_related("root_question").all():
+        values_by_question.append(("SubQuestion", question))
+
+    expression_fields = (
+        "calculation",
+        "relevant",
+        "constraint",
+        "required",
+        "read_only",
+        "default",
+        "choice_filter",
+    )
+    errors = []
+    for model_name, question in values_by_question:
+        requirements = pulldata_requirements(
+            {
+                field_name: getattr(question, field_name, "")
+                for field_name in expression_fields
+            }
+        )
+        for field_name, column in requirements.column_references.get(filename, ()):
+            if column not in available:
+                errors.append(
+                    _(
+                        "%(model)s '%(name)s' field '%(field)s' uses column "
+                        "'%(column)s' from '%(filename)s', but the replacement "
+                        "does not contain that column."
+                    )
+                    % {
+                        "model": model_name,
+                        "name": question.name,
+                        "field": field_name,
+                        "column": column,
+                        "filename": filename,
+                    }
+                )
+    return errors
 
 
 def _attached_file_groups(attached_files: Iterable[Any]) -> dict[str, list[Any]]:
