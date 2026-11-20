@@ -41,6 +41,11 @@ api_urlpatterns = [
         views.LanguageAutocomplete.as_view(),
         name="language-autocomplete",
     ),
+    path(
+        "pulldata-file-autocomplete/",
+        views.PulldataFileAutocomplete.as_view(),
+        name="pulldata-file-autocomplete",
+    ),
 ]
 
 admin_urlpatterns = [
@@ -53,6 +58,11 @@ admin_urlpatterns = [
         "survey-health/scan/",
         admin.site.admin_view(views.survey_health_scan),
         name="survey-health-scan",
+    ),
+    path(
+        "questions/pulldata-status/",
+        admin.site.admin_view(views.pulldata_status),
+        name="pulldata-status",
     ),
     path(
         "questions/constraint/",

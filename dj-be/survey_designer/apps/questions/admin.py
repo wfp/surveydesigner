@@ -11,6 +11,7 @@ from core.admin import (
 )
 from core.forms import TranslationForm
 from core.utils import get_model_admin_base_url
+from dal import autocomplete
 from django.contrib import admin, messages
 from django.contrib.admin.options import IS_POPUP_VAR
 from django.contrib.postgres.aggregates import ArrayAgg
@@ -22,6 +23,7 @@ from django.forms.models import BaseInlineFormSet
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect, reverse
 from django.templatetags.static import static
+from django.urls import reverse_lazy
 from django.utils.html import format_html, format_html_join
 from django.utils.translation import ngettext
 from django.views.generic import RedirectView
@@ -54,6 +56,7 @@ from questions.forms import (
     CalculationAdminModelForm,
     ChoiceGroupFileAdminModelForm,
     NestedSuffixForm,
+    PulldataFileAdminForm,
     RepeatSectionAdminModelForm,
     RootQuestionAdminModelForm,
     SubQuestionAdminModelForm,
@@ -69,6 +72,7 @@ from questions.models import (
     ChoiceGroupFile,
     ChoiceTranslation,
     NestedSuffix,
+    PulldataFile,
     RecallPeriod,
     RepeatSection,
     RepeatSectionTranslation,
@@ -220,7 +224,26 @@ class SubQuestionConstraintMessageTranslationInline(
     form = TranslationForm
 
 
+class PulldataFilesFieldMixin:
+    """Show pull data files as a searchable select; the admin keeps its "+"."""
+
+    def formfield_for_manytomany(self, db_field, request=None, **kwargs):
+        if db_field.name == "pulldata_files":
+            kwargs["widget"] = autocomplete.ModelSelect2Multiple(
+                url="v1:pulldata-file-autocomplete",
+                attrs={
+                    "data-placeholder": "Search uploaded CSV files",
+                    # pulldata_status.js shows each file's status from here.
+                    "data-pulldata-status-url": reverse_lazy("pulldata-status"),
+                },
+            )
+            # Skips the admin's "Hold down Control" hint, which select2 doesn't need.
+            return db_field.formfield(**kwargs)
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
+
+
 class SubQuestionInline(
+    PulldataFilesFieldMixin,
     ObjectPermissionMixin,
     FormFieldOverridesMixin,
     nested_admin.NestedStackedInline,
@@ -405,8 +428,28 @@ class ChoiceGroupFileAdmin(
         super().save_model(request, obj, form, change)
 
 
+@admin.register(PulldataFile)
+class PulldataFileAdmin(
+    ObjectPermissionMixin,
+    AdminUserTrackingMixin,
+    FormFieldOverridesMixin,
+    admin.ModelAdmin,
+):
+    form = PulldataFileAdminForm
+    list_display = (
+        "filename",
+        "columns",
+        "description",
+        "modified_by",
+        "modified_on",
+    )
+    readonly_fields = ("columns",)
+    search_fields = ("file", "description")
+
+
 @admin.register(RootQuestion)
 class RootQuestionAdmin(
+    PulldataFilesFieldMixin,
     CollationSafeSearchAdminMixin,
     OrganizationOwnedParentFieldMixin,
     ObjectPermissionMixin,
@@ -458,6 +501,7 @@ class RootQuestionAdmin(
                     "description",
                     "type",
                     "calculation",
+                    "pulldata_files",
                     "choices",
                     "choices_file",
                     "label",
@@ -480,8 +524,17 @@ class RootQuestionAdmin(
     )
 
     class Media:
-        css = {"all": (static("js/tribute/tribute.css"),)}
-        js = [static("js/tribute/tribute.js"), static("js/admin/question.js")]
+        css = {
+            "all": (
+                static("js/tribute/tribute.css"),
+                static("css/admin/pulldata_status.css"),
+            )
+        }
+        js = [
+            static("js/tribute/tribute.js"),
+            static("js/admin/question.js"),
+            static("js/admin/pulldata_status.js"),
+        ]
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
@@ -756,6 +809,7 @@ class SuffixAdmin(
 
 @admin.register(SubQuestion)
 class SubQuestionAdmin(
+    PulldataFilesFieldMixin,
     CollationSafeSearchAdminMixin,
     OrganizationOwnedParentFieldMixin,
     ObjectPermissionMixin,
@@ -802,10 +856,16 @@ class SubQuestionAdmin(
     search_fields = ("name", "label", "description")
 
     class Media:
-        css = {"all": (static("js/tribute/tribute.css"),)}
+        css = {
+            "all": (
+                static("js/tribute/tribute.css"),
+                static("css/admin/pulldata_status.css"),
+            )
+        }
         js = [
             static("js/tribute/tribute.js"),
             static("js/admin/sub-question-edit.js"),
+            static("js/admin/pulldata_status.js"),
         ]
 
     def save_model(self, request, obj, form, change):
