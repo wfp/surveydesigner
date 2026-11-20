@@ -7,10 +7,59 @@ import pandas as pd
 import pytest
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
+from django.core.files.uploadedfile import SimpleUploadedFile
 from openpyxl import load_workbook
 from questions.const import QuestionType
-from questions.models import ChoiceGroupFile, RootQuestion, SubQuestion, Suffix
-from questions.services import DocConversion, XLSForm, XMLConversion
+from questions.models import (
+    ChoiceGroupFile,
+    PulldataFile,
+    RootQuestion,
+    SubQuestion,
+    Suffix,
+)
+from questions.services import (
+    DocConversion,
+    XLSForm,
+    XMLConversion,
+    build_generated_artifact,
+)
+
+
+def test_generated_artifact_collects_emitted_root_and_subquestion_pulldata(
+    submodule_1, root_question_1, sub_question_1, settings, tmp_path
+):
+    settings.MEDIA_ROOT = str(tmp_path)
+    content = b"id,display\n1,Lookup\n"
+    pulldata_file = PulldataFile.objects.create(
+        file=SimpleUploadedFile("lookup.csv", content, content_type="text/csv")
+    )
+    expression = "pulldata('lookup', 'display', 'id', 1)"
+    root_question_1.calculation = expression
+    root_question_1.save(update_fields=["calculation"])
+    sub_question_1.calculation = expression
+    sub_question_1.save(update_fields=["calculation"])
+    root_question_1.pulldata_files.add(pulldata_file)
+    sub_question_1.pulldata_files.add(pulldata_file)
+
+    form = XLSForm(
+        name="pulldata artifact",
+        submodule_ids=[submodule_1.id],
+        sub_question_ids=[sub_question_1.id],
+        submodules_order=[submodule_1.id],
+    )
+    artifact = build_generated_artifact(form)
+
+    assert artifact.external_files == {"lookup.csv": content}
+    workbook = load_workbook(io.BytesIO(artifact.xlsx_bytes), read_only=True)
+    survey = workbook["survey"]
+    headers = [cell.value for cell in survey[1]]
+    names = {
+        row[headers.index("name")]
+        for row in survey.iter_rows(min_row=2, values_only=True)
+        if row[headers.index("name")]
+    }
+    assert root_question_1.name in names
+    assert sub_question_1.name in names
 
 
 def test_xls_form_generation(

@@ -807,17 +807,6 @@ class PulldataFileAdminForm(ModelForm):
             error = pulldata_filename_error(filename)
             if error:
                 raise forms.ValidationError(error)
-            existing = (
-                PulldataFile.objects.filter(filename__iexact=filename)
-                .exclude(pk=self.instance.pk)
-                .first()
-            )
-            if existing:
-                raise forms.ValidationError(
-                    f"'{existing.filename}' has already been uploaded. Select it "
-                    "on the question instead: one file can serve any number of "
-                    "pulldata() calls."
-                )
             max_size = settings.EXTERNAL_CHOICE_FILE_MAX_BYTES
             if uploaded.size > max_size:
                 raise forms.ValidationError(

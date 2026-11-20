@@ -1,15 +1,16 @@
 import json
+import threading
 
 import pytest
 from core.utils import get_model_admin_base_url
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import IntegrityError, transaction
+from django.db import connection, transaction
 from django.forms import modelform_factory
 from django.urls import reverse
 from organization.utils import get_organizations
 from questions.forms import PulldataFileAdminForm, SubQuestionAdminModelForm
-from questions.models import PulldataFile, RootQuestion, SubQuestion
+from questions.models import PulldataFile, RootQuestion, SubQuestion, SubQuestionProxy
 from questions.services.expression_validation import analyse_expression
 from questions.services.pulldata import (
     pulldata_file_status,
@@ -345,6 +346,66 @@ def test_replacing_a_file_refreshes_its_columns(db, media_root):
     assert pulldata_file.columns == ["key", "display"]
 
 
+def test_stale_metadata_save_preserves_replaced_file_state(db, media_root):
+    created = PulldataFile.objects.create(file=_upload("growth.csv"))
+    stale = PulldataFile.objects.get(pk=created.pk)
+    replacement = PulldataFile.objects.get(pk=created.pk)
+    replacement.file = _upload("growth.csv", b"key,display\n1,Apple\n")
+    replacement.save()
+    replaced_name = replacement.file.name
+
+    stale.description = "Updated"
+    stale.save()
+
+    current = PulldataFile.objects.get(pk=created.pk)
+    assert current.description == "Updated"
+    assert current.file.name == replaced_name
+    assert current.filename == "growth.csv"
+    assert current.columns == ["key", "display"]
+
+
+def test_model_rejects_a_renamed_replacement_before_storage_write(
+    db, media_root, mocker
+):
+    pulldata_file = PulldataFile.objects.create(file=_upload("growth.csv"))
+    old_name = pulldata_file.file.name
+    storage = pulldata_file.file.storage
+    storage_save = mocker.spy(storage, "save")
+    pulldata_file.file = _upload("GROWTH.csv", b"key,display\n1,Apple\n")
+
+    with pytest.raises(ValidationError, match="exact basename"):
+        pulldata_file.save()
+
+    current = PulldataFile.objects.get(pk=pulldata_file.pk)
+    assert current.file.name == old_name
+    assert current.columns == ["Length", "minZScore", "maxZScore"]
+    assert storage.exists(old_name)
+    storage_save.assert_not_called()
+
+
+def test_new_asset_can_use_an_existing_storage_path(db):
+    asset = PulldataFile.objects.create(file="pulldata/existing/growth.csv")
+
+    asset.refresh_from_db()
+    assert asset.filename == "growth.csv"
+
+
+def test_upload_form_rejects_a_case_changed_replacement(db, media_root):
+    pulldata_file = PulldataFile.objects.create(file=_upload("growth.csv"))
+
+    form = PulldataFileAdminForm(
+        data={},
+        files={"file": _upload("GROWTH.csv", b"key,display\n1,Apple\n")},
+        instance=pulldata_file,
+    )
+
+    assert form.is_valid() is False
+    assert form.errors["file"] == [
+        "Replacement files must keep the existing filename 'growth.csv'. "
+        "Upload a file with that exact basename (including letter case)."
+    ]
+
+
 def test_description_only_save_does_not_read_or_persist_pending_file(
     db, media_root, mocker
 ):
@@ -367,6 +428,7 @@ def test_description_only_save_does_not_read_or_persist_pending_file(
     pulldata_file.refresh_from_db()
     assert pulldata_file.description == "Updated"
     assert pulldata_file.columns == ["Length", "minZScore", "maxZScore"]
+    assert pulldata_file.file.storage.exists(created.file.name)
 
 
 def test_empty_update_fields_is_a_noop_for_pending_file(db, media_root, mocker):
@@ -403,23 +465,48 @@ def test_pulldata_validation_uses_metadata_without_opening_storage(
     assert issues == []
 
 
-def test_file_names_are_unique_ignoring_case(db, media_root):
-    PulldataFile.objects.create(file=_upload("growth.csv"))
+def test_file_names_may_repeat_across_distinct_assets(db, media_root):
+    first = PulldataFile.objects.create(file=_upload("growth.csv"))
+    second = PulldataFile.objects.create(file=_upload("growth.csv", b"id,other\n1,2\n"))
 
-    with pytest.raises(IntegrityError), transaction.atomic():
-        PulldataFile.objects.create(file=_upload("Growth.csv"))
+    assert first.pk != second.pk
+    assert list(PulldataFile.objects.values_list("filename", flat=True)) == [
+        "growth.csv",
+        "growth.csv",
+    ]
 
 
-def test_upload_form_points_to_the_file_already_uploaded(db, media_root):
+def test_upload_form_allows_another_asset_with_the_same_name(db, media_root):
     PulldataFile.objects.create(file=_upload("growth.csv"))
 
     form = PulldataFileAdminForm(data={}, files={"file": _upload("GROWTH.csv")})
 
-    assert form.is_valid() is False
-    assert form.errors["file"] == [
-        "'growth.csv' has already been uploaded. Select it on the question "
-        "instead: one file can serve any number of pulldata() calls."
+    assert form.is_valid()
+
+
+def test_duplicate_selected_assets_are_rejected_without_storage_reads():
+    first = _AttachedFile("growth.csv", ["id", "display"])
+    second = _AttachedFile("growth.csv", ["id", "display"])
+    issues = validate_pulldata_files(
+        OWNER,
+        {"calculation": "pulldata('growth', 'display', 'id', 1)"},
+        [first, second],
+    )
+
+    assert [issue.code for issue in issues] == ["PULLDATA_FILE_AMBIGUOUS"]
+    assert "more than one uploaded asset" in issues[0].message
+
+
+def test_status_reports_duplicate_selected_assets_as_ambiguous():
+    status = pulldata_file_status(
+        {"calculation": "pulldata('growth', 'display', 'id', 1)"},
+        [_AttachedFile("growth.csv", ["id", "display"])] * 2,
+    )
+
+    assert status["files"] == [
+        {"filename": "growth.csv", "status": "ambiguous", "fields": ["calculation"]}
     ]
+    assert "more than one uploaded asset" in status["problems"][0]
 
 
 def test_upload_form_lets_a_file_keep_its_own_name(db, media_root):
@@ -505,6 +592,195 @@ def test_root_question_saves_with_its_file_attached(
     root_question_1.refresh_from_db()
     assert root_question_1.calculation == calculation
     assert list(root_question_1.pulldata_files.all()) == [pulldata_file]
+
+
+def test_shared_file_survives_until_last_question_detaches_it(
+    root_question_1, root_question_2, media_root, transactional_db
+):
+    pulldata_file = PulldataFile.objects.create(file=_upload("shared.csv"))
+    stored_name = pulldata_file.file.name
+    root_question_1.pulldata_files.add(pulldata_file)
+    root_question_2.pulldata_files.add(pulldata_file)
+
+    root_question_1.pulldata_files.remove(pulldata_file)
+    assert PulldataFile.objects.filter(pk=pulldata_file.pk).exists()
+    assert pulldata_file.file.storage.exists(stored_name)
+
+    root_question_2.pulldata_files.remove(pulldata_file)
+    assert not PulldataFile.objects.filter(pk=pulldata_file.pk).exists()
+    assert not pulldata_file.file.storage.exists(stored_name)
+
+
+def test_concurrent_attach_commits_before_last_detach_cleanup(
+    root_question_1, root_question_2, media_root, transactional_db
+):
+    """A committed concurrent M2M add wins over orphan cleanup's row lock."""
+
+    pulldata_file = PulldataFile.objects.create(file=_upload("concurrent.csv"))
+    root_question_1.pulldata_files.add(pulldata_file)
+    ready = threading.Event()
+    release = threading.Event()
+    detached = threading.Event()
+    errors = []
+
+    def attach_and_hold_transaction():
+        try:
+            with transaction.atomic():
+                question = RootQuestion.objects.get(pk=root_question_2.pk)
+                question.pulldata_files.add(pulldata_file.pk)
+                # Hold the asset row lock until the committed M2M insert is
+                # visible; cleanup's select_for_update must serialize behind
+                # this transaction before checking references.
+                PulldataFile.objects.select_for_update().get(pk=pulldata_file.pk)
+                ready.set()
+                release.wait(timeout=5)
+        except BaseException as exc:  # pragma: no cover - surfaced below
+            errors.append(exc)
+            ready.set()
+        finally:
+            connection.close()
+
+    def detach_last_reference():
+        try:
+            question = RootQuestion.objects.get(pk=root_question_1.pk)
+            question.pulldata_files.remove(pulldata_file.pk)
+            detached.set()
+        except BaseException as exc:  # pragma: no cover - surfaced below
+            errors.append(exc)
+            detached.set()
+        finally:
+            connection.close()
+
+    attaching = threading.Thread(target=attach_and_hold_transaction)
+    attaching.start()
+    assert ready.wait(timeout=5)
+    detaching = threading.Thread(target=detach_last_reference)
+    detaching.start()
+
+    # Cleanup must wait on the uncommitted FK key-share lock held by the add.
+    assert not detached.wait(timeout=0.5)
+    release.set()
+    attaching.join(timeout=5)
+    detaching.join(timeout=5)
+
+    assert not errors
+    assert detached.is_set()
+    assert PulldataFile.objects.filter(pk=pulldata_file.pk).exists()
+    assert root_question_2.pulldata_files.filter(pk=pulldata_file.pk).exists()
+
+    root_question_2.pulldata_files.remove(pulldata_file)
+
+
+def test_noop_remove_does_not_delete_an_unattached_upload(
+    root_question_1, media_root, transactional_db
+):
+    pulldata_file = PulldataFile.objects.create(file=_upload("unattached.csv"))
+    stored_name = pulldata_file.file.name
+
+    root_question_1.pulldata_files.remove(pulldata_file)
+
+    assert PulldataFile.objects.filter(pk=pulldata_file.pk).exists()
+    assert pulldata_file.file.storage.exists(stored_name)
+
+
+def test_reverse_noop_remove_does_not_delete_an_unattached_upload(
+    root_question_1, media_root, transactional_db
+):
+    pulldata_file = PulldataFile.objects.create(file=_upload("reverse.csv"))
+    stored_name = pulldata_file.file.name
+
+    pulldata_file.rootquestion_set.remove(root_question_1)
+
+    assert PulldataFile.objects.filter(pk=pulldata_file.pk).exists()
+    assert pulldata_file.file.storage.exists(stored_name)
+
+
+def test_reverse_noop_clear_does_not_delete_an_unattached_upload(
+    root_question_1, media_root, transactional_db
+):
+    pulldata_file = PulldataFile.objects.create(file=_upload("reverse-clear.csv"))
+    stored_name = pulldata_file.file.name
+
+    pulldata_file.rootquestion_set.clear()
+
+    assert PulldataFile.objects.filter(pk=pulldata_file.pk).exists()
+    assert pulldata_file.file.storage.exists(stored_name)
+
+
+def test_reverse_subquestion_noop_clear_does_not_delete_an_unattached_upload(
+    sub_question_1, media_root, transactional_db
+):
+    pulldata_file = PulldataFile.objects.create(file=_upload("sub-clear.csv"))
+    stored_name = pulldata_file.file.name
+
+    pulldata_file.subquestion_set.clear()
+
+    assert PulldataFile.objects.filter(pk=pulldata_file.pk).exists()
+    assert pulldata_file.file.storage.exists(stored_name)
+
+
+def test_deleting_a_question_removes_its_last_pull_data_asset(
+    root_question_1, media_root, transactional_db
+):
+    pulldata_file = PulldataFile.objects.create(file=_upload("deleted.csv"))
+    stored_name = pulldata_file.file.name
+    root_question_1.pulldata_files.add(pulldata_file)
+
+    root_question_1.delete()
+
+    assert not PulldataFile.objects.filter(pk=pulldata_file.pk).exists()
+    assert not pulldata_file.file.storage.exists(stored_name)
+
+
+def test_cascading_root_delete_removes_attached_sub_question_asset(
+    root_question_1, sub_question_1, media_root, transactional_db
+):
+    pulldata_file = PulldataFile.objects.create(file=_upload("cascade.csv"))
+    stored_name = pulldata_file.file.name
+    sub_question_1.pulldata_files.add(pulldata_file)
+
+    root_question_1.delete()
+
+    assert not PulldataFile.objects.filter(pk=pulldata_file.pk).exists()
+    assert not pulldata_file.file.storage.exists(stored_name)
+
+
+def test_deleting_a_sub_question_proxy_removes_its_last_pull_data_asset(
+    sub_question_1, media_root, transactional_db
+):
+    pulldata_file = PulldataFile.objects.create(file=_upload("proxy.csv"))
+    stored_name = pulldata_file.file.name
+    sub_question_1.pulldata_files.add(pulldata_file)
+
+    SubQuestionProxy.objects.get(pk=sub_question_1.pk).delete()
+
+    assert not PulldataFile.objects.filter(pk=pulldata_file.pk).exists()
+    assert not pulldata_file.file.storage.exists(stored_name)
+
+
+def test_replacing_a_file_deletes_old_blob_only_after_commit(
+    transactional_db, media_root
+):
+    pulldata_file = PulldataFile.objects.create(file=_upload("replace.csv"))
+    old_name = pulldata_file.file.name
+    storage = pulldata_file.file.storage
+
+    with pytest.raises(RuntimeError):
+        with transaction.atomic():
+            pulldata_file.file = _upload("replace.csv", b"id,new\n1,2\n")
+            pulldata_file.save()
+            raise RuntimeError("rollback")
+
+    pulldata_file.refresh_from_db()
+    assert pulldata_file.file.name == old_name
+    assert storage.exists(old_name)
+
+    pulldata_file.file = _upload("replace.csv", b"id,new\n1,2\n")
+    pulldata_file.save()
+    new_name = pulldata_file.file.name
+    assert new_name != old_name
+    assert storage.exists(new_name)
+    assert not storage.exists(old_name)
 
 
 def _codes_from_messages(messages):
