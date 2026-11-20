@@ -538,6 +538,27 @@ class PulldataFile(UserTrackingMixin, TimestampMixin):
         except PulldataHeaderError as exc:
             raise ValidationError({"file": [str(exc)]}) from exc
 
+    def _refresh_digest_from_pending_upload(self):
+        if not self._has_pending_upload():
+            return
+        from .services.pulldata_csv import sha256_upload
+
+        try:
+            self.sha256 = sha256_upload(self.file.file)
+        except (OSError, TypeError, ValueError) as exc:
+            raise ValidationError(
+                {"file": ["Could not read the uploaded CSV file."]}
+            ) from exc
+
+    def _validate_attached_replacement_columns(self):
+        if self._state.adding or not self._has_pending_upload():
+            return
+        from .services.pulldata import pulldata_replacement_column_errors
+
+        errors = pulldata_replacement_column_errors(self, self.columns)
+        if errors:
+            raise ValidationError({"file": errors})
+
     def _validate_replacement_filename(self, previous_filename):
         filename = os.path.basename(self.file.name or "")
         if filename and previous_filename and filename != previous_filename:
@@ -559,6 +580,8 @@ class PulldataFile(UserTrackingMixin, TimestampMixin):
                 self.filename or os.path.basename(loaded_name)
             )
         self._refresh_columns_from_pending_upload()
+        self._refresh_digest_from_pending_upload()
+        self._validate_attached_replacement_columns()
 
     @classmethod
     def schedule_storage_delete(cls, storage, name, using):
@@ -626,6 +649,7 @@ class PulldataFile(UserTrackingMixin, TimestampMixin):
                     self.file = previous_name
                 self.filename = previous.filename
                 self.columns = previous.columns
+                self.sha256 = previous.sha256
             else:
                 if previous:
                     self._validate_replacement_filename(
@@ -633,8 +657,14 @@ class PulldataFile(UserTrackingMixin, TimestampMixin):
                     )
                 self.filename = os.path.basename(current_name)
                 self._refresh_columns_from_pending_upload()
+                self._refresh_digest_from_pending_upload()
+                self._validate_attached_replacement_columns()
+                if not self._has_pending_upload() and current_name != previous_name:
+                    # A path reassignment without bytes is not proof that the
+                    # old digest still describes this asset.
+                    self.sha256 = ""
                 if update_fields is not None:
-                    update_fields.update(("filename", "columns"))
+                    update_fields.update(("filename", "columns", "sha256"))
 
             super().save(**options)
             self._pulldata_loaded_file_name = self.file.name or ""

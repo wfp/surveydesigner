@@ -795,7 +795,11 @@ class PulldataFileAdminForm(ModelForm):
         fields = ("file", "description")
 
     def clean_file(self):
-        from questions.services.pulldata import pulldata_filename_error
+        from questions.services.pulldata import (
+            find_duplicate_pulldata_file,
+            pulldata_filename_error,
+            pulldata_stem,
+        )
         from questions.services.pulldata_csv import (
             PulldataHeaderError,
             read_pulldata_headers,
@@ -816,6 +820,24 @@ class PulldataFileAdminForm(ModelForm):
                 read_pulldata_headers(uploaded, filename=filename)
             except PulldataHeaderError as exc:
                 raise forms.ValidationError(str(exc)) from exc
+            duplicate = None
+            if not self.instance.pk:
+                _digest, duplicate = find_duplicate_pulldata_file(uploaded)
+            if duplicate is not None:
+                self.duplicate_file = duplicate
+                message = (
+                    f"A byte-identical CSV already exists as '{duplicate.filename}' "
+                    f"(asset #{duplicate.pk}). Use the existing asset instead of "
+                    "creating another upload."
+                )
+                if duplicate.filename != filename:
+                    message += (
+                        f" The existing file's pulldata() stem is "
+                        f"'{pulldata_stem(duplicate.filename)}'; if your formula "
+                        f"uses '{pulldata_stem(filename)}', change its first "
+                        f"argument to '{pulldata_stem(duplicate.filename)}'."
+                    )
+                raise forms.ValidationError(message, code="duplicate_upload")
         return uploaded
 
 
