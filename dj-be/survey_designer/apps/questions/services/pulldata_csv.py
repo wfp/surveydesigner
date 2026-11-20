@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import codecs
 import csv
+import hashlib
 from typing import BinaryIO
 
 from django.utils.translation import gettext as _
@@ -15,6 +16,37 @@ PULLDATA_HEADER_MAX_BYTES = 64 * 1024
 
 class PulldataHeaderError(ValueError):
     """The uploaded file does not have a usable UTF-8 CSV header."""
+
+
+def sha256_upload(uploaded) -> str:
+    """Return the SHA-256 digest of an upload's exact bytes.
+
+    CSV parsing and normalisation must not make two different uploads look
+    like the same asset. Restore the original position so the upload can be
+    validated and saved after the digest is calculated.
+    """
+
+    try:
+        original_position = uploaded.tell()
+    except (AttributeError, OSError, ValueError):
+        original_position = 0
+
+    digest = hashlib.sha256()
+    try:
+        uploaded.seek(0)
+        while True:
+            chunk = uploaded.read(1024 * 1024)
+            if not chunk:
+                break
+            if isinstance(chunk, str):
+                raise TypeError("CSV upload must be binary")
+            digest.update(chunk)
+    finally:
+        try:
+            uploaded.seek(original_position)
+        except (AttributeError, OSError, ValueError):
+            pass
+    return digest.hexdigest()
 
 
 class _BoundedTextLines:
