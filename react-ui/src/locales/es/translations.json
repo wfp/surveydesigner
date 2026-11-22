@@ -1,4 +1,25 @@
 {
+    "releaseNotifications": {
+        "viewAll": "Ver todas las notificaciones",
+        "historyTitle": "Notificaciones de versiones",
+        "new": "Nueva",
+        "read": "Leída",
+        "range": "{{min}}–{{max}} de {{total}} versiones",
+        "page": "Página {{page}}",
+        "pages": "{{page}} de {{total}} páginas",
+        "pageNumber": "Número de página",
+        "title": "Últimos cambios",
+        "unread": "Últimos cambios, versión sin leer",
+        "update": "Actualización",
+        "version": "Versión {{version}}",
+        "loading": "Cargando notificaciones…",
+        "empty": "No hay nuevas notificaciones de versiones.",
+        "clear": "Borrar notificaciones",
+        "retry": "Reintentar",
+        "fetchError": "No se pudieron cargar las notificaciones. Vuelve a intentarlo.",
+        "readError": "No se pudo marcar esta versión como leída. Vuelve a intentarlo.",
+        "clearError": "No se pudo borrar esta notificación. Vuelve a intentarlo."
+    },
     "deleteSavedSurveyModal": {
         "delete": "¿Estás seguro de que deseas eliminar la encuesta.",
         "actionCannotBeUndone": "Esta acción no se puede deshacer.",

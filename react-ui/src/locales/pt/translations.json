@@ -1,4 +1,25 @@
 {
+    "releaseNotifications": {
+        "viewAll": "Ver todas as notificações",
+        "historyTitle": "Notificações de versões",
+        "new": "Nova",
+        "read": "Lida",
+        "range": "{{min}}–{{max}} de {{total}} versões",
+        "page": "Página {{page}}",
+        "pages": "{{page}} de {{total}} páginas",
+        "pageNumber": "Número da página",
+        "title": "Últimas alterações",
+        "unread": "Últimas alterações, versão não lida",
+        "update": "Atualização",
+        "version": "Versão {{version}}",
+        "loading": "A carregar notificações…",
+        "empty": "Não há novas notificações de versões.",
+        "clear": "Limpar notificações",
+        "retry": "Tentar novamente",
+        "fetchError": "Não foi possível carregar as notificações. Tente novamente.",
+        "readError": "Não foi possível marcar esta versão como lida. Tente novamente.",
+        "clearError": "Não foi possível limpar esta notificação. Tente novamente."
+    },
     "deleteSavedSurveyModal": {
         "delete": "Tem certeza de que deseja excluir a pesquisa.",
         "actionCannotBeUndone": "Essa ação não pode ser desfeita.",

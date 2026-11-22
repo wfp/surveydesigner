@@ -18,6 +18,7 @@ import { NavLink } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../redux/store";
 import { logout } from "../../redux/actions/authActions";
 import { languageSelect } from "../languageSelect";
+import ReleaseNotifications from "../ReleaseNotifications";
 
 function Nav() {
   const { t } = useTranslation();
@@ -119,6 +120,11 @@ function Nav() {
         </NavLink>
       </MainNavigationItem>
       {userNavigation}
+      {auth.is_logged && auth.user?.email && (
+        <MainNavigationItem>
+          <ReleaseNotifications />
+        </MainNavigationItem>
+      )}
       {languageSelect()}
     </MainNavigation>
   );
