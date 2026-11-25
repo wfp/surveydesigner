@@ -301,11 +301,15 @@ def test_audience_and_translation_inlines_can_be_removed(logged_admin_client):
 
 
 @pytest.mark.parametrize("name", ("release", "notification"))
-def test_content_delete_is_disabled_even_for_admin(logged_admin_client, name):
+def test_published_content_delete_is_disabled_even_for_admin(logged_admin_client, name):
     record = (
-        Release.objects.create(business_version="2.0.1", title="Release")
+        Release.objects.create(
+            business_version="2.0.1", title="Release", status=ReleaseStatus.PUBLISHED
+        )
         if name == "release"
-        else Notification.objects.create(title="Notification")
+        else Notification.objects.create(
+            title="Notification", status=NotificationStatus.PUBLISHED
+        )
     )
     response = logged_admin_client.post(
         reverse(f"admin:notifications_{name}_delete", args=(record.pk,)),

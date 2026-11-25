@@ -1,8 +1,9 @@
 from core.admin import AdminUserTrackingMixin, CollationSafeSearchAdminMixin
 from django.contrib import admin, messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 
-from .const import NotificationStatus
+from .const import NotificationStatus, ReleaseStatus
 from .forms import (
     NotificationAdminForm,
     NotificationTranslationAdminForm,
@@ -93,7 +94,24 @@ class NotificationContentAdmin(
     actions = None
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return super().has_delete_permission(request, obj) and (
+            obj is None or obj.status == "draft"
+        )
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # Draft deletion is an individual, confirmed operation for now.
+        actions.pop("delete_selected", None)
+        return actions
+
+    @transaction.atomic
+    def delete_model(self, request, obj):
+        # Publication uses the same row lock. Recheck authoritative state so an
+        # earlier confirmation page cannot authorize deleting published content.
+        current = self.get_queryset(request).select_for_update().get(pk=obj.pk)
+        if not self.has_delete_permission(request, current):
+            raise PermissionDenied("Only eligible drafts can be deleted.")
+        super().delete_model(request, current)
 
     def save_formset(self, request, form, formset, change):
         instances = formset.save(commit=False)
@@ -164,6 +182,11 @@ class ReleaseAdmin(NotificationContentAdmin):
             },
         ),
     )
+
+    def has_delete_permission(self, request, obj=None):
+        return super().has_delete_permission(request, obj) and (
+            obj is None or obj.published_at is None
+        )
 
     def has_publish_permission(self, request):
         return can_publish_release(request.user)
@@ -246,6 +269,19 @@ class NotificationAdmin(NotificationContentAdmin):
             },
         ),
     )
+
+    def has_delete_permission(self, request, obj=None):
+        if not super().has_delete_permission(request, obj):
+            return False
+        if obj is None:
+            return True
+        if obj.read_states.exists():
+            return False
+        # Keep the snapshot belonging to a published release intact.
+        return not obj.release_id or (
+            obj.release.status == ReleaseStatus.DRAFT
+            and obj.release.published_at is None
+        )
 
     def get_readonly_fields(self, request, obj=None):
         fields = super().get_readonly_fields(request, obj)
