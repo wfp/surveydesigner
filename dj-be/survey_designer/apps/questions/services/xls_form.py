@@ -63,6 +63,7 @@ class XLSForm:
         "sd_metadata_export_id",
         "sd_metadata_exported_at",
         "sd_metadata_generator_version",
+        "sd_metadata_survey_type",
     )
     ENGLISH_LANGUAGES = {
         "en": "English",
@@ -83,9 +84,11 @@ class XLSForm:
         languages=None,
         indicators=None,
         protected=False,
+        survey_type_name=None,
     ):
         self.name = name
         self.protected = protected
+        self.survey_type_name = survey_type_name
         self.form_version = self.get_form_version()
         self.id_name = (
             f"surveydesigner{self.form_version}_{secrets.token_urlsafe(nbytes=8)}"
@@ -318,6 +321,7 @@ class XLSForm:
                 self.SURVEY_DESIGNER_METADATA_FIELD_NAMES[3],
                 self.get_generator_version(),
             ),
+            (self.SURVEY_DESIGNER_METADATA_FIELD_NAMES[4], self.survey_type_name),
         )
 
     def get_existing_survey_names(self):

@@ -72,6 +72,7 @@ def test_xls_form_includes_survey_designer_metadata(submodule_1):
         "sd_metadata_generated_by": "survey_designer",
         "sd_metadata_export_id": xls_form.export_id,
         "sd_metadata_generator_version": xls_form.get_generator_version(),
+        "sd_metadata_survey_type": None,
     }
     for name, default in expected_defaults.items():
         assert rows[name]["type"] == "hidden"
@@ -126,10 +127,14 @@ def test_get_form_version(mocker, generator_version, expected):
     assert XLSForm.get_form_version() == expected
 
 
-def test_xls_form_rejects_survey_designer_metadata_name_collision(submodule_1):
-    reserved_name = "sd_metadata_export_id"
+@pytest.mark.parametrize(
+    "reserved_name", ["sd_metadata_export_id", "sd_metadata_survey_type"]
+)
+def test_xls_form_rejects_survey_designer_metadata_name_collision(
+    submodule_1, reserved_name
+):
     question = RootQuestion.objects.filter(submodule=submodule_1).first()
-    question.name = reserved_name
+    question.name = reserved_name.upper()
     question.save()
 
     xls_form = XLSForm(

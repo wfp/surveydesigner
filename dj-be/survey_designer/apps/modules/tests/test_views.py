@@ -21,7 +21,7 @@ from modules.models import (
     SubmoduleRequiredGroup,
 )
 from modules.views import generate_docx
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from pyxform.errors import PyXFormError
 from questions.const import QuestionType
 from questions.models import (
@@ -954,6 +954,37 @@ def test_converter_failures_keep_input_and_infrastructure_statuses(
 
     assert response.status_code == expected_status
     assert response.json()["errors"][0]["code"] == expected_code
+
+
+@pytest.mark.parametrize("select_type", [True, False], ids=["selected", "null"])
+def test_download_includes_survey_type_metadata(
+    api_client_authenticated, organization_1, submodule_1, survey_type_1, select_type
+):
+    survey_type_1.organizations.add(organization_1)
+    response = api_client_authenticated.post(
+        "/api/generate/",
+        {
+            "name": "Survey type metadata",
+            "submodules": [submodule_1.pk],
+            "submodules_order": [submodule_1.pk],
+            "sub_questions": [],
+            "languages": [],
+            "survey_type": survey_type_1.pk if select_type else None,
+        },
+        format="json",
+        HTTP_SURVEY_DESIGNER_ORGANIZATIONS=str(organization_1.pk),
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    workbook = load_workbook(io.BytesIO(response.content))
+    rows = workbook["survey"].values
+    headers = next(rows)
+    survey_types = [
+        (row[headers.index("type")], row[headers.index("default")])
+        for row in rows
+        if row[headers.index("name")] == "sd_metadata_survey_type"
+    ]
+    assert survey_types == [("hidden", survey_type_1.name if select_type else None)]
 
 
 @pytest.mark.django_db
