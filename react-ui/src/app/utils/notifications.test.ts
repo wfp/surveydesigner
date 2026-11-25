@@ -16,6 +16,42 @@ beforeEach(() => {
 });
 
 describe("notification API helpers", () => {
+  it("returns valid notification lists, including empty lists", async () => {
+    const notifications = [
+      {
+        id: 7,
+        release_id: null,
+        language: "en",
+        title: "Release update",
+        abstract: "New survey features",
+        publish_at: "2026-11-03T12:00:00Z",
+        expires_at: null,
+        is_read: false,
+      },
+    ];
+    const signal = new AbortController().signal;
+    vi.mocked(API.get).mockResolvedValueOnce({ data: notifications });
+    expect(await fetchNotifications("en", signal)).toEqual(notifications);
+    expect(await fetchNotifications("en", signal)).toEqual([]);
+  });
+
+  it.each([
+    null,
+    undefined,
+    "<html><body>Survey Designer</body></html>",
+    {},
+    { detail: "Service unavailable" },
+    { count: 0, results: [] },
+    [null],
+    [{}],
+    [{ id: 7, is_read: "false" }],
+  ])("rejects unexpected feed responses: %j", async (data) => {
+    vi.mocked(API.get).mockResolvedValueOnce({ data });
+    await expect(
+      fetchNotifications("en", new AbortController().signal),
+    ).rejects.toThrow("Invalid notification list response");
+  });
+
   it("sends the explicit language, ID, and cancellation signal", async () => {
     const signal = new AbortController().signal;
     await fetchNotifications("fr", signal);

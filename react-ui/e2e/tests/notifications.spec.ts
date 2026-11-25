@@ -200,6 +200,32 @@ test("notification failures remain recoverable", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("an HTML notification response does not crash the app and can be retried", async ({
+  page,
+}) => {
+  await consumerAPI(page);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.route(
+    "**/api/notifications/?*",
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<!doctype html><html><body>Frontend fallback</body></html>",
+      }),
+    { times: 1 },
+  );
+  await page.goto("/notifications");
+  await expect(page.getByRole("alert")).toContainText("could not be loaded");
+  await expect(
+    page.getByRole("button", { name: "Notifications", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(page.getByRole("link", { name: notice.title })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test("mobile panel supports keyboard opening and Escape", async ({
   page,
 }, testInfo) => {
