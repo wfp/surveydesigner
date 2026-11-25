@@ -668,6 +668,7 @@ def sub_question_3(root_question_2, suffix_2):
 
 @pytest.fixture()
 def sub_question_4(root_question_1, suffix_1, suffix_2):
+    suffix_1.nested_suffixes.add(suffix_2)
     q = SubQuestion.objects.create(
         root_question=root_question_1,
         name="SubQuestion4",

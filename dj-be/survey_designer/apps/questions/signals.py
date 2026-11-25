@@ -96,6 +96,17 @@ def _bulk_replace_field(
     return len(to_update)
 
 
+_OWN_EXPRESSION_FIELDS = (
+    "relevant",
+    "constraint",
+    "required",
+    "read_only",
+    "default",
+    "choice_filter",
+    "calculation",
+)
+
+
 def _model_has_field(model, fname: str) -> bool:
     return any(getattr(f, "name", None) == fname for f in model._meta.get_fields())
 
@@ -103,7 +114,8 @@ def _model_has_field(model, fname: str) -> bool:
 def _update_references_after_rename(instance, created: bool):
     """
     When a question's `name` changes, update any `${name}` references in:
-      - relevant / constraint / choice_filter / calculation dependency fields
+      - relevant / constraint / choice_filter / calculation / required /
+        read_only / default dependency fields
       - RootQuestion/SubQuestion `label`
       - RootQuestionTranslation `label`
     """
@@ -134,6 +146,12 @@ def _update_references_after_rename(instance, created: bool):
         (base_question.sub_question_choice_filter_dependencies.all(), "choice_filter"),
         (base_question.root_question_calculation_dependencies.all(), "calculation"),
         (base_question.sub_question_calculation_dependencies.all(), "calculation"),
+        (base_question.root_question_required_dependencies.all(), "required"),
+        (base_question.sub_question_required_dependencies.all(), "required"),
+        (base_question.root_question_read_only_dependencies.all(), "read_only"),
+        (base_question.sub_question_read_only_dependencies.all(), "read_only"),
+        (base_question.root_question_default_dependencies.all(), "default"),
+        (base_question.sub_question_default_dependencies.all(), "default"),
     ]
 
     # Label-like fields that may contain ${OldName}
@@ -163,3 +181,16 @@ def _update_references_after_rename(instance, created: bool):
 
         for qs, field in label_fields:
             _bulk_replace_field(qs.only(field), field, token_pat, replacement)
+
+        # The renamed question's own expressions refer to it by the old name
+        # too. Update the instance as well, so callers that keep using it
+        # (dependency sync, a later save) see the new name.
+        own_changes = {}
+        for field in _OWN_EXPRESSION_FIELDS:
+            value = getattr(instance, field) or ""
+            new_value = token_pat.sub(replacement, value)
+            if new_value != value:
+                own_changes[field] = new_value
+                setattr(instance, field, new_value)
+        if own_changes:
+            type(instance).objects.filter(pk=instance.pk).update(**own_changes)

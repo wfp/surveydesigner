@@ -49,4 +49,20 @@ describe("SubmoduleListItem", () => {
 
     expect(checkbox).not.toBeChecked();
   });
+
+  it("focuses a submodule identified by a validation issue", () => {
+    render(
+      <SubmoduleListItemWithFormControl
+        submodule={fakeSubmodule}
+        submodules={[fakeSubmodule.id]}
+        isValidationTarget
+      />,
+      { wrapper: Wrapper },
+    );
+
+    const submodule = screen.getByTestId("submodule-draggable-0");
+
+    expect(submodule).toHaveClass("submodule-item--validation-error");
+    expect(submodule).toHaveFocus();
+  });
 });

@@ -15,6 +15,17 @@ from questions.models import (
     SubQuestionTranslation,
     Suffix,
 )
+from questions.services.expression_scope import (
+    ReferenceScope,
+    expression_references,
+    load_reference_scope,
+    sync_expression_dependencies,
+    validate_expression_fields,
+)
+from questions.services.expression_validation import (
+    QUESTION_EXPRESSION_FIELDS,
+    REPEAT_EXPRESSION_FIELDS,
+)
 from questions.services.questions_import.base import (
     ENGLISH_LANGUAGE_CODE,
     BaseImport,
@@ -75,9 +86,7 @@ class QuestionsImport(BaseImport):
         self.processed_question_names = set()
         self.names_required_for_sub_questions = set()
         self.root_question_names = set()
-        self.required_relevant_question_names = set()
-        self.required_constraint_question_names = set()
-        self.required_calculation_question_names = set()
+        self.expression_rows = []
         self.choice_lists_to_validate = set()
         self.module_names_to_validate = set()
         self.submodule_names_to_validate = set()
@@ -85,7 +94,6 @@ class QuestionsImport(BaseImport):
 
         self.root_questions_after_sub_question = set()
 
-        self.required_repeat_count_question_names = set()
         self.processed_repeat_names = set()
         self.required_repeat = set()
 
@@ -134,9 +142,6 @@ class QuestionsImport(BaseImport):
         module_name = cleaned_data.get("module_name")
         submodule_name = cleaned_data.get("submodule_name")
         type_ = cleaned_data.get("type_")
-        relevant_dependencies = cleaned_data.get("relevant_dependencies", [])
-        constraint_dependencies = cleaned_data.get("constraint_dependencies", [])
-        calculation_dependencies = cleaned_data.get("calculation_dependencies", [])
         choice_list = cleaned_data.get("choice_list")
         base_name = cleaned_data.get("base_name")  # only for sub questions
 
@@ -153,12 +158,6 @@ class QuestionsImport(BaseImport):
             self.choice_lists_to_validate.add(choice_list)
         self.module_names_to_validate.add(module_name)
         self.submodule_names_to_validate.add(submodule_name)
-        self.required_relevant_question_names.update(relevant_dependencies)
-        self.required_constraint_question_names.update(constraint_dependencies)
-        self.required_calculation_question_names.update(calculation_dependencies)
-
-        repeat_count_dependencies = cleaned_data.get("repeat_count_dependencies", [])
-        self.required_repeat_count_question_names.update(repeat_count_dependencies)
 
         repeat = cleaned_data.get("repeat")
 
@@ -245,69 +244,73 @@ class QuestionsImport(BaseImport):
                     f"Choices | Missing choices: {', '.join(missing_choices)}"
                 )
 
-    def _check_missing_repeat_count_dependencies(self):
-        missing_relevant_names = self.required_relevant_question_names.difference(
-            self.processed_question_names
-        )
-        db_questions_relevant_names = {
-            q.name for q in BaseQuestion.objects.filter_by_names(missing_relevant_names)
-        }
-        missing_relevant_names = missing_relevant_names.difference(
-            db_questions_relevant_names
-        )
+    @staticmethod
+    def _expression_owner(data):
+        if data.get("type") == "repeat":
+            model = "RepeatSection"
+        elif data.get("is_for_sub_question"):
+            model = "SubQuestion"
+        else:
+            model = "RootQuestion"
+        return {"model": model, "name": data["name"]}
 
-        if missing_relevant_names:
-            self.non_form_errors.append(
-                f"Missing questions used in relevant column: {', '.join(missing_relevant_names)}"
+    @staticmethod
+    def _expression_values(data):
+        fields = (
+            REPEAT_EXPRESSION_FIELDS
+            if data.get("type") == "repeat"
+            else QUESTION_EXPRESSION_FIELDS
+        )
+        return {field: data.get(field) or "" for field in fields if field in data}
+
+    def _validate_expressions(self):
+        """Validate expressions against the spreadsheet and the codebook.
+
+        Rows reference each other before anything is saved, so the spreadsheet
+        rows take precedence over stored records with the same name.
+        """
+        rows = [
+            (row_number, data, self._expression_values(data))
+            for row_number, data in self.expression_rows
+        ]
+        sheet_scope = ReferenceScope()
+        repeat_members = defaultdict(set)
+        cycle_overrides = {}
+        for _, data, values in rows:
+            name = data["name"]
+            is_repeat = data["type"] == "repeat"
+            sheet_scope.names.add(name)
+            sheet_scope.types[name] = data["type"]
+            sheet_scope.repeats[name] = frozenset(
+                (name,) if is_repeat else data.get("repeat") or ()
+            )
+            for repeat_name in data.get("repeat") or ():
+                repeat_members[repeat_name].add(name)
+            cycle_overrides[name] = (
+                self._expression_owner(data),
+                values,
+                "" if is_repeat else data["type"],
             )
 
-    def _check_missing_dependencies(self):
-        missing_relevant_names = self.required_relevant_question_names.difference(
-            self.processed_question_names
+        scope = load_reference_scope(
+            set().union(*(expression_references(values) for _, _, values in rows))
         )
-        db_questions_relevant_names = {
-            q.name for q in BaseQuestion.objects.filter_by_names(missing_relevant_names)
-        }
-        missing_relevant_names = missing_relevant_names.difference(
-            db_questions_relevant_names
-        )
-
-        missing_constraint_names = self.required_constraint_question_names.difference(
-            self.processed_question_names
-        )
-        db_questions_constraint_names = {
-            q.name
-            for q in BaseQuestion.objects.filter_by_names(missing_constraint_names)
-        }
-        missing_constraint_names = missing_constraint_names.difference(
-            db_questions_constraint_names
-        )
-
-        missing_calculation_names = self.required_calculation_question_names.difference(
-            self.processed_question_names
-        )
-        db_questions_calculation_names = {
-            q.name
-            for q in BaseQuestion.objects.filter_by_names(missing_calculation_names)
-        }
-        missing_calculation_names = missing_calculation_names.difference(
-            db_questions_calculation_names
-        )
-
-        if missing_relevant_names:
-            self.non_form_errors.append(
-                f"Missing questions used in relevant column: {', '.join(missing_relevant_names)}"
+        scope.update(sheet_scope)
+        for row_number, data, values in rows:
+            is_repeat = data["type"] == "repeat"
+            issues = validate_expression_fields(
+                self._expression_owner(data),
+                values,
+                question_type="" if is_repeat else data["type"],
+                repeats=() if is_repeat else data.get("repeat") or (),
+                members=repeat_members[data["name"]] if is_repeat else (),
+                scope=scope,
+                cycle_overrides=cycle_overrides,
             )
-
-        if missing_constraint_names:
-            self.non_form_errors.append(
-                f"Missing questions used in constraint column: {', '.join(missing_constraint_names)}"
-            )
-
-        if missing_calculation_names:
-            self.non_form_errors.append(
-                f"Missing questions used in calculation column: {', '.join(missing_calculation_names)}"
-            )
+            for issue in issues:
+                self.errors.setdefault(row_number, {}).setdefault(
+                    issue.field, []
+                ).append(issue.message)
 
     def _check_sub_questions_dependencies(self):
         names_diff = self.names_required_for_sub_questions.difference(
@@ -375,6 +378,7 @@ class QuestionsImport(BaseImport):
                 cleaned_data["translations"] = translations
                 cleaned_data["hints"] = hints
                 self.cleaned_data.append(cleaned_data)
+                self.expression_rows.append((counter, cleaned_data))
             else:
                 self.errors[counter] = form.errors
 
@@ -382,9 +386,8 @@ class QuestionsImport(BaseImport):
                 form.cleaned_data, is_for_sub_question=form.is_for_sub_question
             )
 
-        self._check_missing_dependencies()
+        self._validate_expressions()
         self._check_sub_questions_dependencies()
-        self._check_missing_repeat_count_dependencies()
         self._validate_repeat()
         self._validate_submodules()
         self._validate_organization_permissions()
@@ -571,7 +574,7 @@ class QuestionsImport(BaseImport):
                 repeat_section.submodule.add(rs_data["submodule"])
 
                 self.log_addition(repeat_section)
-                repeat_section.set_repeat_count_dependencies()
+                sync_expression_dependencies(repeat_section)
                 questions_ids_to_set = {
                     q.id for q in self.repeat_questions_to_set[rs_data["name"]]
                 }
@@ -612,12 +615,9 @@ class QuestionsImport(BaseImport):
                 data.get("choice_list"), created_choices, skip_saving
             )
             relevant = data.get("relevant", "")
-            relevant_dependencies = data.get("relevant_dependencies")
             constraint = data.get("constraint", "")
             constraint_message = data.get("constraint_message", "")
-            constraint_dependencies = data.get("constraint_dependencies")
             calculation = data.get("calculation")
-            calculation_dependencies = data.get("calculation_dependencies")
             is_for_sub_question = data.get("is_for_sub_question")
             suffix_1_instance = self.get_suffix(
                 data.get("suffix_1"), created_suffixes, skip_saving
@@ -697,19 +697,7 @@ class QuestionsImport(BaseImport):
             else:
                 question = self.create_root_question(**root_question_args)
             if question:
-                if (
-                    relevant_dependencies
-                    or constraint_dependencies
-                    or calculation_dependencies
-                ):
-                    data_for_further_processing.append(
-                        (
-                            question,
-                            relevant_dependencies,
-                            constraint_dependencies,
-                            calculation_dependencies,
-                        )
-                    )
+                data_for_further_processing.append(question)
 
                 if repeat:
                     for r in repeat:
@@ -727,36 +715,11 @@ class QuestionsImport(BaseImport):
 
                 imported += 1
 
-        for data in data_for_further_processing:
-            (
-                question,
-                relevant_dependencies,
-                constraint_dependencies,
-                calculation_dependencies,
-            ) = data
-
-            if relevant_dependencies:
-                question.relevant_dependencies.set(
-                    q.id
-                    for q in BaseQuestion.objects.filter_by_names(relevant_dependencies)
-                )
-
-            if constraint_dependencies:
-                question.constraint_dependencies.set(
-                    q.id
-                    for q in BaseQuestion.objects.filter_by_names(
-                        constraint_dependencies
-                    )
-                )
-            if calculation_dependencies:
-                question.calculation_dependencies.set(
-                    q.id
-                    for q in BaseQuestion.objects.filter_by_names(
-                        calculation_dependencies
-                    )
-                )
-
         self.create_repeat_sections(skip_saving=skip_saving)
+
+        # Every question and repeat exists now, so references to later rows resolve.
+        for question in data_for_further_processing:
+            sync_expression_dependencies(question)
 
         return imported
 

@@ -207,7 +207,9 @@ def test_xls_form_collects_external_files_from_choice_group_file(
     settings.MEDIA_ROOT = tmp_path
     choices_file = ChoiceGroupFile.objects.create(
         name=f"FruitChoices_{uuid.uuid4().hex}",
-        csv_file=ContentFile(b"name,color\nbanana,yellow\n", name="fruits.csv"),
+        csv_file=ContentFile(
+            b"name,label,color\nbanana,Banana,yellow\n", name="fruits.csv"
+        ),
     )
     root_question_1.type = QuestionType.SELECT_ONE_FROM_FILE
     root_question_1.choices = None
@@ -226,6 +228,17 @@ def test_xls_form_collects_external_files_from_choice_group_file(
     assert expected_name in xls_form.external_files
     file_field = xls_form.external_files[expected_name]
     assert os.path.basename(file_field.name) == expected_name
+    source = xls_form.external_file_sources[0]
+    assert source.owner == {
+        "model": "RootQuestion",
+        "id": root_question_1.id,
+        "name": root_question_1.name,
+    }
+    assert source.file_owner == {
+        "model": "ChoiceGroupFile",
+        "id": choices_file.id,
+        "name": choices_file.name,
+    }
 
 
 def test_xls_form_collects_external_files_from_suffix_choice_group_file(
@@ -237,7 +250,7 @@ def test_xls_form_collects_external_files_from_suffix_choice_group_file(
     choices_file = ChoiceGroupFile.objects.create(
         name=f"ChoiceFile_{uuid.uuid4().hex}",
         csv_file=ContentFile(
-            b"name,color\nbanana,yellow\n",
+            b"name,label,color\nbanana,Banana,yellow\n",
             name=f"fruits_{uuid.uuid4().hex}.csv",
         ),
     )
@@ -270,6 +283,13 @@ def test_xls_form_collects_external_files_from_suffix_choice_group_file(
 
     csv_name = os.path.basename(choices_file.csv_file.name)
     assert csv_name in xls_form.external_files
+    source = xls_form.external_file_sources[0]
+    assert source.owner == {
+        "model": "SubQuestion",
+        "id": sub_question.id,
+        "name": sub_question.name,
+    }
+    assert source.file_owner["id"] == choices_file.id
 
 
 def test_xls_form_includes_module_relevant(submodule_1, root_question_1):

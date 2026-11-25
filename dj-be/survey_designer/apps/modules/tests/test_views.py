@@ -9,6 +9,7 @@ from accounts.models import UserAPIKey, UserAPISite
 from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.db import connection
+from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from django_rq import get_queue
 from documents.models import Document
@@ -20,6 +21,8 @@ from modules.models import (
     SubmoduleRequiredGroup,
 )
 from modules.views import generate_docx
+from openpyxl import Workbook
+from pyxform.errors import PyXFormError
 from questions.const import QuestionType
 from questions.models import (
     RootQuestion,
@@ -27,6 +30,7 @@ from questions.models import (
     SubQuestion,
     SubQuestionTranslation,
 )
+from questions.services import ExternalChoiceFileSource
 from rest_framework import status
 from rq.exceptions import NoSuchJobError
 from rq.job import Job
@@ -34,7 +38,7 @@ from surveys.models import Survey
 
 
 class FakeFieldFile:
-    def __init__(self, name, content=b"name\nvalue\n"):
+    def __init__(self, name, content=b"name,label\nvalue,Value\n"):
         self.name = f"question/{name}"
         self._content = content
         self.file = None
@@ -49,17 +53,343 @@ class FakeFieldFile:
             self.file.seek(0)
 
 
-def build_stub_xls_form(external_files):
+def build_minimal_xlsx():
+    workbook = Workbook()
+    survey = workbook.active
+    survey.title = "survey"
+    survey.append(["type", "name"])
+    survey.append(["text", "stub_question"])
+    choices = workbook.create_sheet("choices")
+    choices.append(["list_name", "name", "label"])
+    output = io.BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def build_stub_xls_form(external_files, external_file_sources=()):
     class StubXLSForm:
         id_name = "test-form-id"
 
         def __init__(self, files):
             self.external_files = files
+            self.external_file_sources = list(external_file_sources)
+            self.xlsx_bytes = build_minimal_xlsx()
 
         def generate(self):
-            return b"fake-xlsx"
+            return self.xlsx_bytes
 
     return StubXLSForm(external_files)
+
+
+def build_external_choice_source(file_obj, filename="choices.csv"):
+    return ExternalChoiceFileSource(
+        filename=filename,
+        file_obj=file_obj,
+        owner={"model": "RootQuestion", "id": 17, "name": "external_question"},
+        file_owner={"model": "ChoiceGroupFile", "id": 23, "name": "external_choices"},
+    )
+
+
+def mock_successful_xml_conversion(mocker, xml=None):
+    conversion = mocker.Mock()
+    conversion.run.return_value = xml or (
+        '<h:html xmlns:h="http://www.w3.org/1999/xhtml" '
+        'xmlns:xf="http://www.w3.org/2002/xforms">'
+        "<h:head><xf:model><xf:instance><data/></xf:instance>"
+        "</xf:model></h:head><h:body/></h:html>"
+    )
+    conversion.warnings = []
+    conversion.errors = []
+    mocker.patch("modules.views.XMLConversion", return_value=conversion)
+    return conversion
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["/api/validate/", "/api/generate/", "/api/preview/", "/api/upload/"],
+)
+def test_final_survey_actions_block_internal_select_without_emitted_choices(
+    url,
+    logged_admin_client,
+    moda_api_key,
+    submodule_1,
+    root_question_2,
+    choices_1,
+):
+    choices_1.choices.update(is_active=False)
+    payload = {
+        "name": "Invalid choices",
+        "submodules": [submodule_1.id],
+        "submodules_order": [submodule_1.id],
+        "sub_questions": [],
+        "languages": [],
+        "id": moda_api_key.id,
+        "project_id": 99,
+    }
+
+    response = logged_admin_client.post(
+        url, json.dumps(payload), content_type="application/json"
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    body = response.json()
+    assert body["valid"] is False
+    assert body["errors"][0]["code"] == "CODEBOOK_CHOICE_LIST_NOT_EMITTED", body
+    assert body["errors"][0]["owner"]["name"] == root_question_2.name
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["/api/validate/", "/api/generate/", "/api/preview/", "/api/upload/"],
+)
+def test_final_survey_actions_block_invalid_external_choice_file_before_effects(
+    url,
+    mocker,
+    logged_admin_client,
+    moda_api_key,
+    submodule_1,
+):
+    invalid_file = FakeFieldFile("choices.csv", b"name\na\n")
+    source = build_external_choice_source(invalid_file)
+    stub_form = build_stub_xls_form(
+        {"choices.csv": invalid_file},
+        [source],
+    )
+    mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
+    conversion = mocker.patch("modules.views.XMLConversion")
+    external_request = mocker.patch("modules.views.requests.post")
+    preview_storage = mocker.patch("modules.views.Survey.objects.create")
+    payload = {
+        "name": "Invalid external choices",
+        "submodules": [submodule_1.id],
+        "submodules_order": [submodule_1.id],
+        "sub_questions": [],
+        "languages": [],
+        "id": moda_api_key.id,
+        "project_id": 99,
+    }
+
+    response = logged_admin_client.post(
+        url, json.dumps(payload), content_type="application/json"
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    issue = response.json()["errors"][0]
+    assert issue["code"] == "EXTERNAL_FILE_REQUIRED_COLUMN_MISSING"
+    assert issue["owner"] == {
+        "model": "RootQuestion",
+        "id": 17,
+        "name": "external_question",
+    }
+    assert issue["field"] == "choices_file"
+    assert issue["sheet"] == "choices.csv"
+    conversion.assert_not_called()
+    external_request.assert_not_called()
+    preview_storage.assert_not_called()
+
+
+def test_upload_classifies_external_storage_failure_without_external_requests(
+    mocker,
+    logged_admin_client,
+    moda_api_key,
+    submodule_1,
+):
+    unavailable_file = FakeFieldFile("choices.csv")
+    mocker.patch.object(
+        unavailable_file,
+        "open",
+        side_effect=PermissionError("storage credentials rejected"),
+    )
+    source = build_external_choice_source(unavailable_file)
+    stub_form = build_stub_xls_form(
+        {"choices.csv": unavailable_file},
+        [source],
+    )
+    mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
+    external_request = mocker.patch("modules.views.requests.post")
+    payload = {
+        "name": "Unavailable external choices",
+        "submodules": [submodule_1.id],
+        "submodules_order": [submodule_1.id],
+        "sub_questions": [],
+        "languages": [],
+        "id": moda_api_key.id,
+        "project_id": 99,
+    }
+
+    response = logged_admin_client.post(
+        "/api/upload/", json.dumps(payload), content_type="application/json"
+    )
+
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    issue = response.json()["errors"][0]
+    assert issue["code"] == "EXTERNAL_FILE_STORAGE_UNAVAILABLE"
+    assert issue["layer"] == "storage"
+    external_request.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["/api/validate/", "/api/generate/", "/api/preview/", "/api/upload/"],
+)
+def test_final_survey_actions_block_reference_to_unselected_question(
+    url,
+    logged_admin_client,
+    moda_api_key,
+    submodule_1,
+    root_question_1,
+    root_question_3,
+):
+    root_question_1.relevant = f"${{{root_question_3.name}}} > 0"
+    root_question_1.save(update_fields=["relevant"])
+    payload = {
+        "name": "Unselected question reference",
+        "submodules": [submodule_1.id],
+        "submodules_order": [submodule_1.id],
+        "sub_questions": [],
+        "languages": [],
+        "id": moda_api_key.id,
+        "project_id": 99,
+    }
+
+    response = logged_admin_client.post(
+        url, json.dumps(payload), content_type="application/json"
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    body = response.json()
+    assert body["valid"] is False
+    assert body["errors"][0]["code"] == "CODEBOOK_REFERENCE_NOT_EMITTED"
+    assert body["errors"][0]["owner"] == {
+        "model": "RootQuestion",
+        "id": root_question_1.id,
+        "name": root_question_1.name,
+    }
+    assert root_question_3.name in body["errors"][0]["message"]
+
+
+def test_step_2_and_final_artifact_gates_reject_unselected_dependency(
+    logged_admin_client,
+    moda_api_key,
+    submodule_1,
+    submodule_2,
+    root_question_1,
+    root_question_3,
+):
+    root_question_1.relevant = f"${{{root_question_3.name}}} > 0"
+    root_question_1.save(update_fields=["relevant"])
+
+    step_2_response = logged_admin_client.get(
+        "/api/order-validation/",
+        {
+            "submodule_ids": str(submodule_1.id),
+            "all_submodule_ids": f"{submodule_1.id} {submodule_2.id}",
+        },
+    )
+
+    assert step_2_response.status_code == status.HTTP_200_OK
+    step_2_body = step_2_response.json()
+    assert step_2_body["valid"] is False
+    assert step_2_body["errors"][0]["code"] == ("SELECTED_SCOPE_DEPENDENCY_NOT_EMITTED")
+    assert step_2_body["errors"][0]["submodule"]["id"] == submodule_1.id
+    assert step_2_body["errors"][0]["dependency"]["target"]["id"] == (
+        root_question_3.id
+    )
+
+    final_response = logged_admin_client.post(
+        "/api/validate/",
+        json.dumps(
+            {
+                "name": "Unselected dependency backstop",
+                "submodules": [submodule_1.id],
+                "submodules_order": [submodule_1.id],
+                "sub_questions": [],
+                "languages": [],
+                "id": moda_api_key.id,
+                "project_id": 99,
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert final_response.status_code == status.HTTP_400_BAD_REQUEST
+    final_body = final_response.json()
+    assert final_body["valid"] is False
+    assert final_body["errors"][0]["code"] == "CODEBOOK_REFERENCE_NOT_EMITTED"
+    assert final_body["errors"][0]["owner"]["id"] == root_question_1.id
+
+
+def test_step_2_success_does_not_bypass_final_artifact_validation(
+    logged_admin_client,
+    moda_api_key,
+    submodule_1,
+    root_question_2,
+    choices_1,
+):
+    choices_1.choices.update(is_active=False)
+
+    step_2_response = logged_admin_client.get(
+        "/api/order-validation/",
+        {
+            "submodule_ids": str(submodule_1.id),
+            "all_submodule_ids": str(submodule_1.id),
+        },
+    )
+
+    assert step_2_response.status_code == status.HTTP_200_OK
+    assert step_2_response.json()["valid"] is True
+
+    final_response = logged_admin_client.post(
+        "/api/validate/",
+        json.dumps(
+            {
+                "name": "Final artifact backstop",
+                "submodules": [submodule_1.id],
+                "submodules_order": [submodule_1.id],
+                "sub_questions": [],
+                "languages": [],
+                "id": moda_api_key.id,
+                "project_id": 99,
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert final_response.status_code == status.HTTP_400_BAD_REQUEST
+    final_body = final_response.json()
+    assert final_body["valid"] is False
+    assert final_body["errors"][0]["code"] == "CODEBOOK_CHOICE_LIST_NOT_EMITTED"
+    assert final_body["errors"][0]["owner"]["name"] == root_question_2.name
+
+
+def test_validate_action_blocks_choice_without_english_label(
+    logged_admin_client,
+    submodule_1,
+    root_question_2,
+    choices_1,
+):
+    choice = choices_1.choices.first()
+    choices_1.choices.filter(id=choice.id).update(label="   ")
+    payload = {
+        "name": "Invalid choice label",
+        "submodules": [submodule_1.id],
+        "submodules_order": [submodule_1.id],
+        "sub_questions": [],
+        "languages": ["en"],
+    }
+
+    response = logged_admin_client.post(
+        "/api/validate/", json.dumps(payload), content_type="application/json"
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    body = response.json()
+    assert body["errors"][0]["code"] == "CODEBOOK_CHOICE_LABEL_MISSING"
+    assert body["errors"][0]["owner"] == {
+        "model": "choice",
+        "name": choice.name,
+        "choice_list": choices_1.name,
+    }
 
 
 @pytest.fixture(autouse=True)
@@ -578,26 +908,105 @@ def test_preview_xls_form(
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("conversion_error", "expected_status", "expected_code"),
+    [
+        (
+            PyXFormError("invalid XLSForm"),
+            status.HTTP_400_BAD_REQUEST,
+            "PYXFORM_CONVERSION_ERROR",
+        ),
+        (
+            RuntimeError("converter crashed"),
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "VALIDATOR_UNAVAILABLE",
+        ),
+        (
+            TimeoutError("converter timed out"),
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "VALIDATOR_UNAVAILABLE",
+        ),
+    ],
+)
+def test_converter_failures_keep_input_and_infrastructure_statuses(
+    mocker,
+    api_client_authenticated_admin,
+    submodule_1,
+    conversion_error,
+    expected_status,
+    expected_code,
+):
+    mocker.patch(
+        "questions.services.xml_conversion.xls2xform.convert",
+        side_effect=conversion_error,
+    )
+    payload = {
+        "name": "Converter failure survey",
+        "submodules": [submodule_1.id],
+        "submodules_order": [submodule_1.id],
+        "sub_questions": [],
+        "languages": ["en"],
+    }
+
+    response = api_client_authenticated_admin.post(
+        "/api/validate/", payload, format="json"
+    )
+
+    assert response.status_code == expected_status
+    assert response.json()["errors"][0]["code"] == expected_code
+
+
+@pytest.mark.django_db
+@override_settings(CORS_ALLOWED_ORIGINS=["http://localhost:3000"])
+def test_download_exposes_validation_warning_headers_to_frontend(
+    mocker, api_client_authenticated_admin, submodule_1
+):
+    conversion = mock_successful_xml_conversion(mocker)
+    conversion.warnings = ["non-blocking warning"]
+    payload = {
+        "name": "Warning survey",
+        "submodules": [submodule_1.id],
+        "submodules_order": [submodule_1.id],
+        "sub_questions": [],
+        "languages": ["en"],
+    }
+
+    response = api_client_authenticated_admin.post(
+        "/api/generate/",
+        payload,
+        format="json",
+        HTTP_ORIGIN="http://localhost:3000",
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    warnings = json.loads(response["X-Survey-Validation-Warnings"])
+    assert warnings[0]["code"] == "PYXFORM_WARNING"
+    assert response["Access-Control-Allow-Origin"] == "http://localhost:3000"
+    exposed_headers = {
+        header.strip().lower()
+        for header in response["Access-Control-Expose-Headers"].split(",")
+    }
+    assert {
+        "x-survey-validation-warnings",
+        "x-validation-warnings",
+        "x-survey-artifact-hash",
+    }.issubset(exposed_headers)
+
+
+@pytest.mark.django_db
 def test_preview_xls_form_with_external_media(
     mocker,
     logged_admin_client,
     submodule_1,
 ):
     csv_content = b"name,color\nbanana,yellow\n"
-    stub_form = mocker.Mock()
-    stub_form.name = "preview_form"
-    stub_form.generate.return_value = b"fake-xlsx"
-    stub_form.external_files = {
-        "fruits.csv": ContentFile(csv_content, name="fruits.csv")
-    }
+    stub_form = build_stub_xls_form(
+        {"fruits.csv": ContentFile(csv_content, name="fruits.csv")}
+    )
 
-    mocker.patch("modules.views.get_xlsx_from_request", return_value=stub_form)
+    mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
 
-    xml_conversion = mocker.Mock()
-    xml_conversion.run.return_value = "<data/>"
-    xml_conversion.warnings = []
-    xml_conversion.errors = []
-    mocker.patch("modules.views.XMLConversion", return_value=xml_conversion)
+    mock_successful_xml_conversion(mocker)
 
     saved_paths = []
 
@@ -640,7 +1049,9 @@ def test_preview_xls_form_with_external_media(
         "languages": [],
     }
 
-    response = logged_admin_client.post("/api/preview/", data, follow=True)
+    response = logged_admin_client.post(
+        "/api/preview/", json.dumps(data), content_type="application/json"
+    )
     assert response.status_code == status.HTTP_200_OK
     payload = response.json()
 
@@ -662,15 +1073,14 @@ def test_preview_xls_form_rewrites_external_file_links(
 ):
     csv_content = b"name,color\nbanana,yellow\n"
     img_content = b"png"
-    stub_form = mocker.Mock()
-    stub_form.name = "preview_form"
-    stub_form.generate.return_value = b"fake-xlsx"
-    stub_form.external_files = {
-        "fruits.csv": ContentFile(csv_content, name="fruits.csv"),
-        "logo.png": ContentFile(img_content, name="logo.png"),
-    }
+    stub_form = build_stub_xls_form(
+        {
+            "fruits.csv": ContentFile(csv_content, name="fruits.csv"),
+            "logo.png": ContentFile(img_content, name="logo.png"),
+        }
+    )
 
-    mocker.patch("modules.views.get_xlsx_from_request", return_value=stub_form)
+    mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
 
     xml_payload = (
         '<h:html xmlns:h="http://www.w3.org/1999/xhtml" '
@@ -679,11 +1089,7 @@ def test_preview_xls_form_rewrites_external_file_links(
         '<h:body><h:img src="jr://images/logo.png"/></h:body>'
         "</h:html>"
     )
-    xml_conversion = mocker.Mock()
-    xml_conversion.run.return_value = xml_payload
-    xml_conversion.warnings = []
-    xml_conversion.errors = []
-    mocker.patch("modules.views.XMLConversion", return_value=xml_conversion)
+    mock_successful_xml_conversion(mocker, xml_payload)
 
     saved_contents = {}
 
@@ -726,7 +1132,9 @@ def test_preview_xls_form_rewrites_external_file_links(
         "languages": [],
     }
 
-    response = logged_admin_client.post("/api/preview/", data, follow=True)
+    response = logged_admin_client.post(
+        "/api/preview/", json.dumps(data), content_type="application/json"
+    )
     assert response.status_code == status.HTTP_200_OK
 
     xml_path = next(
@@ -893,9 +1301,12 @@ def test_upload_xls_form_moda_uploads_metadata(
     mocker, logged_admin_client, moda_api_key, submodule_1
 ):
     site = moda_api_key.site
-    fake_file = FakeFieldFile("fruits.csv", b"name,color\nbanana,yellow\n")
-    stub_form = build_stub_xls_form({"fruits.csv": fake_file})
+    csv_content = b"name,label,color\nbanana,Banana,yellow\n"
+    fake_file = FakeFieldFile("fruits.csv", csv_content)
+    source = build_external_choice_source(fake_file, "fruits.csv")
+    stub_form = build_stub_xls_form({"fruits.csv": fake_file}, [source])
     mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
+    mock_successful_xml_conversion(mocker)
 
     upload_response = mocker.Mock()
     upload_response.ok = True
@@ -940,7 +1351,7 @@ def test_upload_xls_form_moda_uploads_metadata(
     assert upload_call.args[0] == upload_url
     assert upload_call.kwargs["headers"] == {"Authorization": "Token test-token"}
     assert upload_call.kwargs["files"]["xls_file"][0] == f"{stub_form.id_name}.xlsx"
-    assert upload_call.kwargs["files"]["xls_file"][1] == b"fake-xlsx"
+    assert upload_call.kwargs["files"]["xls_file"][1] == stub_form.xlsx_bytes
 
     metadata_url = UserAPISiteAPITypes.get_metadata_url(site)
     assert metadata_call.args[0] == metadata_url
@@ -956,7 +1367,7 @@ def test_upload_xls_form_moda_uploads_metadata(
     data_file = metadata_files["data_file"]
     assert data_file[0] == "fruits.csv"
     assert data_file[2] == "text/csv"
-    assert data_file[1].getvalue() == b"name,color\nbanana,yellow\n"
+    assert data_file[1].getvalue() == csv_content
 
 
 @pytest.mark.django_db
@@ -966,6 +1377,7 @@ def test_upload_xls_form_moda_without_attachments(
     site = moda_api_key.site
     stub_form = build_stub_xls_form({})
     mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
+    mock_successful_xml_conversion(mocker)
 
     upload_response = mocker.Mock()
     upload_response.ok = True
@@ -1009,6 +1421,7 @@ def test_upload_xls_form_moda_metadata_failure(
 ):
     stub_form = build_stub_xls_form({"fruits.csv": FakeFieldFile("fruits.csv")})
     mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
+    mock_successful_xml_conversion(mocker)
 
     upload_response = mocker.Mock()
     upload_response.ok = True
@@ -1051,7 +1464,7 @@ def test_upload_xls_form_moda_metadata_failure(
 
 
 @pytest.mark.django_db
-class TestSubmodulesOrderValidationView:
+class TestSubmoduleCompositionValidationView:
     def test_submodules_order_validation_view_no_submodule_ids(
         self, logged_admin_client
     ):
@@ -1060,7 +1473,60 @@ class TestSubmodulesOrderValidationView:
         response = logged_admin_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.json() == []
+        assert response.json()["valid"] is True
+        assert response.json()["errors"] == []
+
+    def test_submodules_order_validation_blocks_unselected_dependency(
+        self,
+        logged_admin_client,
+        submodule_1,
+        submodule_2,
+        root_question_1,
+        root_question_3,
+    ):
+        root_question_1.relevant = f"${{{root_question_3.name}}}"
+        root_question_1.save(update_fields=["relevant"])
+        url = "/api/order-validation/"
+        query_params = {
+            "submodule_ids": str(submodule_1.id),
+            "all_submodule_ids": f"{submodule_1.id} {submodule_2.id}",
+        }
+
+        response = logged_admin_client.get(url, query_params)
+
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert body["valid"] is False
+        assert body["errors"][0]["code"] == ("SELECTED_SCOPE_DEPENDENCY_NOT_EMITTED")
+        assert body["errors"][0]["owner"] == {
+            "model": "RootQuestion",
+            "id": root_question_1.id,
+            "name": root_question_1.name,
+        }
+        assert body["errors"][0]["submodule"] == {
+            "model": "Submodule",
+            "id": submodule_1.id,
+            "name": submodule_1.name,
+            "label": submodule_1.label,
+        }
+        assert body["errors"][0]["dependency"] == {
+            "name": root_question_3.name,
+            "status": "not_emitted",
+            "target": {
+                "model": "RootQuestion",
+                "id": root_question_3.id,
+                "name": root_question_3.name,
+            },
+            "available_submodules": [
+                {
+                    "model": "Submodule",
+                    "id": submodule_2.id,
+                    "name": submodule_2.name,
+                    "label": submodule_2.label,
+                }
+            ],
+        }
+        assert body["errors"][0]["field"] == "relevant"
 
     def test_submodules_order_validation_view_with_submodule_ids(
         self, logged_admin_client, submodule_1, submodule_2, submodule_3

@@ -16,4 +16,5 @@ export interface SubmoduleListItemProps {
   isSelectedByIndicator: boolean;
   selectedIndicatorSubmoduleIdMap: Record<number, string[]>;
   selectedIndicatorMatchingSubmoduleIdMap: Record<number, string[]>;
+  isValidationTarget?: boolean;
 }

@@ -130,7 +130,8 @@ def test_assigned_admin_can_queue_generation_for_foreign_selected_scope(
 
 
 @pytest.mark.parametrize(
-    "endpoint", ["/api/generate/", "/api/preview/", "/api/upload/"]
+    "endpoint",
+    ["/api/generate/", "/api/preview/", "/api/upload/", "/api/validate/"],
 )
 def test_out_of_scope_content_fails_before_generation_or_external_side_effects(
     mocker,

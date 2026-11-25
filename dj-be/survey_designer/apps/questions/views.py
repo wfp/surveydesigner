@@ -1,13 +1,19 @@
+import json
+from collections import defaultdict
+
 from dal import autocomplete
 from django.conf import settings
-from django.contrib import messages
+from django.contrib import admin, messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Q
 from django.db.models.functions import Collate
 from django.forms import formset_factory
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, reverse
+from django.urls import NoReverseMatch
+from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import FormView
 from modules.models import Indicator
 from questions.models import (
@@ -27,6 +33,177 @@ from .forms import (
     UploadQuestionsForm,
 )
 from .services import DataImport, QuestionsExport
+from .services.expression_scope import (
+    expression_references,
+    load_reference_scope,
+    sync_expression_dependencies,
+    validate_expression_fields,
+)
+from .services.health import (
+    MODEL_ORDER,
+    MODEL_SPECS,
+    HealthScanInfrastructureError,
+    count_totals,
+    scan_batch,
+)
+
+
+def _health_user_can_access(user):
+    """Require global admin authority and view permission for every scan model."""
+
+    if not user or not user.is_authenticated:
+        return False
+    if not (user.is_superuser or user.is_global_admins_member):
+        return False
+    return all(
+        user.has_perm(
+            f"{spec.model._meta.app_label}.view_{spec.model._meta.model_name}"
+        )
+        for spec in MODEL_SPECS.values()
+    )
+
+
+def _health_headers(response):
+    response["Cache-Control"] = "no-store, private"
+    response["Pragma"] = "no-cache"
+    return response
+
+
+def _health_error(message, status, **extra):
+    body = {"status": "error", "message": message, **extra}
+    return _health_headers(JsonResponse(body, status=status))
+
+
+def _health_edit_url(request, model, obj, field=""):
+    """Build a link only when the registered admin allows this object to change."""
+
+    if obj is None:
+        return None
+    model_admin = admin.site._registry.get(model)
+    if model_admin is None:
+        return None
+    try:
+        if not model_admin.has_change_permission(request, obj):
+            return None
+        url = reverse(
+            f"admin:{model._meta.app_label}_{model._meta.model_name}_change",
+            args=[obj.pk],
+        )
+    except (LookupError, NoReverseMatch, PermissionDenied):
+        return None
+    if field:
+        url = f"{url}#id_{field}"
+    return url
+
+
+def _health_add_edit_links(request, payload, objects):
+    """Decorate findings from the page's already-loaded objects.
+
+    This callback runs inside the scanner's read-only transaction, so link
+    permission checks share the same timeout and transaction guard as the
+    validation queries.
+    """
+
+    permissions = {}
+    resolved = {}
+
+    def resolve_object(finding):
+        key = (finding.get("model"), finding.get("id"))
+        if key in objects:
+            return objects[key]
+        if key in resolved:
+            return resolved[key]
+        spec = MODEL_SPECS.get(finding.get("model"))
+        object_id = finding.get("id")
+        if (
+            spec is None
+            or not isinstance(object_id, int)
+            or isinstance(object_id, bool)
+            or object_id <= 0
+        ):
+            resolved[key] = None
+            return None
+        # Dependency graph errors may refer to an object outside this page.
+        # Load only the identity fields needed by the registered admin's
+        # permission check; this callback remains inside the scan guard.
+        resolved[key] = (
+            spec.model.objects.only("id", "name").filter(pk=object_id).first()
+        )
+        return resolved[key]
+
+    for findings, field_anchor in (
+        (payload.get("issues", []), True),
+        (payload.get("scan_errors", []), False),
+    ):
+        for finding in findings:
+            obj = resolve_object(finding)
+            if obj is None:
+                continue
+            key = (finding.get("model"), obj.pk)
+            if key not in permissions:
+                permissions[key] = _health_edit_url(request, type(obj), obj)
+            if permissions[key]:
+                finding["edit_url"] = (
+                    f"{permissions[key]}#id_{finding.get('field')}"
+                    if field_anchor
+                    else permissions[key]
+                )
+    return payload
+
+
+@require_GET
+def survey_health(request):
+    """Render the idle health page; scans only happen through the POST endpoint."""
+
+    if not _health_user_can_access(request.user):
+        raise PermissionDenied
+    context = admin.site.each_context(request)
+    context.update(
+        {
+            "title": "Survey health",
+            "health_models": [
+                {"key": key, "label": MODEL_SPECS[key].label} for key in MODEL_ORDER
+            ],
+            "health_scan_url": reverse("survey-health-scan"),
+        }
+    )
+    return _health_headers(render(request, "admin/survey_health.html", context))
+
+
+@require_POST
+def survey_health_scan(request):
+    """Scan one bounded page for the authorized admin browser session."""
+
+    if not _health_user_can_access(request.user):
+        raise PermissionDenied
+    try:
+        data = json.loads(request.body.decode("utf-8") or "{}")
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return _health_error("Invalid health scan request.", 400)
+    if not isinstance(data, dict):
+        return _health_error("Invalid health scan request.", 400)
+    if data.get("action") == "totals":
+        try:
+            totals = count_totals()
+        except HealthScanInfrastructureError as error:
+            return _health_error(str(error), 503, complete=False)
+        return _health_headers(JsonResponse({"status": "ok", "totals": totals}))
+    model_key = data.get("model")
+    if not isinstance(model_key, str) or model_key not in MODEL_SPECS:
+        return _health_error("Unknown health scan model.", 400)
+    try:
+        payload = scan_batch(
+            model_key,
+            after_pk=data.get("after_pk", 0),
+            requested_limit=data.get("limit", 25),
+            decorate=lambda result, objects: _health_add_edit_links(
+                request, result, objects
+            ),
+        )
+    except HealthScanInfrastructureError as error:
+        return _health_error(str(error), 503, complete=False)
+    payload["status"] = "ok"
+    return _health_headers(JsonResponse(payload))
 
 
 def _collation_safe_icontains(queryset, search_term, field_names):
@@ -63,6 +240,48 @@ class AdminQuestionBulkEditMixin(LoginRequiredMixin, UserPassesTestMixin):
             + ", ".join(unauthorized_questions),
         )
         return True
+
+    def add_expression_errors(self, form, field_name, formula, base_questions):
+        """Validate the formula for every selected question before saving it."""
+        error_field = field_name if field_name in form.fields else None
+        has_error = False
+        scope = load_reference_scope(expression_references({field_name: formula}))
+        repeats_by_question = defaultdict(list)
+        for (
+            base_question_id,
+            repeat_name,
+        ) in RepeatSection.questions.through.objects.filter(
+            basequestion__in=base_questions
+        ).values_list(
+            "basequestion_id", "repeatsection__name"
+        ):
+            repeats_by_question[base_question_id].append(repeat_name)
+        for base_question in base_questions:
+            instance = base_question.instance
+            if isinstance(instance, RepeatSection):
+                # A repeat's relevance is evaluated outside the repeat.
+                question_kwargs = {
+                    "members": [member.name for member in instance.questions.all()]
+                }
+            else:
+                question_kwargs = {
+                    "question_type": instance.type or "",
+                    "repeats": repeats_by_question[base_question.id],
+                }
+            issues = validate_expression_fields(
+                {
+                    "model": instance.__class__.__name__,
+                    "id": instance.id,
+                    "name": instance.name,
+                },
+                {field_name: formula},
+                scope=scope,
+                **question_kwargs,
+            )
+            for issue in issues:
+                form.add_error(error_field, issue.message)
+                has_error = True
+        return has_error
 
 
 class ConstraintCreateView(AdminQuestionBulkEditMixin, FormView):
@@ -101,11 +320,10 @@ class ConstraintCreateView(AdminQuestionBulkEditMixin, FormView):
         return context
 
     def get_formula(self, form, formset):
-        dependencies = []
         formulas = []
         for count, formset_form in enumerate(formset.forms):
             logical_operator = (
-                f"{formset_form.cleaned_data['logical_operator']}" if count > 0 else ""
+                f"{formset_form.cleaned_data['logical_operator']} " if count > 0 else ""
             )
 
             operator = formset_form.cleaned_data["operator"]
@@ -114,7 +332,6 @@ class ConstraintCreateView(AdminQuestionBulkEditMixin, FormView):
             right_side_value = ""
             if reference_question == ReferenceQuestionType.OTHER:
                 question = formset_form.cleaned_data["question"]
-                dependencies.append(question)
                 question_name = question.instance.name
                 right_side_value = f"${{{question_name}}}"
             elif reference_question == ReferenceQuestionType.SELF:
@@ -122,24 +339,7 @@ class ConstraintCreateView(AdminQuestionBulkEditMixin, FormView):
 
             formulas.append(f"{logical_operator}. {operator} {right_side_value}")
 
-        return " ".join(formulas), dependencies
-
-    def break_down_text_formula(self, form, formula):
-        question_names = BaseQuestion.get_question_names(formula)
-        base_questions = BaseQuestion.get_base_questions(question_names)
-        has_error = False
-
-        for question in base_questions:
-            question_names.remove(question.name)
-
-        if question_names:
-            message = f"Questions not found: {', '.join(question_names)}"
-            form.add_error("constraint", message)
-            has_error = True
-
-        if has_error:
-            return None, None
-        return formula, base_questions
+        return " ".join(formulas)
 
     def create_translations(self, base_question, formset):
         for form in formset.forms:
@@ -170,7 +370,6 @@ class ConstraintCreateView(AdminQuestionBulkEditMixin, FormView):
 
         if form.is_valid() and translation_formset.is_valid():
             formula = None
-            dependencies = None
             base_questions = form.cleaned_data["base_questions"]
             if self.add_object_permission_errors(form, base_questions):
                 return self.render_to_response(
@@ -183,12 +382,12 @@ class ConstraintCreateView(AdminQuestionBulkEditMixin, FormView):
 
             if form.cleaned_data["mode"] == "text":
                 formula = form.cleaned_data["constraint"]
-                formula, dependencies = self.break_down_text_formula(form, formula)
-            else:
-                if formset.is_valid():
-                    formula, dependencies = self.get_formula(form, formset)
+            elif formset.is_valid():
+                formula = self.get_formula(form, formset)
 
-            if formula:
+            if formula and not self.add_expression_errors(
+                form, "constraint", formula, base_questions
+            ):
                 for question in base_questions:
                     question.instance.constraint = formula
                     question.instance.constraint_message = form.cleaned_data[
@@ -197,9 +396,7 @@ class ConstraintCreateView(AdminQuestionBulkEditMixin, FormView):
                     question.instance.updated_by = request.user
                     question.instance.save()
                     self.create_translations(question, translation_formset)
-
-                    if dependencies:
-                        question.set_instance_constraint_dependencies(dependencies)
+                    sync_expression_dependencies(question.instance)
                 messages.success(request, "Constraint successfully added.")
                 return self.form_valid(form)
 
@@ -226,23 +423,6 @@ class RelevantCreateView(AdminQuestionBulkEditMixin, FormView):
             initial["base_questions"] = BaseQuestion.objects.filter(id__in=ids)
         return initial
 
-    def break_down_text_formula(self, form, formula):
-        question_names = BaseQuestion.get_question_names(formula)
-        base_questions = BaseQuestion.get_base_questions(question_names)
-        has_error = False
-
-        for question in base_questions:
-            question_names.remove(question.name)
-
-        if question_names:
-            message = f"Questions not found: {', '.join(question_names)}"
-            form.add_error("relevant", message)
-            has_error = True
-
-        if has_error:
-            return None, None
-        return formula, base_questions
-
     def post(self, request, *args, **kwargs):
         form = self.get_form()
 
@@ -256,16 +436,14 @@ class RelevantCreateView(AdminQuestionBulkEditMixin, FormView):
                 )
 
             formula = form.cleaned_data["relevant"]
-            formula, dependencies = self.break_down_text_formula(form, formula)
-
-            if formula:
+            if not self.add_expression_errors(
+                form, "relevant", formula, base_questions
+            ):
                 for question in base_questions:
                     question.instance.relevant = formula
                     question.instance.updated_by = request.user
                     question.instance.save()
-
-                    if dependencies:
-                        question.set_instance_relevant_dependencies(dependencies)
+                    sync_expression_dependencies(question.instance)
                 messages.success(request, "Relevant formula successfully added.")
                 return self.form_valid(form)
 

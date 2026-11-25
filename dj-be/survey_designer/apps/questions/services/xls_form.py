@@ -16,7 +16,6 @@ from modules.models import (
 )
 from openpyxl import Workbook
 from openpyxl.styles import Font
-from openpyxl.writer.excel import save_virtual_workbook
 from questions.const import QuestionType
 from questions.models import (
     BaseQuestion,
@@ -31,6 +30,9 @@ from questions.models import (
     SubQuestionTranslation,
 )
 from survey_designer import ___version___ as SURVEY_DESIGNER_VERSION
+
+from .form_validation import ExternalChoiceFileSource
+from .workbook import save_virtual_workbook
 
 
 class XLSForm:
@@ -109,6 +111,8 @@ class XLSForm:
         self.bold_font = Font(bold=True)
         self.processed_questions = set()
         self.external_files = {}
+        self.external_file_sources = []
+        self.row_source_map = {}
 
         self.wb = Workbook()
         self.survey_sheet = self.wb.active
@@ -158,8 +162,15 @@ class XLSForm:
         sub_questions_prefetch = Prefetch(
             "sub_questions",
             queryset=SubQuestion.objects.select_related(
-                "suffix__choices", "suffix_2__choices", "recall_period"
-            ).prefetch_related(sub_questions_translations_prefetch),
+                "suffix__choices",
+                "suffix__choices__choice_filter_list",
+                "suffix_2__choices",
+                "suffix_2__choices__choice_filter_list",
+                "recall_period",
+            ).prefetch_related(
+                sub_questions_translations_prefetch,
+                "suffix__nested_suffixes",
+            ),
         )
 
         root_questions_translations_prefetch = Prefetch(
@@ -174,7 +185,7 @@ class XLSForm:
             queryset=RootQuestion.objects.prefetch_related(
                 sub_questions_prefetch, root_questions_translations_prefetch
             )
-            .select_related("choices")
+            .select_related("choices", "choices__choice_filter_list")
             .filter(base_question__repeat_sections=None),
         )
 
@@ -382,16 +393,70 @@ class XLSForm:
             if choices is not None and hasattr(choices, "csv_file"):
                 choices_file = choices
 
-        if not choices_file or not getattr(choices_file, "csv_file", None):
-            return
-
-        file_field = choices_file.csv_file
-        file_name = os.path.basename(file_field.name)
+        file_field = getattr(choices_file, "csv_file", None)
+        file_name = os.path.basename(str(getattr(file_field, "name", "") or ""))
+        self.external_file_sources.append(
+            ExternalChoiceFileSource(
+                filename=file_name,
+                file_obj=file_field,
+                owner=self._reference_source(question),
+                file_owner=self._reference_source(choices_file),
+                question_type=str(question.type),
+                parameters=str(getattr(question, "parameters", "") or ""),
+                choice_filter=str(getattr(question, "choice_filter", "") or ""),
+            )
+        )
         if file_name and file_name not in self.external_files:
             self.external_files[file_name] = file_field
 
+    @staticmethod
+    def _reference_source(instance):
+        if instance is None:
+            return None
+        return {
+            "model": instance.__class__.__name__,
+            "id": instance.id,
+            "name": instance.name,
+        }
+
+    def _record_row_source(self, instance):
+        self.row_source_map[("survey", self.current_row_index)] = (
+            self._reference_source(instance)
+        )
+
+    def _record_question_source(self, question):
+        source = {
+            "model": question.__class__.__name__,
+            "id": question.id,
+            "name": question.name,
+        }
+        choices = question.choices
+        if isinstance(choices, ChoiceGroup):
+            source["choice_filter_list"] = self._reference_source(
+                choices.choice_filter_list
+            )
+        if isinstance(question, SubQuestion):
+            suffix = self._reference_source(question.suffix)
+            if suffix:
+                suffix["nested_suffixes"] = tuple(
+                    nested.name for nested in question.suffix.nested_suffixes.all()
+                )
+            source.update(
+                {
+                    "suffix": suffix,
+                    "suffix_2": self._reference_source(question.suffix_2),
+                    "recall_period": self._reference_source(question.recall_period),
+                    "effective_type": question.type,
+                    "effective_choice_list": (
+                        question.choices.name if question.choices else ""
+                    ),
+                }
+            )
+        self.row_source_map[("survey", self.current_row_index)] = source
+
     def add_question_row(self, question):
         self.increment_row_index()
+        self._record_question_source(question)
         self.fill_cell("type", question.get_xls_type())
         self.fill_cell("name", question.name)
         self.fill_cell("constraint", question.constraint)
@@ -436,6 +501,7 @@ class XLSForm:
 
     def add_repeat_section(self, repeat_section):
         self.increment_row_index()
+        self._record_row_source(repeat_section)
         self.fill_cell("type", "begin_repeat", bold=True)
         self.fill_cell("name", repeat_section.name)
         self.fill_cell("relevant", repeat_section.relevant)
@@ -556,6 +622,7 @@ class XLSForm:
             cell.font = self.bold_font
 
     def fill_submodule_start(self, submodule):
+        self._record_row_source(submodule)
         self.fill_cell("type", "begin_group", bold=True)
         self.fill_cell("name", f"{submodule.name}_submodule")
         self.fill_cell("appearance", submodule.appearance)
@@ -574,6 +641,7 @@ class XLSForm:
             self.fill_cell("label", submodule.label)
 
     def fill_module_start(self, module):
+        self._record_row_source(module)
         self.fill_cell("type", "begin_group", bold=True)
         self.fill_cell("name", f"{module.name}_module")
         self.fill_cell("relevant", module.relevant)

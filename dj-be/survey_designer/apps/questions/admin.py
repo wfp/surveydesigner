@@ -54,6 +54,7 @@ from questions.forms import (
     CalculationAdminModelForm,
     ChoiceGroupFileAdminModelForm,
     NestedSuffixForm,
+    RepeatSectionAdminModelForm,
     RootQuestionAdminModelForm,
     SubQuestionAdminModelForm,
     SubQuestionProxyForm,
@@ -85,6 +86,7 @@ from questions.recall_period_ordering import (
     recall_period_ordering_expression,
 )
 from questions.services import QuestionsExport
+from questions.services.expression_scope import sync_expression_dependencies
 from questions.views import BaseQuestionAutocomplete
 
 
@@ -240,6 +242,9 @@ class SubQuestionInline(
         "relevant_dependencies",
         "choice_filter_dependencies",
         "calculation_dependencies",
+        "required_dependencies",
+        "read_only_dependencies",
+        "default_dependencies",
     )
 
 
@@ -480,32 +485,7 @@ class RootQuestionAdmin(
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
-        if obj.constraint:
-            names = BaseQuestion.get_question_names(obj.constraint)
-            base_questions = BaseQuestion.get_base_questions(names)
-            obj.constraint_dependencies.set(question.id for question in base_questions)
-        else:
-            obj.constraint_dependencies.clear()
-        if obj.relevant:
-            names = BaseQuestion.get_question_names(obj.relevant)
-            base_questions = BaseQuestion.get_base_questions(names)
-            obj.relevant_dependencies.set(question.id for question in base_questions)
-        else:
-            obj.relevant_dependencies.clear()
-        if obj.choice_filter:
-            names = BaseQuestion.get_question_names(obj.choice_filter)
-            base_questions = BaseQuestion.get_base_questions(names)
-            obj.choice_filter_dependencies.set(
-                question.id for question in base_questions
-            )
-        else:
-            obj.choice_filter_dependencies.clear()
-        if obj.calculation:
-            names = BaseQuestion.get_question_names(obj.calculation)
-            base_questions = BaseQuestion.get_base_questions(names)
-            obj.calculation_dependencies.set(question.id for question in base_questions)
-        else:
-            obj.calculation_dependencies.clear()
+        sync_expression_dependencies(obj)
 
         repeat_sections = form.cleaned_data.get("repeat_sections", [])
         indicators = form.cleaned_data.get("indicators", [])
@@ -532,6 +512,15 @@ class RootQuestionAdmin(
 
         for indicator in current_indicators:
             indicator.questions.remove(base_question)
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        for formset in formsets:
+            if formset.model is not SubQuestion:
+                continue
+            changed = [sub_question for sub_question, _ in formset.changed_objects]
+            for sub_question in [*formset.new_objects, *changed]:
+                sync_expression_dependencies(sub_question)
 
     def get_model_perms(self, request):
         """Hide model from Admin index"""
@@ -785,6 +774,9 @@ class SubQuestionAdmin(
         "relevant_dependencies",
         "choice_filter_dependencies",
         "calculation_dependencies",
+        "required_dependencies",
+        "read_only_dependencies",
+        "default_dependencies",
     )
     form = SubQuestionAdminModelForm
     list_display = (
@@ -818,33 +810,7 @@ class SubQuestionAdmin(
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
-
-        if obj.constraint:
-            names = BaseQuestion.get_question_names(obj.constraint)
-            base_questions = BaseQuestion.get_base_questions(names)
-            obj.constraint_dependencies.set(question.id for question in base_questions)
-        else:
-            obj.constraint_dependencies.clear()
-        if obj.relevant:
-            names = BaseQuestion.get_question_names(obj.relevant)
-            base_questions = BaseQuestion.get_base_questions(names)
-            obj.relevant_dependencies.set(question.id for question in base_questions)
-        else:
-            obj.relevant_dependencies.clear()
-        if obj.choice_filter:
-            names = BaseQuestion.get_question_names(obj.choice_filter)
-            base_questions = BaseQuestion.get_base_questions(names)
-            obj.choice_filter_dependencies.set(
-                question.id for question in base_questions
-            )
-        else:
-            obj.choice_filter_dependencies.clear()
-        if obj.calculation:
-            names = BaseQuestion.get_question_names(obj.calculation)
-            base_questions = BaseQuestion.get_base_questions(names)
-            obj.calculation_dependencies.set(question.id for question in base_questions)
-        else:
-            obj.calculation_dependencies.clear()
+        sync_expression_dependencies(obj)
         repeat_sections = form.cleaned_data.get("repeat_sections", [])
         indicators = form.cleaned_data.get("indicators", [])
         base_question = obj.base_question
@@ -1450,7 +1416,7 @@ class CalculationAdmin(
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
-        obj.set_related_questions()
+        sync_expression_dependencies(obj)
 
 
 @admin.register(NestedSuffix)
@@ -1519,6 +1485,9 @@ class SubQuestionProxyAdmin(
         "constraint_dependencies",
         "choice_filter_dependencies",
         "calculation_dependencies",
+        "required_dependencies",
+        "read_only_dependencies",
+        "default_dependencies",
     )
     # autocomplete_fields = ("suffix", "suffix_2", "recall_period")
     inlines = (SubQuestionProxyTranslationInline,)
@@ -1620,6 +1589,7 @@ class RepeatSectionAdmin(
     nested_admin.NestedModelAdmin,
 ):
     organization_owned_parent_fields = ["submodule"]
+    form = RepeatSectionAdminModelForm
     exclude = (
         "created_by",
         "updated_by",
@@ -1665,13 +1635,7 @@ class RepeatSectionAdmin(
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
-        obj.set_repeat_count_dependencies()
-        if obj.relevant:
-            names = BaseQuestion.get_question_names(obj.relevant)
-            base_questions = BaseQuestion.get_base_questions(names)
-            obj.relevant_dependencies.set(question.id for question in base_questions)
-        else:
-            obj.relevant_dependencies.clear()
+        sync_expression_dependencies(obj)
 
     def get_search_results(self, request, queryset, search_term):
         queryset, use_distinct = super().get_search_results(

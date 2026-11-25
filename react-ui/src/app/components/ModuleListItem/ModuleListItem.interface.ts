@@ -18,4 +18,5 @@ export interface ModuleListItemProps {
   collapseAll: CheckboxState;
   setCollapseAll: (collapseAll: CheckboxState) => void;
   watchAllFields: SurveyFormState;
+  validationSubmoduleId?: number | null;
 }
