@@ -28,6 +28,7 @@ import { useTranslation } from "react-i18next";
 import MainLayout from "../Layout";
 import Modules from "../Modules";
 import Surveys from "../Surveys";
+import { SurveysHandle } from "../Surveys/Surveys.interface";
 import Review from "../Review";
 import Generate from "../Generate";
 import DocFetcher from "../DocFetcher";
@@ -316,6 +317,12 @@ function SurveyWizard() {
   };
 
   const surveyTableRef = useRef<{ clearFilters: () => void }>(null);
+  const surveysRef = useRef<SurveysHandle>(null);
+  // Survey options are refetched when the organizations change; show that in
+  // the header so the step 1 form doesn't shift down while it loads.
+  const isRefreshingSurveyOptions = useAppSelector(
+    (state) => state.surveys.isLoading && !state.organizations.isLoading,
+  );
 
   const savedSurveyLabelsData = savedSurveys.data
     ? savedSurveys.data.map((survey) =>
@@ -429,6 +436,7 @@ function SurveyWizard() {
   const step0Content =
     initialRequest || isCreatingSurvey ? (
       <Surveys
+        ref={surveysRef}
         next={next()}
         frontendContent={frontendContent}
         selectedSurveyToEdit={selectedSurveyToEdit}
@@ -509,6 +517,24 @@ function SurveyWizard() {
                     </span>
                   )}
                 </div>
+                {step === 0 && (initialRequest || isCreatingSurvey) && (
+                  // Reserve the spinner's height so the header doesn't grow
+                  <div
+                    className="d-flex align-items-center"
+                    style={{ minHeight: "2rem", gap: "0.5rem" }}
+                  >
+                    {isRefreshingSurveyOptions && (
+                      <InlineLoading description="loading..." />
+                    )}
+                    <Button
+                      kind="ghost"
+                      small
+                      onClick={() => surveysRef.current?.clearFilters()}
+                    >
+                      {t("surveyWizard.clearFilters")}
+                    </Button>
+                  </div>
+                )}
                 {[1, 2].includes(step) && (
                   <div className="checkbox-row">
                     <div className="d-flex">

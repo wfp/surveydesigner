@@ -139,6 +139,7 @@
         "expandAllIndicators": "Expand All Indicators",
         "collapseAllIndicators": "Collapse All Indicators",
         "savedSurveys": "Saved Surveys",
-        "createSurvey": "Create Survey"
+        "createSurvey": "Create Survey",
+        "clearFilters": "Clear filters"
     }
 }
