@@ -20,6 +20,7 @@ from notifications.models import (
     Release,
     ReleaseTranslation,
 )
+from notifications.services import publish_release
 
 pytestmark = pytest.mark.django_db
 
@@ -157,6 +158,95 @@ def test_create_notification_with_translation_and_audience(logged_admin_client, 
     assert translation.created_by == admin
     assert translation.updated_by == admin
     assert NotificationRead.objects.count() == 0
+
+
+@pytest.mark.parametrize("editing", (False, True))
+def test_admin_rejects_linking_a_notification_to_a_draft_release(
+    logged_admin_client, editing
+):
+    release = Release.objects.create(business_version="2.0.1", title="Draft release")
+    original = Notification.objects.create(title="Original") if editing else None
+    url = (
+        reverse("admin:notifications_notification_change", args=(original.pk,))
+        if editing
+        else reverse("admin:notifications_notification_add")
+    )
+    group = Group.objects.create(name="Audience")
+    response = logged_admin_client.post(
+        url,
+        {
+            **notification_data(),
+            "release": str(release.pk),
+            **management("translations", total=1),
+            "translations-0-language": "fr",
+            "translations-0-title": "Mise a jour",
+            "translations-0-label": "Contenu",
+            **management("audience_entries", total=1),
+            "audience_entries-0-group": str(group.pk),
+        },
+    )
+
+    assert response.status_code == 200
+    form = response.context["adminform"].form
+    assert form.errors.as_data()["release"][0].code == "release_not_published"
+    assert "Publish the release first" in str(form.errors["release"])
+    assert Notification.objects.count() == int(editing)
+    assert not Notification.objects.filter(release=release).exists()
+    assert not NotificationTranslation.objects.exists()
+    assert not NotificationAudience.objects.exists()
+    release.refresh_from_db()
+    assert release.status == ReleaseStatus.DRAFT
+    if original:
+        original.refresh_from_db()
+        assert original.title == "Original"
+        assert original.release is None
+
+
+def test_legacy_draft_notification_can_be_saved_after_clearing_its_release(
+    logged_admin_client,
+):
+    release = Release.objects.create(business_version="2.0.1", title="Draft release")
+    notification = Notification.objects.create(release=release, title="Legacy draft")
+    url = reverse("admin:notifications_notification_change", args=(notification.pk,))
+
+    response = logged_admin_client.post(
+        url, {**notification_data(), "release": str(release.pk)}
+    )
+    assert response.status_code == 200
+    assert "release" in response.context["adminform"].form.errors
+    notification.refresh_from_db()
+    assert notification.title == "Legacy draft"
+
+    response = logged_admin_client.post(url, {**notification_data(), "release": ""})
+    assert response.status_code == 302
+    notification.refresh_from_db()
+    assert notification.release is None
+    assert notification.status == NotificationStatus.DRAFT
+    assert Notification.objects.count() == 1
+
+
+def test_generated_notification_for_published_release_remains_editable(
+    logged_admin_client, admin
+):
+    release = Release.objects.create(
+        business_version="2.0.1", title="Release", body="Release notes"
+    )
+    notification, created = publish_release(release_id=release.pk, actor=admin)
+    assert created is True
+
+    response = logged_admin_client.post(
+        reverse("admin:notifications_notification_change", args=(notification.pk,)),
+        {**notification_data(), "release": str(release.pk)},
+    )
+
+    assert response.status_code == 302
+    notification.refresh_from_db()
+    release.refresh_from_db()
+    assert notification.title == "Survey Designer update"
+    assert notification.release_id == release.pk
+    assert notification.status == NotificationStatus.DRAFT
+    assert release.status == ReleaseStatus.PUBLISHED
+    assert Notification.objects.count() == 1
 
 
 def test_edit_preserves_creator_and_updates_changed_translation_audit(
@@ -301,11 +391,15 @@ def test_audience_and_translation_inlines_can_be_removed(logged_admin_client):
 
 
 @pytest.mark.parametrize("name", ("release", "notification"))
-def test_content_delete_is_disabled_even_for_admin(logged_admin_client, name):
+def test_published_content_delete_is_disabled_even_for_admin(logged_admin_client, name):
     record = (
-        Release.objects.create(business_version="2.0.1", title="Release")
+        Release.objects.create(
+            business_version="2.0.1", title="Release", status=ReleaseStatus.PUBLISHED
+        )
         if name == "release"
-        else Notification.objects.create(title="Notification")
+        else Notification.objects.create(
+            title="Notification", status=NotificationStatus.PUBLISHED
+        )
     )
     response = logged_admin_client.post(
         reverse(f"admin:notifications_{name}_delete", args=(record.pk,)),
