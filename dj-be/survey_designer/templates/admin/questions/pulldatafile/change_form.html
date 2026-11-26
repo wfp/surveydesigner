@@ -1,0 +1,21 @@
+{% extends "admin/change_form.html" %}
+
+{% block form_top %}
+  {{ block.super }}
+  {% if pulldata_duplicate_token %}
+    <input type="hidden" name="_pulldata_duplicate_token" value="{{ pulldata_duplicate_token }}">
+  {% endif %}
+{% endblock %}
+
+{% block submit_buttons_bottom %}
+  {% with duplicate=adminform.form.duplicate_file %}
+    {% if duplicate %}
+      <div class="submit-row pulldata-duplicate-action">
+        <button type="submit" name="_use_existing" value="1" formnovalidate>
+          Use existing pull data file ({{ duplicate.filename }})
+        </button>
+      </div>
+    {% endif %}
+  {% endwith %}
+  {{ block.super }}
+{% endblock %}
