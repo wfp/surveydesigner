@@ -1,5 +1,7 @@
+import logging
 import os
 import re
+import uuid
 
 from core.models import (
     BaseTranslationMixin,
@@ -10,11 +12,13 @@ from core.models import (
 )
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, router, transaction
 from django.utils.functional import cached_property
 
 from .const import QuestionType
 from .managers import BaseQuestionQuerySet
+
+logger = logging.getLogger(__name__)
 
 
 class QuestionFieldsMixin(models.Model):
@@ -34,6 +38,15 @@ class QuestionFieldsMixin(models.Model):
     default = models.TextField(blank=True)
     choice_filter = models.TextField(blank=True)
     calculation = models.TextField(blank=True)
+    pulldata_files = models.ManyToManyField(
+        "questions.PulldataFile",
+        blank=True,
+        verbose_name="Pull data files",
+        help_text=(
+            "CSV files used by pulldata() in this question. Each file name must "
+            "match the call: pulldata('wfl_0_2_girls', ...) needs wfl_0_2_girls.csv."
+        ),
+    )
 
     class Meta:
         abstract = True
@@ -459,6 +472,206 @@ class ChoiceGroupFile(BaseWFPModelMixin):
         if hasattr(self, "_request_user") and self._request_user:
             self.updated_by = self._request_user
         super().save(*args, **kwargs)
+
+
+def pulldata_file_upload_to(instance, filename):
+    # A folder per upload keeps the original name: storage never has to rename
+    # the file to avoid a clash, so the name pulldata() uses stays intact.
+    return f"pulldata/{uuid.uuid4().hex}/{filename}"
+
+
+class PulldataFile(UserTrackingMixin, TimestampMixin):
+    """A CSV file that questions read with pulldata().
+
+    Multiple assets may preserve the same basename; any number of questions
+    and pulldata() calls can use one selected asset.
+    """
+
+    file = models.FileField(upload_to=pulldata_file_upload_to, max_length=255)
+    # The name pulldata() uses, e.g. wfl_0_2_girls.csv.
+    filename = models.CharField(max_length=255, editable=False)
+    description = models.TextField(blank=True)
+    # Header names only; this deliberately contains no row-level metadata.
+    columns = models.JSONField(default=list, editable=False)
+    # Exact upload bytes. Empty values are retained for rows created before
+    # SD-185 and are lazily backfilled when duplicate detection compares them.
+    sha256 = models.CharField(
+        max_length=64, blank=True, default="", editable=False, db_index=True
+    )
+
+    class Meta:
+        verbose_name = "Pull data file"
+        ordering = ("filename",)
+
+    def __str__(self):
+        label = self.filename or "(unnamed pull data file)"
+        if self.description:
+            label = f"{label} — {self.description}"
+        if self.pk:
+            label = f"{label} [#{self.pk}]"
+        return label
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        if "file" in field_names:
+            instance._pulldata_loaded_file_name = instance.file.name or ""
+        return instance
+
+    def refresh_from_db(self, using=None, fields=None, from_queryset=None):
+        super().refresh_from_db(using=using, fields=fields, from_queryset=from_queryset)
+        if "file" in self.__dict__ and (fields is None or "file" in fields):
+            self._pulldata_loaded_file_name = self.file.name or ""
+
+    def _has_pending_upload(self):
+        return bool(self.file and not getattr(self.file, "_committed", True))
+
+    def _refresh_columns_from_pending_upload(self):
+        if not self._has_pending_upload():
+            return
+        from .services.pulldata_csv import PulldataHeaderError, read_pulldata_headers
+
+        try:
+            self.columns = read_pulldata_headers(
+                self.file.file, filename=os.path.basename(self.file.name or "")
+            )
+        except PulldataHeaderError as exc:
+            raise ValidationError({"file": [str(exc)]}) from exc
+
+    def _refresh_digest_from_pending_upload(self):
+        if not self._has_pending_upload():
+            return
+        from .services.pulldata_csv import sha256_upload
+
+        try:
+            self.sha256 = sha256_upload(self.file.file)
+        except (OSError, TypeError, ValueError) as exc:
+            raise ValidationError(
+                {"file": ["Could not read the uploaded CSV file."]}
+            ) from exc
+
+    def _validate_attached_replacement_columns(self):
+        if self._state.adding or not self._has_pending_upload():
+            return
+        from .services.pulldata import pulldata_replacement_column_errors
+
+        errors = pulldata_replacement_column_errors(self, self.columns)
+        if errors:
+            raise ValidationError({"file": errors})
+
+    def _validate_replacement_filename(self, previous_filename):
+        filename = os.path.basename(self.file.name or "")
+        if filename and previous_filename and filename != previous_filename:
+            raise ValidationError(
+                {
+                    "file": [
+                        f"Replacement files must keep the existing filename "
+                        f"'{previous_filename}'. Upload a file with that exact "
+                        "basename (including letter case)."
+                    ]
+                }
+            )
+
+    def clean(self):
+        super().clean()
+        if not self._state.adding and self._has_pending_upload():
+            loaded_name = getattr(self, "_pulldata_loaded_file_name", "")
+            self._validate_replacement_filename(
+                self.filename or os.path.basename(loaded_name)
+            )
+        self._refresh_columns_from_pending_upload()
+        self._refresh_digest_from_pending_upload()
+        self._validate_attached_replacement_columns()
+
+    @classmethod
+    def schedule_storage_delete(cls, storage, name, using):
+        if not name or storage is None:
+            return
+
+        def delete_if_unowned():
+            if cls.objects.using(using).filter(file=name).exists():
+                return
+            try:
+                storage.delete(name)
+            except Exception:
+                logger.exception("Unable to delete pull data file blob %s", name)
+
+        transaction.on_commit(delete_if_unowned, using=using)
+
+    def save(
+        self,
+        *args,
+        force_insert=False,
+        force_update=False,
+        using=None,
+        update_fields=None,
+    ):
+        if args:
+            force_insert, force_update, using, update_fields = self._parse_save_params(
+                *args,
+                method_name="save",
+                force_insert=force_insert,
+                force_update=force_update,
+                using=using,
+                update_fields=update_fields,
+            )
+        update_fields = set(update_fields) if update_fields is not None else None
+        options = dict(
+            force_insert=force_insert,
+            force_update=force_update,
+            using=using,
+            update_fields=update_fields,
+        )
+        if update_fields is not None and "file" not in update_fields:
+            return super().save(**options)
+
+        using = using or router.db_for_write(type(self), instance=self)
+        options["using"] = using
+        with transaction.atomic(using=using):
+            previous = None
+            if self.pk is not None and not force_insert:
+                previous = (
+                    type(self)
+                    .objects.using(using)
+                    .select_for_update()
+                    .filter(pk=self.pk)
+                    .first()
+                )
+
+            previous_name = (previous.file.name or "") if previous else ""
+            current_name = self.file.name or ""
+            loaded_name = getattr(self, "_pulldata_loaded_file_name", "")
+            file_changed = self._has_pending_upload() or current_name != loaded_name
+
+            if previous and not file_changed:
+                # A full metadata save can hold a stale file path and headers.
+                if current_name != previous_name:
+                    self.file = previous_name
+                self.filename = previous.filename
+                self.columns = previous.columns
+                self.sha256 = previous.sha256
+            else:
+                if previous:
+                    self._validate_replacement_filename(
+                        previous.filename or os.path.basename(previous_name)
+                    )
+                self.filename = os.path.basename(current_name)
+                self._refresh_columns_from_pending_upload()
+                self._refresh_digest_from_pending_upload()
+                self._validate_attached_replacement_columns()
+                if not self._has_pending_upload() and current_name != previous_name:
+                    # A path reassignment without bytes is not proof that the
+                    # old digest still describes this asset.
+                    self.sha256 = ""
+                if update_fields is not None:
+                    update_fields.update(("filename", "columns", "sha256"))
+
+            super().save(**options)
+            self._pulldata_loaded_file_name = self.file.name or ""
+            if previous and previous_name != self.file.name:
+                self.schedule_storage_delete(
+                    previous.file.storage, previous_name, using
+                )
 
 
 class Choice(UserTrackingMixin, TimestampMixin, SoftDeleteMixin):

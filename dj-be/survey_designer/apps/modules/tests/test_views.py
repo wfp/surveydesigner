@@ -1,6 +1,7 @@
 import io
 import json
 import uuid
+import zipfile
 from xml.etree import ElementTree as ET
 
 import pytest
@@ -30,7 +31,7 @@ from questions.models import (
     SubQuestion,
     SubQuestionTranslation,
 )
-from questions.services import ExternalChoiceFileSource
+from questions.services import ExternalChoiceFileSource, PulldataFileSource
 from rest_framework import status
 from rq.exceptions import NoSuchJobError
 from rq.job import Job
@@ -66,13 +67,16 @@ def build_minimal_xlsx():
     return output.getvalue()
 
 
-def build_stub_xls_form(external_files, external_file_sources=()):
+def build_stub_xls_form(
+    external_files, external_file_sources=(), pulldata_file_sources=()
+):
     class StubXLSForm:
         id_name = "test-form-id"
 
         def __init__(self, files):
             self.external_files = files
             self.external_file_sources = list(external_file_sources)
+            self.pulldata_file_sources = list(pulldata_file_sources)
             self.xlsx_bytes = build_minimal_xlsx()
 
         def generate(self):
@@ -87,6 +91,20 @@ def build_external_choice_source(file_obj, filename="choices.csv"):
         file_obj=file_obj,
         owner={"model": "RootQuestion", "id": 17, "name": "external_question"},
         file_owner={"model": "ChoiceGroupFile", "id": 23, "name": "external_choices"},
+    )
+
+
+def build_pulldata_source(file_obj, filename="lookup.csv"):
+    attached = type("AttachedPulldata", (), {})()
+    attached.filename = filename
+    attached.file = file_obj
+    attached.pk = id(attached)
+    return PulldataFileSource(
+        owner={"model": "RootQuestion", "id": 17, "name": "lookup_question"},
+        values={
+            "calculation": "pulldata('lookup', 'display', 'id', 1)",
+        },
+        attached_files=(attached,),
     )
 
 
@@ -1025,6 +1043,36 @@ def test_download_exposes_validation_warning_headers_to_frontend(
 
 
 @pytest.mark.django_db
+def test_generate_xls_form_packages_pulldata_csv_bytes(
+    mocker,
+    logged_admin_client,
+    submodule_1,
+):
+    csv_content = b"id,display\n1,Lookup\n"
+    fake_file = FakeFieldFile("lookup.csv", csv_content)
+    source = build_pulldata_source(fake_file)
+    stub_form = build_stub_xls_form({}, pulldata_file_sources=[source])
+    mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
+    mock_successful_xml_conversion(mocker)
+
+    payload = {
+        "name": "Lookup form",
+        "submodules": [submodule_1.id],
+        "submodules_order": [submodule_1.id],
+        "sub_questions": [],
+        "languages": [],
+    }
+    response = logged_admin_client.post(
+        "/api/generate/", data=json.dumps(payload), content_type="application/json"
+    )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        assert archive.namelist() == ["survey.xlsx", "lookup.csv"]
+        assert archive.read("lookup.csv") == csv_content
+
+
+@pytest.mark.django_db
 def test_preview_xls_form_with_external_media(
     mocker,
     logged_admin_client,
@@ -1399,6 +1447,51 @@ def test_upload_xls_form_moda_uploads_metadata(
     assert data_file[0] == "fruits.csv"
     assert data_file[2] == "text/csv"
     assert data_file[1].getvalue() == csv_content
+
+
+def test_upload_xls_form_moda_uploads_validated_pulldata_bytes(
+    mocker, logged_admin_client, moda_api_key, submodule_1
+):
+    site = moda_api_key.site
+    csv_content = b"id,display\n1,Lookup\n"
+    fake_file = FakeFieldFile("lookup.csv", csv_content)
+    source = build_pulldata_source(fake_file)
+    stub_form = build_stub_xls_form({}, pulldata_file_sources=[source])
+    mocker.patch("modules.views.get_xlsx_from_data", return_value=stub_form)
+    mock_successful_xml_conversion(mocker)
+
+    upload_response = mocker.Mock()
+    upload_response.ok = True
+    upload_response.json.return_value = {
+        "id": 683,
+        "enketo_preview_url": "https://enketo.test/preview",
+    }
+    metadata_response = mocker.Mock()
+    metadata_response.ok = True
+    metadata_response.json.return_value = {"status": "ok"}
+    mock_post = mocker.patch(
+        "modules.views.requests.post", side_effect=[upload_response, metadata_response]
+    )
+
+    payload = {
+        "name": "Moda pull data form",
+        "submodules": [submodule_1.id],
+        "submodules_order": [submodule_1.id],
+        "sub_questions": [],
+        "languages": [],
+        "id": moda_api_key.id,
+        "project_id": 100,
+    }
+    response = logged_admin_client.post(
+        "/api/upload/", data=json.dumps(payload), content_type="application/json"
+    )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    assert response.json()["metadata_uploaded_files"] == ["lookup.csv"]
+    assert mock_post.call_count == 2
+    metadata_files = mock_post.call_args_list[1].kwargs["files"]
+    assert metadata_files["data_file"][0] == "lookup.csv"
+    assert metadata_files["data_file"][1].getvalue() == csv_content
 
 
 @pytest.mark.django_db

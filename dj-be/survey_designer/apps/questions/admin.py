@@ -11,10 +11,12 @@ from core.admin import (
 )
 from core.forms import TranslationForm
 from core.utils import get_model_admin_base_url
+from dal import autocomplete
 from django.contrib import admin, messages
-from django.contrib.admin.options import IS_POPUP_VAR
+from django.contrib.admin.options import IS_POPUP_VAR, TO_FIELD_VAR
 from django.contrib.postgres.aggregates import ArrayAgg
-from django.core.exceptions import ValidationError
+from django.core import signing
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import models
 from django.db.models import Count, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
@@ -22,6 +24,7 @@ from django.forms.models import BaseInlineFormSet
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect, reverse
 from django.templatetags.static import static
+from django.urls import reverse_lazy
 from django.utils.html import format_html, format_html_join
 from django.utils.translation import ngettext
 from django.views.generic import RedirectView
@@ -54,6 +57,7 @@ from questions.forms import (
     CalculationAdminModelForm,
     ChoiceGroupFileAdminModelForm,
     NestedSuffixForm,
+    PulldataFileAdminForm,
     RepeatSectionAdminModelForm,
     RootQuestionAdminModelForm,
     SubQuestionAdminModelForm,
@@ -69,6 +73,7 @@ from questions.models import (
     ChoiceGroupFile,
     ChoiceTranslation,
     NestedSuffix,
+    PulldataFile,
     RecallPeriod,
     RepeatSection,
     RepeatSectionTranslation,
@@ -220,7 +225,26 @@ class SubQuestionConstraintMessageTranslationInline(
     form = TranslationForm
 
 
+class PulldataFilesFieldMixin:
+    """Show pull data files as a searchable select; the admin keeps its "+"."""
+
+    def formfield_for_manytomany(self, db_field, request=None, **kwargs):
+        if db_field.name == "pulldata_files":
+            kwargs["widget"] = autocomplete.ModelSelect2Multiple(
+                url="v1:pulldata-file-autocomplete",
+                attrs={
+                    "data-placeholder": "Search uploaded CSV files",
+                    # pulldata_status.js shows each file's status from here.
+                    "data-pulldata-status-url": reverse_lazy("pulldata-status"),
+                },
+            )
+            # Skips the admin's "Hold down Control" hint, which select2 doesn't need.
+            return db_field.formfield(**kwargs)
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
+
+
 class SubQuestionInline(
+    PulldataFilesFieldMixin,
     ObjectPermissionMixin,
     FormFieldOverridesMixin,
     nested_admin.NestedStackedInline,
@@ -405,8 +429,113 @@ class ChoiceGroupFileAdmin(
         super().save_model(request, obj, form, change)
 
 
+@admin.register(PulldataFile)
+class PulldataFileAdmin(
+    ObjectPermissionMixin,
+    AdminUserTrackingMixin,
+    FormFieldOverridesMixin,
+    admin.ModelAdmin,
+):
+    form = PulldataFileAdminForm
+    change_form_template = "admin/questions/pulldatafile/change_form.html"
+    list_display = (
+        "filename",
+        "columns",
+        "description",
+        "id",
+        "modified_by",
+        "modified_on",
+    )
+    readonly_fields = ("columns",)
+    search_fields = ("file", "description")
+
+    duplicate_token_salt = "questions.pulldatafile.duplicate"
+
+    def _verified_existing_upload(self, request):
+        """Return an explicitly selected asset whose signed token is exact."""
+
+        token = request.POST.get("_pulldata_duplicate_token")
+        if request.POST.get("_use_existing") != "1" or not token:
+            return None
+        try:
+            payload = signing.loads(token, salt=self.duplicate_token_salt, max_age=600)
+            if payload.get("user") != request.user.pk:
+                return None
+            candidate_id = int(payload["pk"])
+            digest = str(payload["sha256"])
+        except (TypeError, ValueError, KeyError, signing.BadSignature):
+            return None
+        candidate = self.get_queryset(request).filter(pk=candidate_id).first()
+        if (
+            candidate is None
+            or not self.has_add_permission(request)
+            or not self.has_view_permission(request, candidate)
+        ):
+            return None
+
+        from questions.services.pulldata import pulldata_file_digest
+
+        candidate_digest = candidate.sha256 or pulldata_file_digest(candidate)
+        if candidate_digest != digest:
+            return None
+        if not candidate.sha256:
+            updated = PulldataFile.objects.filter(
+                pk=candidate.pk,
+                file=str(candidate.file.name or ""),
+                sha256="",
+            ).update(sha256=digest)
+            if not updated:
+                candidate.refresh_from_db()
+                if candidate.sha256 != digest:
+                    return None
+            else:
+                candidate.sha256 = digest
+        return candidate
+
+    def _use_existing_response(self, request, obj):
+        if IS_POPUP_VAR in request.POST:
+            to_field = request.POST.get(TO_FIELD_VAR)
+            if to_field and str(to_field) != obj._meta.pk.attname:
+                raise PermissionDenied
+            return self.response_add(request, obj)
+        self.message_user(
+            request,
+            f"Using existing pull data file '{obj.filename}' (asset #{obj.pk}).",
+            messages.SUCCESS,
+        )
+        return redirect(
+            reverse(
+                "admin:%s_%s_change" % (obj._meta.app_label, obj._meta.model_name),
+                args=(obj.pk,),
+            )
+        )
+
+    def add_view(self, request, form_url="", extra_context=None):
+        if request.method == "POST":
+            existing = self._verified_existing_upload(request)
+            if existing is not None:
+                return self._use_existing_response(request, existing)
+        return super().add_view(request, form_url, extra_context)
+
+    def render_change_form(
+        self, request, context, add=False, change=False, form_url="", obj=None
+    ):
+        duplicate = getattr(context["adminform"].form, "duplicate_file", None)
+        if duplicate is not None:
+            context["pulldata_duplicate_token"] = signing.dumps(
+                {
+                    "pk": duplicate.pk,
+                    "sha256": duplicate.sha256,
+                    "user": request.user.pk,
+                },
+                salt=self.duplicate_token_salt,
+            )
+        return super().render_change_form(request, context, add, change, form_url, obj)
+
+
 @admin.register(RootQuestion)
 class RootQuestionAdmin(
+    PulldataFilesFieldMixin,
     CollationSafeSearchAdminMixin,
     OrganizationOwnedParentFieldMixin,
     ObjectPermissionMixin,
@@ -458,6 +587,7 @@ class RootQuestionAdmin(
                     "description",
                     "type",
                     "calculation",
+                    "pulldata_files",
                     "choices",
                     "choices_file",
                     "label",
@@ -480,8 +610,17 @@ class RootQuestionAdmin(
     )
 
     class Media:
-        css = {"all": (static("js/tribute/tribute.css"),)}
-        js = [static("js/tribute/tribute.js"), static("js/admin/question.js")]
+        css = {
+            "all": (
+                static("js/tribute/tribute.css"),
+                static("css/admin/pulldata_status.css"),
+            )
+        }
+        js = [
+            static("js/tribute/tribute.js"),
+            static("js/admin/question.js"),
+            static("js/admin/pulldata_status.js"),
+        ]
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
@@ -756,6 +895,7 @@ class SuffixAdmin(
 
 @admin.register(SubQuestion)
 class SubQuestionAdmin(
+    PulldataFilesFieldMixin,
     CollationSafeSearchAdminMixin,
     OrganizationOwnedParentFieldMixin,
     ObjectPermissionMixin,
@@ -802,10 +942,16 @@ class SubQuestionAdmin(
     search_fields = ("name", "label", "description")
 
     class Media:
-        css = {"all": (static("js/tribute/tribute.css"),)}
+        css = {
+            "all": (
+                static("js/tribute/tribute.css"),
+                static("css/admin/pulldata_status.css"),
+            )
+        }
         js = [
             static("js/tribute/tribute.js"),
             static("js/admin/sub-question-edit.js"),
+            static("js/admin/pulldata_status.js"),
         ]
 
     def save_model(self, request, obj, form, change):

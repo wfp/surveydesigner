@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime
 
@@ -20,6 +21,7 @@ from questions.const import (
 from questions.models import (
     BaseQuestion,
     ChoiceGroupFile,
+    PulldataFile,
     RepeatSection,
     RootQuestion,
     SubQuestion,
@@ -65,11 +67,59 @@ class ExpressionValidationFormMixin:
             previous_name=previous_name,
             **kwargs,
         )
+        self.add_issues(issues)
+        return issues
+
+    def pulldata_file_issues(self, fields):
+        """Check the attached pull data files against pulldata() in ``fields``.
+
+        Call before ``validate_expressions``: adding an error removes that
+        field from ``cleaned_data``. Add the result with ``add_issues``.
+        """
+        if "pulldata_files" not in self.fields:
+            return []
+        from questions.services.pulldata import validate_pulldata_files
+
+        return validate_pulldata_files(
+            {
+                "model": self.expression_model,
+                "id": self.instance.pk,
+                "name": self.get_expression_name(),
+            },
+            {
+                field_name: self.cleaned_data.get(field_name, "")
+                for field_name in fields
+                if field_name in self.cleaned_data
+            },
+            self.cleaned_data.get("pulldata_files") or (),
+        )
+
+    def add_issues(self, issues, *, mark_pulldata=False):
+        pulldata_codes = frozenset()
+        if mark_pulldata:
+            from questions.services.pulldata import PULLDATA_LIVE_ISSUE_CODES
+
+            pulldata_codes = PULLDATA_LIVE_ISSUE_CODES
         for issue in issues:
             self.add_error(
                 issue.field if issue.field in self.fields else None, issue.message
             )
-        return issues
+            if mark_pulldata and issue.code in pulldata_codes:
+                field = self.fields.get(issue.field)
+                if field is None:
+                    continue
+                raw_messages = field.widget.attrs.get(
+                    "data-pulldata-server-errors", "[]"
+                )
+                try:
+                    messages = json.loads(raw_messages)
+                except (TypeError, ValueError):
+                    messages = []
+                if issue.message not in messages:
+                    messages.append(issue.message)
+                field.widget.attrs["data-pulldata-server-errors"] = json.dumps(
+                    messages, ensure_ascii=False
+                )
 
 
 class SubQuestionAdminModelForm(ExpressionValidationFormMixin, ModelForm):
@@ -182,6 +232,7 @@ class SubQuestionAdminModelForm(ExpressionValidationFormMixin, ModelForm):
         if suffix and suffix_2 and suffix == suffix_2:
             self.add_error("", "Suffix cannot be the same as Suffix 2.")
 
+        pulldata_issues = self.pulldata_file_issues(QUESTION_EXPRESSION_FIELDS)
         self.validate_expressions(
             QUESTION_EXPRESSION_FIELDS,
             question_type=self.get_expression_type(),
@@ -190,6 +241,7 @@ class SubQuestionAdminModelForm(ExpressionValidationFormMixin, ModelForm):
                 for repeat_section in self.cleaned_data.get("repeat_sections") or ()
             ],
         )
+        self.add_issues(pulldata_issues, mark_pulldata=True)
         return self.cleaned_data
 
 
@@ -342,6 +394,7 @@ class RootQuestionAdminModelForm(ExpressionValidationFormMixin, ModelForm):
                         "Cannot set both 'choices' and 'choices_file'. Use 'choices_file' for file-based question types.",
                     )
 
+        pulldata_issues = self.pulldata_file_issues(QUESTION_EXPRESSION_FIELDS)
         self.validate_expressions(
             QUESTION_EXPRESSION_FIELDS,
             question_type=type_ or self.instance.type,
@@ -350,6 +403,7 @@ class RootQuestionAdminModelForm(ExpressionValidationFormMixin, ModelForm):
                 for repeat_section in self.cleaned_data.get("repeat_sections") or ()
             ],
         )
+        self.add_issues(pulldata_issues, mark_pulldata=True)
         return self.cleaned_data
 
 
@@ -733,6 +787,58 @@ class ChoiceGroupFileAdminModelForm(ModelForm):
                     f"File size exceeds the maximum allowed size of {max_size / (1024 * 1024):g}MB. Current file size: {csv_file.size / (1024 * 1024):.2f}MB"
                 )
         return csv_file
+
+
+class PulldataFileAdminForm(ModelForm):
+    class Meta:
+        model = PulldataFile
+        fields = ("file", "description")
+
+    def clean_file(self):
+        from questions.services.pulldata import (
+            find_duplicate_pulldata_file,
+            pulldata_filename_error,
+            pulldata_stem,
+        )
+        from questions.services.pulldata_csv import (
+            PulldataHeaderError,
+            read_pulldata_headers,
+        )
+
+        uploaded = self.cleaned_data.get("file")
+        if uploaded and "file" in self.changed_data:
+            filename = os.path.basename(uploaded.name)
+            error = pulldata_filename_error(filename)
+            if error:
+                raise forms.ValidationError(error)
+            max_size = settings.EXTERNAL_CHOICE_FILE_MAX_BYTES
+            if uploaded.size > max_size:
+                raise forms.ValidationError(
+                    f"File size exceeds the maximum allowed size of {max_size / (1024 * 1024):g}MB. Current file size: {uploaded.size / (1024 * 1024):.2f}MB"
+                )
+            try:
+                read_pulldata_headers(uploaded, filename=filename)
+            except PulldataHeaderError as exc:
+                raise forms.ValidationError(str(exc)) from exc
+            duplicate = None
+            if not self.instance.pk:
+                _digest, duplicate = find_duplicate_pulldata_file(uploaded)
+            if duplicate is not None:
+                self.duplicate_file = duplicate
+                message = (
+                    f"A byte-identical CSV already exists as '{duplicate.filename}' "
+                    f"(asset #{duplicate.pk}). Use the existing asset instead of "
+                    "creating another upload."
+                )
+                if duplicate.filename != filename:
+                    message += (
+                        f" The existing file's pulldata() stem is "
+                        f"'{pulldata_stem(duplicate.filename)}'; if your formula "
+                        f"uses '{pulldata_stem(filename)}', change its first "
+                        f"argument to '{pulldata_stem(duplicate.filename)}'."
+                    )
+                raise forms.ValidationError(message, code="duplicate_upload")
+        return uploaded
 
 
 class DownloadTemplateForm(Form):

@@ -18,6 +18,7 @@ from django.views.generic import FormView
 from modules.models import Indicator
 from questions.models import (
     BaseQuestion,
+    PulldataFile,
     RepeatSection,
     RootQuestionConstraintMessageTranslation,
     SubQuestionConstraintMessageTranslation,
@@ -39,6 +40,7 @@ from .services.expression_scope import (
     sync_expression_dependencies,
     validate_expression_fields,
 )
+from .services.expression_validation import QUESTION_EXPRESSION_FIELDS
 from .services.health import (
     MODEL_ORDER,
     MODEL_SPECS,
@@ -46,6 +48,7 @@ from .services.health import (
     count_totals,
     scan_batch,
 )
+from .services.pulldata import pulldata_file_status
 
 
 def _health_user_can_access(user):
@@ -572,6 +575,34 @@ class RepeatSectionAutocomplete(autocomplete.Select2QuerySetView):
 
         if self.q:
             qs = _collation_safe_icontains(qs, self.q, ("name",))
+
+        return qs
+
+
+@require_GET
+def pulldata_status(request):
+    """Pull data file status for the question form while an admin edits it."""
+
+    if not request.user.has_perm("questions.view_pulldatafile"):
+        raise PermissionDenied
+    values = {
+        field_name: request.GET.get(field_name, "")
+        for field_name in QUESTION_EXPRESSION_FIELDS
+    }
+    file_ids = [value for value in request.GET.getlist("files") if value.isdigit()]
+    attached = PulldataFile.objects.filter(pk__in=file_ids).only("filename", "columns")
+    return JsonResponse(pulldata_file_status(values, attached))
+
+
+class PulldataFileAutocomplete(autocomplete.Select2QuerySetView):
+    def get_queryset(self):
+        if not self.request.user.is_staff:
+            return PulldataFile.objects.none()
+
+        qs = PulldataFile.objects.all()
+
+        if self.q:
+            qs = qs.filter(Q(file__icontains=self.q) | Q(description__icontains=self.q))
 
         return qs
 

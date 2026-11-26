@@ -4,6 +4,7 @@ from .form_validation import (  # noqa
     ArtifactInputError,
     ExternalChoiceFileSource,
     GeneratedSurveyArtifact,
+    PulldataFileSource,
     ValidationIssue,
     ValidationResult,
     ValidatorInfrastructureError,
@@ -13,6 +14,7 @@ from .form_validation import (  # noqa
     failed_validation_result,
     materialize_external_files,
     resolve_external_choice_files,
+    resolve_pulldata_files,
     validate_generated_artifact,
     validate_xml_compatibility,
 )
