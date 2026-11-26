@@ -496,7 +496,7 @@ def _validate_external_filename(source: ExternalChoiceFileSource) -> str:
 def _read_external_file(source: ExternalChoiceFileSource) -> bytes:
     filename = _validate_external_filename(source)
     max_bytes = int(
-        getattr(settings, "EXTERNAL_CHOICE_FILE_MAX_BYTES", 10 * 1024 * 1024)
+        getattr(settings, "EXTERNAL_CHOICE_FILE_MAX_BYTES", 40 * 1024 * 1024)
     )
     timeout_seconds = float(
         getattr(settings, "EXTERNAL_CHOICE_FILE_READ_TIMEOUT_SECONDS", 10)

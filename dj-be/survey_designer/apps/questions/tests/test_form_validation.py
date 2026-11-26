@@ -2087,6 +2087,26 @@ def test_external_choice_resolver_preserves_validated_filename_and_bytes():
     assert resolve_external_choice_files([source]) == {"choices.csv": content}
 
 
+def test_external_choice_resolver_accepts_valid_csv_larger_than_ten_mb():
+    label = "A" * 1024
+    content = (
+        "name,label\n" + "".join(f"choice_{i},{label}\n" for i in range(11000))
+    ).encode()
+    assert 10 * 1024 * 1024 < len(content) < 40 * 1024 * 1024
+    source = _external_choice_source(content)
+
+    assert resolve_external_choice_files([source]) == {"choices.csv": content}
+
+
+def test_external_choice_resolver_rejects_files_over_forty_mb():
+    source = _external_choice_source(b"x" * (40 * 1024 * 1024 + 1))
+
+    with pytest.raises(ArtifactInputError) as raised:
+        resolve_external_choice_files([source])
+
+    assert raised.value.issue.code == "EXTERNAL_FILE_TOO_LARGE"
+
+
 def test_external_choice_resolver_supports_custom_value_and_label_columns():
     content = b"code,title\na,Choice A\n"
     source = _external_choice_source(
