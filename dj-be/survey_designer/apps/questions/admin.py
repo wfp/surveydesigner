@@ -440,6 +440,7 @@ class PulldataFileAdmin(
         "filename",
         "columns",
         "description",
+        "id",
         "modified_by",
         "modified_on",
     )

@@ -11,11 +11,13 @@ from questions.services.form_validation import (
     ArtifactInputError,
     ExternalChoiceFileSource,
     GeneratedSurveyArtifact,
+    PulldataFileSource,
     ValidationIssue,
     build_generated_artifact,
     compute_artifact_hash,
     materialize_external_files,
     resolve_external_choice_files,
+    resolve_pulldata_files,
     validate_codebook_integrity,
     validate_generated_artifact,
     validate_xml_compatibility,
@@ -240,6 +242,124 @@ def test_build_generated_artifact_generates_and_reads_each_external_file_once():
     assert external.open_mode == "rb"
     assert external.read_count == 1
     assert external.close_count == 1
+
+
+def _pulldata_source(
+    content,
+    *,
+    filename="growth.csv",
+    owner_name="question_a",
+    source_stem=None,
+):
+    file_obj = ContentFile(content, name=filename)
+    attached = type("AttachedPulldata", (), {})()
+    attached.filename = filename
+    attached.file = file_obj
+    attached.pk = id(attached)
+    return PulldataFileSource(
+        owner={"model": "RootQuestion", "id": 7, "name": owner_name},
+        values={
+            "calculation": f"pulldata('{source_stem or filename[:-4]}', 'display', 'id', 1)"
+        },
+        attached_files=(attached,),
+    )
+
+
+def test_pulldata_resolver_accepts_lookup_columns_without_choice_semantics():
+    content = b"id,display\n1,Apple\n"
+
+    assert resolve_pulldata_files([_pulldata_source(content)]) == {
+        "growth.csv": content
+    }
+
+
+def test_pulldata_resolver_rejects_different_content_under_one_filename():
+    first = _pulldata_source(b"id,display\n1,Apple\n", owner_name="question_a")
+    second = _pulldata_source(b"id,display\n1,Orange\n", owner_name="question_b")
+
+    with pytest.raises(ArtifactInputError, match="different content"):
+        resolve_pulldata_files([first, second])
+
+
+def test_pulldata_resolver_reports_missing_storage_as_structured_input_error():
+    class MissingFile:
+        name = "pulldata/asset/missing.csv"
+
+        def open(self, mode):
+            raise FileNotFoundError(self.name)
+
+    attached = type("AttachedPulldata", (), {})()
+    attached.filename = "missing.csv"
+    attached.file = MissingFile()
+    attached.pk = 901
+    source = PulldataFileSource(
+        owner={"model": "RootQuestion", "id": 9, "name": "missing_lookup"},
+        values={"calculation": "pulldata('missing', 'display', 'id', 1)"},
+        attached_files=(attached,),
+    )
+
+    with pytest.raises(ArtifactInputError) as error:
+        resolve_pulldata_files([source])
+
+    assert error.value.issue.code == "PULLDATA_FILE_MISSING"
+
+
+def test_pulldata_resolver_enforces_bounded_source_size(settings):
+    settings.EXTERNAL_CHOICE_FILE_MAX_BYTES = 5
+
+    with pytest.raises(ArtifactInputError) as error:
+        resolve_pulldata_files([_pulldata_source(b"id,display\n1,Lookup\n")])
+
+    assert error.value.issue.code == "PULLDATA_FILE_TOO_LARGE"
+
+
+def test_pulldata_resolver_rejects_ambiguous_assets_before_storage_reads():
+    first = _pulldata_source(b"id,display\n1,Lookup\n")
+    second = _pulldata_source(b"id,display\n1,Other\n", owner_name="question_b")
+    first_file = first.attached_files[0]
+    second_file = second.attached_files[0]
+
+    class NeverOpen:
+        name = "pulldata/asset/growth.csv"
+
+        def open(self, mode):
+            raise AssertionError("ambiguous assets must be rejected before reading")
+
+    first_file.file = NeverOpen()
+    second_file.file = NeverOpen()
+    source = PulldataFileSource(
+        owner=first.owner,
+        values=first.values,
+        attached_files=(first_file, second_file),
+    )
+
+    with pytest.raises(ArtifactInputError) as error:
+        resolve_pulldata_files([source])
+
+    assert error.value.issue.code == "PULLDATA_FILE_AMBIGUOUS"
+
+
+def test_artifact_rejects_choice_and_pulldata_name_collision_before_publish():
+    choice_content = b"name,label\na,Choice A\n"
+    choice = _external_choice_source(content=choice_content, filename="shared.csv")
+    pulldata = _pulldata_source(
+        b"id,display\n1,Lookup\n",
+        filename="shared.csv",
+        owner_name="lookup",
+        source_stem="shared",
+    )
+
+    class Form:
+        id_name = "collision"
+        external_files = {"shared.csv": choice.file_obj}
+        external_file_sources = (choice,)
+        pulldata_file_sources = (pulldata,)
+
+        def generate(self):
+            return b"xlsx"
+
+    with pytest.raises(ArtifactInputError, match="different content"):
+        build_generated_artifact(Form())
 
 
 def test_compatibility_requires_referenced_csv_in_exact_artifact():

@@ -17,6 +17,7 @@
   const FILES_SELECTOR = "select[data-pulldata-status-url]";
   const STATUS_TEXT = {
     attached: "attached",
+    ambiguous: "ambiguous: select one asset",
     missing: "missing: add it in Pull data files",
     unused: "not used: remove it from Pull data files",
     unchecked: "attached",
@@ -100,7 +101,7 @@
   }
 
   function clearMarkedServerErrors(prefix) {
-    EXPRESSION_FIELDS.forEach((field) => {
+    [...EXPRESSION_FIELDS, FILES_FIELD].forEach((field) => {
       const element = input(prefix, field);
       const messages = markedServerErrors(element);
       if (!element || !messages.length) {

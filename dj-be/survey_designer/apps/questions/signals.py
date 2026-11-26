@@ -1,15 +1,167 @@
 import re
 
 from django.db import transaction
-from django.db.models.signals import post_save, pre_save
+from django.db.models.signals import (
+    m2m_changed,
+    post_delete,
+    post_save,
+    pre_delete,
+    pre_save,
+)
 from django.dispatch import receiver
 from questions.models import (
     BaseQuestion,
+    PulldataFile,
     RepeatSection,
     RootQuestion,
     RootQuestionTranslation,
     SubQuestion,
+    SubQuestionProxy,
 )
+
+
+def _pulldata_file_is_referenced(file_id, using):
+    return (
+        RootQuestion.objects.using(using).filter(pulldata_files__pk=file_id).exists()
+        or SubQuestion.objects.using(using).filter(pulldata_files__pk=file_id).exists()
+    )
+
+
+def _schedule_unreferenced_pulldata_files(file_ids, using):
+    file_ids = {file_id for file_id in file_ids if file_id}
+    if not file_ids:
+        return
+
+    def cleanup():
+        for file_id in file_ids:
+            # Serialize orphan cleanup against a concurrent M2M add.  On
+            # PostgreSQL the row lock conflicts with the FK key-share lock
+            # acquired by a through-table insert, so a committed attachment
+            # is visible before this callback can delete the asset.
+            with transaction.atomic(using=using):
+                file_obj = (
+                    PulldataFile.objects.using(using)
+                    .select_for_update()
+                    .filter(pk=file_id)
+                    .first()
+                )
+                if file_obj is None or _pulldata_file_is_referenced(file_id, using):
+                    continue
+                file_obj.delete(using=using)
+
+    transaction.on_commit(cleanup, using=using)
+
+
+def _capture_question_pulldata_ids(instance, using):
+    instance._pulldata_file_ids_before_delete = set(
+        instance.pulldata_files.using(using).values_list("pk", flat=True)
+    )
+
+
+def _schedule_question_pulldata_cleanup(instance, using):
+    _schedule_unreferenced_pulldata_files(
+        getattr(instance, "_pulldata_file_ids_before_delete", ()), using
+    )
+
+
+@receiver(pre_delete, sender=RootQuestion)
+def capture_root_question_pulldata_files(sender, instance, using, **kwargs):
+    _capture_question_pulldata_ids(instance, using)
+
+
+@receiver(post_delete, sender=RootQuestion)
+def cleanup_root_question_pulldata_files(sender, instance, using, **kwargs):
+    _schedule_question_pulldata_cleanup(instance, using)
+
+
+@receiver(pre_delete, sender=SubQuestion)
+def capture_sub_question_pulldata_files(sender, instance, using, **kwargs):
+    _capture_question_pulldata_ids(instance, using)
+
+
+@receiver(post_delete, sender=SubQuestion)
+def cleanup_sub_question_pulldata_files(sender, instance, using, **kwargs):
+    _schedule_question_pulldata_cleanup(instance, using)
+
+
+@receiver(pre_delete, sender=SubQuestionProxy)
+def capture_sub_question_proxy_pulldata_files(sender, instance, using, **kwargs):
+    _capture_question_pulldata_ids(instance, using)
+
+
+@receiver(post_delete, sender=SubQuestionProxy)
+def cleanup_sub_question_proxy_pulldata_files(sender, instance, using, **kwargs):
+    _schedule_question_pulldata_cleanup(instance, using)
+
+
+@receiver(m2m_changed, sender=RootQuestion.pulldata_files.through)
+@receiver(m2m_changed, sender=SubQuestion.pulldata_files.through)
+def cleanup_detached_pulldata_files(
+    sender, instance, action, reverse, model, pk_set, using, **kwargs
+):
+    if action == "pre_clear":
+        if reverse:
+            is_linked = (
+                sender.objects.using(using)
+                .filter(
+                    pulldatafile_id=instance.pk,
+                )
+                .exists()
+            )
+            instance._pulldata_file_ids_before_clear = (
+                {instance.pk} if is_linked else set()
+            )
+        else:
+            instance._pulldata_file_ids_before_clear = set(
+                instance.pulldata_files.using(using).values_list("pk", flat=True)
+            )
+        return
+    if action == "pre_remove":
+        requested_ids = set(pk_set or ())
+        if reverse:
+            owner_field = f"{model._meta.model_name}_id"
+            is_linked = (
+                sender.objects.using(using)
+                .filter(
+                    pulldatafile_id=instance.pk,
+                    **{f"{owner_field}__in": requested_ids},
+                )
+                .exists()
+            )
+            instance._pulldata_file_ids_before_remove = (
+                {instance.pk} if is_linked else set()
+            )
+        else:
+            instance._pulldata_file_ids_before_remove = set(
+                instance.pulldata_files.using(using)
+                .filter(pk__in=requested_ids)
+                .values_list("pk", flat=True)
+            )
+        return
+    if action not in {"post_remove", "post_clear"}:
+        return
+    if action == "post_clear":
+        file_ids = getattr(instance, "_pulldata_file_ids_before_clear", set())
+    else:
+        file_ids = getattr(instance, "_pulldata_file_ids_before_remove", set())
+    _schedule_unreferenced_pulldata_files(file_ids, using)
+
+
+@receiver(post_delete, sender=PulldataFile)
+def cleanup_deleted_pulldata_file(sender, instance, using, **kwargs):
+    storage_name = getattr(instance, "_pulldata_storage_name_before_delete", None)
+    if not storage_name:
+        storage_name = str(getattr(instance.file, "name", "") or "")
+    PulldataFile.schedule_storage_delete(
+        getattr(instance.file, "storage", None), storage_name, using
+    )
+
+
+@receiver(pre_delete, sender=PulldataFile)
+def capture_deleted_pulldata_file(sender, instance, using, **kwargs):
+    instance._pulldata_storage_name_before_delete = str(
+        getattr(instance.file, "name", "") or ""
+    )
 
 
 # Create BaseQuestion on create

@@ -24,6 +24,7 @@ PULLDATA_LIVE_ISSUE_CODES = frozenset(
         "PULLDATA_SOURCE_INVALID",
         "PULLDATA_COLUMN_MISSING",
         "PULLDATA_COLUMNS_UNAVAILABLE",
+        "PULLDATA_FILE_AMBIGUOUS",
     )
 )
 
@@ -129,18 +130,28 @@ def pulldata_requirements(values: Mapping[str, str]) -> PulldataRequirements:
     return requirements
 
 
-def _attached_file_map(attached_files: Iterable[Any]) -> dict[str, Any]:
-    """Map filenames to objects while accepting the live-status name API."""
+def _attached_file_groups(attached_files: Iterable[Any]) -> dict[str, list[Any]]:
+    """Group selected assets by their preserved pulldata filename."""
 
-    result = {}
+    result: dict[str, list[Any]] = {}
     for attached_file in attached_files:
         if isinstance(attached_file, str):
-            result[attached_file] = attached_file
+            result.setdefault(attached_file, []).append(attached_file)
             continue
         filename = getattr(attached_file, "filename", None)
         if filename:
-            result[filename] = attached_file
+            result.setdefault(filename, []).append(attached_file)
     return result
+
+
+def _attached_file_map(attached_files: Iterable[Any]) -> dict[str, Any]:
+    """Map unique filenames to objects, retaining the old helper contract."""
+
+    return {
+        filename: matches[0]
+        for filename, matches in _attached_file_groups(attached_files).items()
+        if len(matches) == 1
+    }
 
 
 def _column_problems(
@@ -194,18 +205,42 @@ def _column_problems(
     return problems
 
 
+def _ambiguous_file_problem(label: str, filename: str, fields: Iterable[str]):
+    where = ", ".join(f"'{name}'" for name in fields)
+    return _(
+        "Ambiguous pull data file: %(label)s uses pulldata('%(stem)s', ...) "
+        "in %(where)s, but more than one uploaded asset is selected for "
+        "'%(filename)s'. Select exactly one asset for this filename."
+    ) % {
+        "label": label,
+        "stem": filename[: -len(PULLDATA_FILE_EXTENSION)],
+        "where": where,
+        "filename": filename,
+    }
+
+
 def pulldata_file_status(
     values: Mapping[str, str], attached_filenames: Iterable[Any]
 ) -> dict[str, Any]:
     """Each file's status, for the question form to show while editing."""
 
     requirements = pulldata_requirements(values)
-    attached_by_filename = _attached_file_map(attached_filenames)
-    attached = set(attached_by_filename)
+    attached_files = list(attached_filenames)
+    attached_groups = _attached_file_groups(attached_files)
+    attached_by_filename = {
+        filename: matches[0]
+        for filename, matches in attached_groups.items()
+        if len(matches) == 1
+    }
+    attached = set(attached_groups)
     files = [
         {
             "filename": filename,
-            "status": "attached" if filename in attached else "missing",
+            "status": (
+                "ambiguous"
+                if len(attached_groups.get(filename, ())) > 1
+                else "attached" if filename in attached else "missing"
+            ),
             "fields": fields,
         }
         for filename, fields in requirements.files.items()
@@ -224,6 +259,15 @@ def pulldata_file_status(
         f"Field '{field_name}' {error}"
         for field_name, error in requirements.source_errors
     ]
+    problems.extend(
+        _ambiguous_file_problem(
+            "pull data",
+            filename,
+            requirements.files[filename],
+        )
+        for filename in requirements.files
+        if len(attached_groups.get(filename, ())) > 1
+    )
     problems.extend(
         _("Field '%(field)s': %(message)s") % {"field": field_name, "message": message}
         for field_name, _column, message, _code in _column_problems(
@@ -260,12 +304,25 @@ def validate_pulldata_files(
         )
         for field_name, error in requirements.source_errors
     ]
-    # File names are unique, so each name is attached at most once.
+    # A filename can now identify multiple uploaded assets.  A question must
+    # select exactly one of them; never silently choose the first row.
     attached_files = list(attached_files)
+    attached_groups = _attached_file_groups(attached_files)
     attached_by_filename = _attached_file_map(attached_files)
-    attached = set(attached_by_filename)
+    attached = set(attached_groups)
 
     for filename, fields in required.items():
+        matches = attached_groups.get(filename, ())
+        if len(matches) > 1:
+            issues.append(
+                _issue(
+                    "PULLDATA_FILE_AMBIGUOUS",
+                    _ambiguous_file_problem(label, filename, fields),
+                    owner,
+                    PULLDATA_FILES_FIELD,
+                )
+            )
+            continue
         if filename in attached:
             continue
         stem = filename[: -len(PULLDATA_FILE_EXTENSION)]
