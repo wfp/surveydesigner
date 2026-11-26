@@ -295,6 +295,7 @@ def get_xlsx_from_data(data, as_wb=False):
         languages=languages,
         indicators=indicators,
         protected=protected,
+        survey_type_name=survey_type.name if survey_type else None,
     )
     return xls_form.generate() if not as_wb else xls_form
 
